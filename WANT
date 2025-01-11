@@ -1,0 +1,13 @@
+{
+  "name": "want",
+  "ignore": {
+    "union": [
+      {
+        "single": ".git"
+      },
+      {
+        "prefix": ".git/"
+      }
+    ]
+  }
+}
