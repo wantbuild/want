@@ -8,10 +8,9 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"go.brendoncarroll.net/state/cadata"
-	"lukechampine.com/blake3"
-)
 
-const MaxBlobSize = 1 << 21
+	"wantbuild.io/want/internal/stores"
+)
 
 type StoreID = uint64
 
@@ -61,11 +60,11 @@ func (s *Store) Delete(ctx context.Context, id cadata.ID) error {
 }
 
 func (s *Store) Hash(x []byte) cadata.ID {
-	return blake3.Sum256(x)
+	return stores.Hash(x)
 }
 
 func (s *Store) MaxSize() int {
-	return MaxBlobSize
+	return stores.MaxBlobSize
 }
 
 func (s *Store) List(ctx context.Context, span cadata.Span, ids []cadata.ID) (int, error) {
@@ -98,10 +97,10 @@ func DropStore(tx *sqlx.Tx, sid StoreID) error {
 }
 
 func PostBlob(tx *sqlx.Tx, sid StoreID, data []byte) (cadata.ID, error) {
-	if len(data) > MaxBlobSize {
+	if len(data) > stores.MaxBlobSize {
 		return cadata.ID{}, cadata.ErrTooLarge
 	}
-	id := blake3.Sum256(data)
+	id := stores.Hash(data)
 	yes, err := blobExists(tx, id)
 	if err != nil {
 		return cadata.ID{}, err
