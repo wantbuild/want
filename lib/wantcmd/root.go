@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/jmoiron/sqlx"
 	"go.brendoncarroll.net/star"
@@ -68,25 +69,36 @@ var dbParam = star.Param[*sqlx.DB]{
 	Name:    "db",
 	Default: star.Ptr(""),
 	Parse: func(p string) (*sqlx.DB, error) {
-		db := wantdb.NewMemory()
+		if p == "" {
+			// TODO:
+			// var err error
+			// if p, err = defaultDBPath(); err != nil {
+			// 	return nil, err
+			// }
+			p = filepath.Join(os.TempDir(), "want.db")
+		}
+		db, err := wantdb.Open(p)
+		if err != nil {
+			return nil, err
+		}
 		if err := wantdb.Setup(context.Background(), db); err != nil {
 			return nil, err
 		}
 		return db, nil
-		// TODO
-		// if p == "" {
-		// 	homeDir, err := os.UserHomeDir()
-		// 	if err != nil {
-		// 		return nil, err
-		// 	}
-		// 	wantStateDir := filepath.Join(homeDir, ".local", "want")
-		// 	if err := os.MkdirAll(wantStateDir, 0o755); err != nil {
-		// 		return nil, err
-		// 	}
-		// 	p = filepath.Join(wantStateDir, "want.db")
-		// }
-		// return wantdb.Open(p)
 	},
+}
+
+// defaultDBPath sets up and returns the default path for the global DB.
+func defaultDBPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	wantStateDir := filepath.Join(homeDir, ".local", "want")
+	if err := os.MkdirAll(wantStateDir, 0o755); err != nil {
+		return "", err
+	}
+	return filepath.Join(wantStateDir, "want.db"), nil
 }
 
 var projNameParam = star.Param[string]{

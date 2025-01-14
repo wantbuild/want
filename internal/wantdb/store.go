@@ -17,6 +17,7 @@ type StoreID = uint64
 type Store struct {
 	id StoreID
 	tx *sqlx.Tx
+
 	mu sync.Mutex
 }
 

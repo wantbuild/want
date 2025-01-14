@@ -13,6 +13,7 @@ require (
 	go.brendoncarroll.net/star v0.0.0-20241118192826-d8f73b537798
 	go.brendoncarroll.net/state v0.0.0-20241118200920-627c9c196901
 	go.brendoncarroll.net/stdctx v0.0.0-20241118190518-40d09f4d11e7
+	go.brendoncarroll.net/tai64 v0.0.0-20241118171318-6e12d283d5e4
 	golang.org/x/sync v0.7.0
 	lukechampine.com/blake3 v1.2.1
 	modernc.org/sqlite v1.34.4

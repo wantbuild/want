@@ -11,17 +11,11 @@ import (
 	"wantbuild.io/want/internal/stores"
 	"wantbuild.io/want/internal/wantc"
 	"wantbuild.io/want/internal/wantdag"
-	"wantbuild.io/want/internal/wantdb"
 	"wantbuild.io/want/internal/wantjob"
 	"wantbuild.io/want/lib/wantrepo"
 )
 
-// Import imports the repo into the database
-func Import(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo) (wantdb.StoreID, *glfs.Ref, error) {
-	panic("not implemented")
-}
-
-func Plan(ctx context.Context, db *sqlx.DB, source *glfs.Ref) (*wantc.Plan, error) {
+func Plan(ctx context.Context, db *sqlx.DB, root glfs.Ref) (*wantc.Plan, error) {
 	panic("not implemented")
 }
 

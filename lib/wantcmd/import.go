@@ -15,6 +15,7 @@ import (
 	"wantbuild.io/want/internal/dbutil"
 	"wantbuild.io/want/internal/glfsport"
 	"wantbuild.io/want/internal/wantdb"
+	"wantbuild.io/want/lib/want"
 	"wantbuild.io/want/lib/wantrepo"
 )
 
@@ -29,17 +30,16 @@ var importCmd = star.Command{
 			return err
 		}
 		db := dbParam.Load(c)
-		sid, root, err := importRepo(c.Context, db, repo)
+		srcid, err := want.Import(ctx, db, repo)
 		if err != nil {
 			return err
 		}
-		if err := dbutil.ROTx(ctx, db, func(tx *sqlx.Tx) error {
-			s := wantdb.NewStore(tx, sid)
-			return printTreeRef(ctx, s, c.StdOut, *root)
+		dur := time.Since(startTime)
+		if want.AccessSource(ctx, db, srcid, func(ctx context.Context, s cadata.Getter, root glfs.Ref) error {
+			return printTreeRef(ctx, s, c.StdOut, root)
 		}); err != nil {
 			return err
 		}
-		dur := time.Since(startTime)
 		fmt.Fprintf(c.StdErr, "%v\n", dur)
 		return c.StdOut.Flush()
 	},
@@ -81,7 +81,7 @@ func glfsLs(ctx context.Context, db *sqlx.DB, root glfs.Ref, w io.Writer) error 
 	})
 }
 
-func printTreeRef(ctx context.Context, store cadata.Store, w io.Writer, treeRef glfs.Ref) error {
+func printTreeRef(ctx context.Context, store cadata.Getter, w io.Writer, treeRef glfs.Ref) error {
 	ag := glfs.NewAgent()
 	return ag.WalkTree(ctx, store, treeRef, func(prefix string, ent glfs.TreeEntry) error {
 		depth := 0

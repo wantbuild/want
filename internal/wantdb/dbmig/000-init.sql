@@ -16,5 +16,12 @@ CREATE TABLE store_blobs (
     blob_id BLOB NOT NULL REFERENCES blobs(id),
 
     PRIMARY KEY (store_id, blob_id)
-) STRICT;
+) STRICT, WITHOUT ROWID;
 
+CREATE TABLE sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    store_id INT NOT NULL REFERENCES store(id),
+    root TEXT NOT NULL,
+    repo_dir TEXT,
+    created_at BLOB NOT NULL
+) STRICT;
