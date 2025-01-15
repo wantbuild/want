@@ -20,7 +20,7 @@ func NewExecutor(s cadata.Store) Executor {
 	return Executor{s: s}
 }
 
-func (e Executor) Compute(ctx context.Context, jc *wantjob.JobCtx, src cadata.Getter, x wantjob.Task) (*glfs.Ref, error) {
+func (e Executor) Compute(ctx context.Context, jc *wantjob.Ctx, src cadata.Getter, x wantjob.Task) (*glfs.Ref, error) {
 	op, ok := ops[x.Op]
 	if !ok {
 		return nil, wantjob.NewErrUnknownOperator(x.Op)

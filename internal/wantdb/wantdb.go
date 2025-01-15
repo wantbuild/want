@@ -20,7 +20,9 @@ func Open(p string) (*sqlx.DB, error) {
 	if p == "" {
 		return nil, errors.New("wantdb.Open: empty path")
 	}
-	return sqlx.Open("sqlite", "file:"+p+"?cache=shared&mode=rwc")
+	// How To for PRAGMAs with the modernc.org/sqlite driver
+	// https://pkg.go.dev/modernc.org/sqlite@v1.34.4#Driver.Open
+	return sqlx.Open("sqlite", "file:"+p+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)")
 }
 
 // NewMemory creates an in memory database

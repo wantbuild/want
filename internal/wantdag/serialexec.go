@@ -2,9 +2,9 @@ package wantdag
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/blobcache/glfs"
+	"go.brendoncarroll.net/exp/slices2"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/internal/wantjob"
@@ -25,18 +25,18 @@ func (e *SerialExec) GetStore() cadata.Getter {
 	return e.store
 }
 
-func (e *SerialExec) Execute(ctx context.Context, jc *wantjob.JobCtx, s cadata.Getter, x DAG) ([]glfs.Ref, error) {
-	nodeResults := make([]glfs.Ref, len(x.Nodes))
+func (e *SerialExec) Execute(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter, x DAG) ([]glfs.Ref, error) {
+	nodeResults := make([]*wantjob.Result, len(x.Nodes))
 	resolve := func(nid NodeID) *glfs.Ref {
-		out := nodeResults[nid]
-		if out.CID.IsZero() {
+		res := nodeResults[nid]
+		if res == nil {
 			return nil
 		}
-		return &out
+		return &res.Data
 	}
 	for i, n := range x.Nodes {
 		if n.IsFact() {
-			nodeResults[i] = *n.Value
+			nodeResults[i] = &wantjob.Result{Data: *n.Value}
 			continue
 		}
 		input, err := PrepareInput(ctx, s, e.store, n, resolve)
@@ -48,9 +48,11 @@ func (e *SerialExec) Execute(ctx context.Context, jc *wantjob.JobCtx, s cadata.G
 			Input: *input,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("critical error in node %d (%w). stopping", i, err)
+			return nil, err
 		}
-		nodeResults[i] = *out
+		nodeResults[i] = out
 	}
-	return nodeResults, nil
+	return slices2.Map(nodeResults, func(res *wantjob.Result) glfs.Ref {
+		return res.Data
+	}), nil
 }

@@ -14,6 +14,7 @@ import (
 func TestEvalNoRepo(t *testing.T) {
 	ctx := testutil.Context(t)
 	db := wantdb.NewMemory()
+	require.NoError(t, wantdb.Setup(ctx, db))
 	s := stores.NewMem()
 
 	tcs := []struct {

@@ -9,69 +9,125 @@ import (
 	"github.com/jmoiron/sqlx"
 	"go.brendoncarroll.net/state/cadata"
 
+	"wantbuild.io/want/internal/dbutil"
 	"wantbuild.io/want/internal/stores"
 )
 
 type StoreID = uint64
 
-type Store struct {
+type DBStore struct {
+	id StoreID
+	db *sqlx.DB
+}
+
+func NewDBStore(db *sqlx.DB, id StoreID) *DBStore {
+	return &DBStore{id: id, db: db}
+}
+
+func (s *DBStore) Post(ctx context.Context, data []byte) (cadata.ID, error) {
+	return dbutil.DoTx1(ctx, s.db, func(tx *sqlx.Tx) (cadata.ID, error) {
+		return PostBlob(tx, s.id, data)
+	})
+}
+
+func (s *DBStore) Get(ctx context.Context, id cadata.ID, buf []byte) (int, error) {
+	return dbutil.ROTx1(ctx, s.db, func(tx *sqlx.Tx) (int, error) {
+		return GetBlob(tx, s.id, id, buf)
+	})
+}
+
+func (s *DBStore) Exists(ctx context.Context, id cadata.ID) (bool, error) {
+	return dbutil.ROTx1(ctx, s.db, func(tx *sqlx.Tx) (bool, error) {
+		return storeContains(tx, s.id, id)
+	})
+}
+
+func (s *DBStore) Add(ctx context.Context, id cadata.ID) error {
+	return dbutil.DoTx(ctx, s.db, func(tx *sqlx.Tx) error {
+		if exists, err := blobExists(tx, id); err != nil {
+			return err
+		} else if !exists {
+			return cadata.ErrNotFound{Key: id}
+		}
+		return storeAdd(tx, s.id, id)
+	})
+}
+
+func (s *DBStore) Delete(ctx context.Context, id cadata.ID) error {
+	return dbutil.DoTx(ctx, s.db, func(tx *sqlx.Tx) error {
+		return DeleteBlob(tx, s.id, id)
+	})
+}
+
+func (s *DBStore) Hash(x []byte) cadata.ID {
+	return stores.Hash(x)
+}
+
+func (s *DBStore) MaxSize() int {
+	return stores.MaxBlobSize
+}
+
+func (s *DBStore) List(ctx context.Context, span cadata.Span, ids []cadata.ID) (int, error) {
+	return dbutil.ROTx1(ctx, s.db, func(tx *sqlx.Tx) (int, error) {
+		return ListBlobs(tx, s.id, span, ids)
+	})
+}
+
+type TxStore struct {
 	id StoreID
 	tx *sqlx.Tx
-
 	mu sync.Mutex
 }
 
-func NewStore(tx *sqlx.Tx, id StoreID) *Store {
-	return &Store{tx: tx, id: id}
+func NewTxStore(tx *sqlx.Tx, id StoreID) *TxStore {
+	return &TxStore{
+		id: id,
+		tx: tx,
+	}
 }
 
-func (s *Store) Post(ctx context.Context, data []byte) (cadata.ID, error) {
+func (s *TxStore) Post(ctx context.Context, data []byte) (cadata.ID, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return PostBlob(s.tx, s.id, data)
 }
 
-func (s *Store) Get(ctx context.Context, id cadata.ID, buf []byte) (int, error) {
+func (s *TxStore) Get(ctx context.Context, id cadata.ID, buf []byte) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return GetBlob(s.tx, s.id, id, buf)
 }
 
-func (s *Store) Exists(ctx context.Context, id cadata.ID) (bool, error) {
+func (s *TxStore) Exists(ctx context.Context, id cadata.ID) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return storeContains(s.tx, s.id, id)
 }
 
-func (s *Store) Add(ctx context.Context, id cadata.ID) error {
+func (s *TxStore) Add(ctx context.Context, id cadata.ID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if exists, err := blobExists(s.tx, id); err != nil {
-		return err
-	} else if !exists {
-		return cadata.ErrNotFound{Key: id}
-	}
-	return storeAdd(s.tx, s.id, id)
+	return AddBlob(s.tx, s.id, id)
 }
 
-func (s *Store) Delete(ctx context.Context, id cadata.ID) error {
+func (s *TxStore) Delete(ctx context.Context, id cadata.ID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return DeleteBlob(s.tx, s.id, id)
 }
 
-func (s *Store) Hash(x []byte) cadata.ID {
+func (s *TxStore) Hash(x []byte) cadata.ID {
 	return stores.Hash(x)
 }
 
-func (s *Store) MaxSize() int {
+func (s *TxStore) MaxSize() int {
 	return stores.MaxBlobSize
 }
 
-func (s *Store) List(ctx context.Context, span cadata.Span, ids []cadata.ID) (int, error) {
+func (s *TxStore) List(ctx context.Context, span cadata.Span, ids []cadata.ID) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return 0, nil
+	return ListBlobs(s.tx, s.id, span, ids)
 }
 
 func CreateStore(tx *sqlx.Tx) (StoreID, error) {
@@ -130,6 +186,15 @@ func GetBlob(tx *sqlx.Tx, sid StoreID, id cadata.ID, buf []byte) (int, error) {
 	return copy(buf, data), nil
 }
 
+func AddBlob(tx *sqlx.Tx, sid StoreID, id cadata.ID) error {
+	if exists, err := blobExists(tx, id); err != nil {
+		return err
+	} else if !exists {
+		return cadata.ErrNotFound{Key: id}
+	}
+	return storeAdd(tx, sid, id)
+}
+
 func DeleteBlob(tx *sqlx.Tx, sid StoreID, id cadata.ID) error {
 	if err := storeRemove(tx, sid, id); err != nil {
 		return err
@@ -142,6 +207,10 @@ func DeleteBlob(tx *sqlx.Tx, sid StoreID, id cadata.ID) error {
 		return dropBlob(tx, id)
 	}
 	return err
+}
+
+func ListBlobs(tx *sqlx.Tx, sid StoreID, span cadata.Span, ids []cadata.ID) (int, error) {
+	panic("not implemented")
 }
 
 func storeContains(tx *sqlx.Tx, sid StoreID, id cadata.ID) (bool, error) {

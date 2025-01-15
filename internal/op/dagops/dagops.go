@@ -38,7 +38,7 @@ func NewExecutor(s cadata.Store) Executor {
 	}
 }
 
-func (e Executor) Compute(ctx context.Context, jc *wantjob.JobCtx, src cadata.Getter, x wantjob.Task) (*glfs.Ref, error) {
+func (e Executor) Compute(ctx context.Context, jc *wantjob.Ctx, src cadata.Getter, x wantjob.Task) (*glfs.Ref, error) {
 	switch x.Op {
 	case OpExec:
 		return e.Exec(ctx, jc, src, x.Input)
@@ -55,7 +55,7 @@ func (e Executor) GetStore() cadata.Getter {
 	return e.s
 }
 
-func (e Executor) Exec(ctx context.Context, jc *wantjob.JobCtx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+func (e Executor) Exec(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
 	dag, err := wantdag.GetDAG(ctx, s, ref)
 	if err != nil {
 		return nil, err
@@ -68,7 +68,7 @@ func (e Executor) Exec(ctx context.Context, jc *wantjob.JobCtx, s cadata.Getter,
 	return wantdag.PostNodeResults(ctx, e.s, nrs)
 }
 
-func (e Executor) PickLast(ctx context.Context, jc *wantjob.JobCtx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+func (e Executor) PickLast(ctx context.Context, _ *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
 	nrs, err := wantdag.GetNodeResults(ctx, s, ref)
 	if err != nil {
 		return nil, err
@@ -79,7 +79,7 @@ func (e Executor) PickLast(ctx context.Context, jc *wantjob.JobCtx, s cadata.Get
 	return &nrs[len(nrs)-1], nil
 }
 
-func (e Executor) ExecLast(ctx context.Context, jc *wantjob.JobCtx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+func (e Executor) ExecLast(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
 	dag, err := wantdag.GetDAG(ctx, s, ref)
 	if err != nil {
 		return nil, err

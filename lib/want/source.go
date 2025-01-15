@@ -29,7 +29,7 @@ func Import(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo) (wantdb.Sourc
 		if err != nil {
 			return 0, err
 		}
-		dst := wantdb.NewStore(tx, sid)
+		dst := wantdb.NewTxStore(tx, sid)
 		imp := glfsport.Importer{
 			Store:  dst,
 			Dir:    repo.RootPath(),
@@ -60,7 +60,7 @@ func AccessSource(ctx context.Context, db *sqlx.DB, id SourceID, fn func(ctx con
 		if err != nil {
 			return err
 		}
-		s := wantdb.NewStore(tx, src.Store)
+		s := wantdb.NewTxStore(tx, src.Store)
 		return fn(ctx, s, src.Root)
 	})
 }

@@ -34,7 +34,7 @@ func newExecutor(s cadata.Store) *executor {
 	}
 }
 
-func (e *executor) Compute(ctx context.Context, jc *wantjob.JobCtx, src cadata.Getter, task wantjob.Task) (*glfs.Ref, error) {
+func (e *executor) Compute(ctx context.Context, jc *wantjob.Ctx, src cadata.Getter, task wantjob.Task) (*glfs.Ref, error) {
 	parts := strings.SplitN(string(task.Op), ".", 2)
 	e2, exists := e.execs[wantjob.OpName(parts[0])]
 	if !exists {

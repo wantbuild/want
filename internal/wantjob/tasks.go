@@ -29,6 +29,8 @@ func (s OpSet) Add(x OpName) OpSet {
 	return NewOpSet(append(s, x)...)
 }
 
+type TaskID = cadata.ID
+
 // Task is a well defined unit of work.
 type Task struct {
 	Op    OpName
@@ -49,7 +51,7 @@ func (t Task) String() string {
 
 // Executors execute Tasks
 type Executor interface {
-	Compute(ctx context.Context, jc *JobCtx, src cadata.Getter, input Task) (*glfs.Ref, error)
+	Compute(ctx context.Context, jc *Ctx, src cadata.Getter, task Task) (*glfs.Ref, error)
 	GetStore() cadata.Getter
 }
 

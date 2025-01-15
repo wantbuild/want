@@ -2,11 +2,11 @@ package want
 
 import (
 	"context"
+	"runtime"
 
 	"github.com/blobcache/glfs"
 	"github.com/jmoiron/sqlx"
 
-	"wantbuild.io/want/internal/dbutil"
 	"wantbuild.io/want/internal/op/dagops"
 	"wantbuild.io/want/internal/stores"
 	"wantbuild.io/want/internal/wantc"
@@ -15,39 +15,44 @@ import (
 	"wantbuild.io/want/lib/wantrepo"
 )
 
-func Plan(ctx context.Context, db *sqlx.DB, root glfs.Ref) (*wantc.Plan, error) {
-	panic("not implemented")
-}
-
-func Build(ctx context.Context, db *sqlx.DB, plan *wantc.Plan) (*glfs.Ref, error) {
+func Build(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, prefix string) (*glfs.Ref, error) {
 	panic("not implemented")
 }
 
 func Eval(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, calledFrom string, expr []byte) (*glfs.Ref, error) {
-	return dbutil.DoTx1(ctx, db, func(tx *sqlx.Tx) (*glfs.Ref, error) {
-		s := stores.NewMem()
-		c := wantc.NewCompiler(s)
-		dag, err := c.CompileSnippet(ctx, expr)
-		if err != nil {
-			return nil, err
-		}
-		dagRef, err := wantdag.PostDAG(ctx, s, *dag)
-		if err != nil {
-			return nil, err
-		}
-		exec := newExecutor(s)
+	s := stores.NewMem()
+	exec := newExecutor(s)
+	jsys := newJobSys(ctx, db, exec, s, runtime.GOMAXPROCS(0))
+	defer jsys.Shutdown()
 
-		job, err := wantjob.Run(ctx, exec, s, wantjob.Task{
-			Op:    "dag." + dagops.OpExecLast,
-			Input: *dagRef,
-		})
-		if err != nil {
-			return nil, err
-		}
-		if job.Error != nil {
-			return nil, job.Error
-		} else {
-			return &job.Output, nil
-		}
-	})
+	c := wantc.NewCompiler(s)
+	dag, err := c.CompileSnippet(ctx, expr)
+	if err != nil {
+		return nil, err
+	}
+	dagRef, err := wantdag.PostDAG(ctx, s, *dag)
+	if err != nil {
+		return nil, err
+	}
+	task := wantjob.Task{
+		Op:    "dag." + dagops.OpExecLast,
+		Input: *dagRef,
+	}
+
+	rootIdx, err := jsys.Init(ctx, task)
+	if err != nil {
+		return nil, err
+	}
+	if err := jsys.Await(ctx, nil, rootIdx); err != nil {
+		return nil, err
+	}
+	job, err := jsys.Inspect(ctx, nil, rootIdx)
+	if err != nil {
+		return nil, err
+	}
+	if err := job.Result.Err(); err != nil {
+		return nil, err
+	} else {
+		return &job.Result.Data, nil
+	}
 }

@@ -40,7 +40,7 @@ func NewExecutor(s cadata.Store) Executor {
 	}
 }
 
-func (e Executor) Compute(ctx context.Context, jc *wantjob.JobCtx, src cadata.Getter, x wantjob.Task) (*glfs.Ref, error) {
+func (e Executor) Compute(ctx context.Context, jc *wantjob.Ctx, src cadata.Getter, x wantjob.Task) (*glfs.Ref, error) {
 	switch x.Op {
 	case OpCompile:
 		return e.Compile(ctx, src, x.Input)
@@ -77,7 +77,7 @@ func (e Executor) CompileSnippet(ctx context.Context, s cadata.Getter, ref glfs.
 	return wantdag.PostDAG(ctx, e.s, *dag)
 }
 
-func (e Executor) PathSetRegexp(ctx context.Context, jc *wantjob.JobCtx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+func (e Executor) PathSetRegexp(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
 	data, err := e.glfs.GetBlobBytes(ctx, s, ref, 1e6)
 	if err != nil {
 		return nil, err
