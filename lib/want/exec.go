@@ -9,6 +9,7 @@ import (
 
 	"wantbuild.io/want/internal/op/dagops"
 	"wantbuild.io/want/internal/op/glfsops"
+	"wantbuild.io/want/internal/op/importops"
 	"wantbuild.io/want/internal/op/wantops"
 	"wantbuild.io/want/internal/singleflight"
 	"wantbuild.io/want/internal/wantjob"
@@ -24,12 +25,14 @@ func newExecutor(s cadata.Store) *executor {
 	glfsExec := glfsops.NewExecutor(s)
 	wantExec := wantops.NewExecutor(s)
 	dagExec := dagops.NewExecutor(s)
+	impExec := importops.NewExecutor(s)
 	return &executor{
 		s: s,
 		execs: map[wantjob.OpName]wantjob.Executor{
-			"glfs": glfsExec,
-			"want": wantExec,
-			"dag":  dagExec,
+			"glfs":   glfsExec,
+			"want":   wantExec,
+			"dag":    dagExec,
+			"import": impExec,
 		},
 	}
 }
