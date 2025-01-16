@@ -11,24 +11,14 @@ import (
 
 var _ wantjob.Executor = Executor{}
 
-type Executor struct {
-	s cadata.GetPoster
-}
+type Executor struct{}
 
-func NewExecutor(s cadata.GetPoster) Executor {
-	return Executor{s: s}
-}
-
-func (e Executor) Execute(jc *wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]byte, error) {
+func (e Executor) Execute(jc *wantjob.Ctx, dst cadata.Store, src cadata.Getter, x wantjob.Task) ([]byte, error) {
 	op, ok := ops[x.Op]
 	if !ok {
 		return nil, wantjob.NewErrUnknownOperator(x.Op)
 	}
 	return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
-		return op(jc.Context(), stores.Fork{W: e.s, R: src}, x)
+		return op(jc.Context(), stores.Fork{W: dst, R: src}, x)
 	})
-}
-
-func (e Executor) GetStore() cadata.Getter {
-	return e.s
 }

@@ -1,0 +1,3 @@
+local ubuntu = import "./ubuntu.libsonnet";
+
+ubuntu.baseRootFS("amd64")

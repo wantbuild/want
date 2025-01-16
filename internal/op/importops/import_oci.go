@@ -31,7 +31,7 @@ func GetImportOCIImageTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*I
 	return loadJSON[ImportOCIImageTask](ctx, s, x)
 }
 
-func (e *Executor) ImportOCIImage(ctx context.Context, _ *wantjob.Ctx, s cadata.Getter, task ImportOCIImageTask) (*glfs.Ref, error) {
+func (e *Executor) ImportOCIImage(jc *wantjob.Ctx, dst cadata.GetPoster, s cadata.Getter, task ImportOCIImageTask) (*glfs.Ref, error) {
 	ag := glfs.NewAgent()
 	if len(task.Hash) < 40 {
 		return nil, fmt.Errorf("hash too short %q len=%d", task.Hash, len(task.Hash))
@@ -47,10 +47,12 @@ func (e *Executor) ImportOCIImage(ctx context.Context, _ *wantjob.Ctx, s cadata.
 	if err != nil {
 		return nil, fmt.Errorf("reading image failed: %w", err)
 	}
+	jc.Infof("oci: %v", ref)
 	rc := mutate.Extract(img)
 	defer rc.Close()
 	tr := tar.NewReader(rc)
-	return glfstar.ReadTAR(ctx, ag, e.s, tr)
+	ctx := jc.Context()
+	return glfstar.ReadTAR(ctx, ag, dst, tr)
 }
 
 type ImportOCIManifestTask struct {
@@ -88,7 +90,7 @@ type ImportOCILayerTask struct {
 	Descriptor v1.Descriptor
 }
 
-func (e *Executor) ImportOCILayer(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter, task ImportOCILayerTask) (*glfs.Ref, error) {
+func (e *Executor) ImportOCILayer(jc *wantjob.Ctx, dst cadata.Store, s cadata.Getter, task ImportOCILayerTask) (*glfs.Ref, error) {
 	jc.Infof("name: %v", task.Name)
 	jc.Infof("descriptor: %v", task.Descriptor)
 	dig, err := crname.NewDigest(task.Name+"@"+task.Descriptor.Digest.String(), crname.StrictValidation)
@@ -106,14 +108,16 @@ func (e *Executor) ImportOCILayer(ctx context.Context, jc *wantjob.Ctx, s cadata
 	defer rc.Close()
 	ag := glfs.NewAgent()
 	tr := tar.NewReader(rc)
-	return glfstar.ReadTAR(ctx, ag, e.s, tr)
+	ctx := jc.Context()
+	return glfstar.ReadTAR(ctx, ag, dst, tr)
 }
 
 type MergeOCILayersTask struct {
 	Layers []glfs.Ref
 }
 
-func (e *Executor) MergeOCILayers(ctx context.Context, _ *wantjob.Ctx, s cadata.Getter, task MergeOCILayersTask) (*glfs.Ref, error) {
+func (e *Executor) MergeOCILayers(jc *wantjob.Ctx, dst cadata.GetPoster, s cadata.Getter, task MergeOCILayersTask) (*glfs.Ref, error) {
+	ctx := jc.Context()
 	ag := glfs.NewAgent()
 	img := empty.Image
 	for _, layer := range task.Layers {
@@ -138,7 +142,7 @@ func (e *Executor) MergeOCILayers(ctx context.Context, _ *wantjob.Ctx, s cadata.
 	rc := mutate.Extract(img)
 	defer rc.Close()
 	tr := tar.NewReader(rc)
-	return glfstar.ReadTAR(ctx, ag, e.s, tr)
+	return glfstar.ReadTAR(ctx, ag, dst, tr)
 }
 
 func invertStream(fn func(w io.Writer) error) io.ReadCloser {

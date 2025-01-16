@@ -35,7 +35,7 @@ func TestImportURL(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Parallel()
 			s := stores.NewMem()
-			e := NewExecutor(s)
+			e := NewExecutor()
 			jc := wantjob.NewCtx(ctx, nil, nil)
 			y, err := e.ImportURL(ctx, &jc, s, tc)
 			require.NoError(t, err)
@@ -59,7 +59,7 @@ func TestImportGoZip(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Parallel()
 			s := stores.NewMem()
-			e := NewExecutor(s)
+			e := NewExecutor()
 			jc := wantjob.NewCtx(ctx, nil, nil)
 			y, err := e.ImportGoZip(ctx, &jc, s, tc)
 			require.NoError(t, err)
@@ -87,9 +87,9 @@ func TestImportOCIImage(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Parallel()
 			s := stores.NewMem()
-			e := NewExecutor(s)
+			e := NewExecutor()
 			jc := wantjob.NewCtx(ctx, nil, nil)
-			ref, err := e.ImportOCIImage(ctx, &jc, s, tc)
+			ref, err := e.ImportOCIImage(&jc, s, s, tc)
 			require.NoError(t, err)
 			require.NotNil(t, ref)
 			// testutil.PrintFS(t, s, *ref)
@@ -112,19 +112,19 @@ func TestImportOCILayers(t *testing.T) {
 	for i, tc := range tcs {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			s := stores.NewMem()
-			e := NewExecutor(s)
+			e := NewExecutor()
 			jc := wantjob.NewCtx(ctx, nil, nil)
 			mf, err := e.ImportOCIManifest(ctx, &jc, s, tc)
 			require.NoError(t, err)
 			require.NotNil(t, mf)
 
-			eg, ctx := errgroup.WithContext(ctx)
+			eg, _ := errgroup.WithContext(ctx)
 			layers := make([]glfs.Ref, len(mf.Layers))
 			for i, desc := range mf.Layers {
 				i := i
 				desc := desc
 				eg.Go(func() error {
-					ref, err := e.ImportOCILayer(ctx, &jc, s, ImportOCILayerTask{
+					ref, err := e.ImportOCILayer(&jc, s, s, ImportOCILayerTask{
 						Name:       tc.Name,
 						Descriptor: desc,
 					})
@@ -135,7 +135,7 @@ func TestImportOCILayers(t *testing.T) {
 				})
 			}
 			require.NoError(t, eg.Wait())
-			ref, err := e.MergeOCILayers(ctx, &jc, s, MergeOCILayersTask{
+			ref, err := e.MergeOCILayers(&jc, s, s, MergeOCILayersTask{
 				Layers: layers,
 			})
 			require.NoError(t, err)

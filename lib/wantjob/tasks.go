@@ -30,9 +30,7 @@ func (t Task) String() string {
 // Executors execute Tasks
 type Executor interface {
 	// Execute blocks while the task is executing, and returns the result or an error.
-	Execute(jc *Ctx, src cadata.Getter, task Task) ([]byte, error)
-	// GetStore returns the internal store where additional data referenced by a task output may have been written.
-	GetStore() cadata.Getter
+	Execute(jc *Ctx, dst cadata.Store, src cadata.Getter, task Task) ([]byte, error)
 }
 
 func productHash(hf cadata.HashFunc, xs ...[]byte) cadata.ID {

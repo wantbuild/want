@@ -25,17 +25,16 @@ const (
 var _ wantjob.Executor = &Executor{}
 
 type Executor struct {
-	s  cadata.GetPoster
 	hc *http.Client
 }
 
-func NewExecutor(s cadata.GetPoster) *Executor {
-	return &Executor{s: s, hc: http.DefaultClient}
+func NewExecutor() *Executor {
+	return &Executor{hc: http.DefaultClient}
 }
 
-func (e *Executor) Execute(jc *wantjob.Ctx, s cadata.Getter, x wantjob.Task) ([]byte, error) {
+func (e *Executor) Execute(jc *wantjob.Ctx, dst cadata.Store, s cadata.Getter, x wantjob.Task) ([]byte, error) {
 	ctx := jc.Context()
-	s2 := stores.Fork{W: e.s, R: s}
+	s2 := stores.Fork{W: dst, R: s}
 
 	switch x.Op {
 	case OpFromURL:
@@ -76,15 +75,11 @@ func (e *Executor) Execute(jc *wantjob.Ctx, s cadata.Getter, x wantjob.Task) ([]
 			if err != nil {
 				return nil, err
 			}
-			return e.ImportOCIImage(ctx, jc, s, *spec)
+			return e.ImportOCIImage(jc, dst, s, *spec)
 		})
 	default:
 		return nil, wantjob.NewErrUnknownOperator(x.Op)
 	}
-}
-
-func (e *Executor) GetStore() cadata.Getter {
-	return e.s
 }
 
 const MaxConfigSize = 1e6

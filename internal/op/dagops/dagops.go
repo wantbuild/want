@@ -23,25 +23,17 @@ const (
 
 var _ wantjob.Executor = &Executor{}
 
-type Executor struct {
-	s cadata.GetPoster
-}
+type Executor struct{}
 
-func NewExecutor(s cadata.GetPoster) Executor {
-	return Executor{
-		s: s,
-	}
-}
-
-func (e Executor) Execute(jc *wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]byte, error) {
+func (e Executor) Execute(jc *wantjob.Ctx, dst cadata.Store, src cadata.Getter, x wantjob.Task) ([]byte, error) {
 	switch x.Op {
 	case OpExecAll:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
-			return e.ExecAll(jc, src, x)
+			return e.ExecAll(jc, dst, src, x)
 		})
 	case OpExecLast:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
-			return e.ExecLast(jc, src, x)
+			return e.ExecLast(jc, dst, src, x)
 		})
 	case OpPickLastValue:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
@@ -52,22 +44,18 @@ func (e Executor) Execute(jc *wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([
 	}
 }
 
-func (e Executor) GetStore() cadata.Getter {
-	return e.s
-}
-
-func (e Executor) ExecAll(jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+func (e Executor) ExecAll(jc *wantjob.Ctx, dst cadata.GetPoster, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
 	ctx := jc.Context()
 	dag, err := wantdag.GetDAG(ctx, s, ref)
 	if err != nil {
 		return nil, err
 	}
-	e2 := wantdag.NewSerialExec(e.s)
+	e2 := wantdag.NewSerialExec(dst)
 	nrs, err := e2.ExecAll(jc, s, *dag)
 	if err != nil {
 		return nil, err
 	}
-	return wantdag.PostNodeResults(ctx, e.s, nrs)
+	return wantdag.PostNodeResults(ctx, dst, nrs)
 }
 
 func (e Executor) PickLast(jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
@@ -86,13 +74,13 @@ func (e Executor) PickLast(jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glf
 	return glfstasks.ParseGLFSRef(res.Data)
 }
 
-func (e Executor) ExecLast(jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+func (e Executor) ExecLast(jc *wantjob.Ctx, dst cadata.GetPoster, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
 	ctx := jc.Context()
 	dag, err := wantdag.GetDAG(ctx, s, ref)
 	if err != nil {
 		return nil, err
 	}
-	e2 := wantdag.NewSerialExec(e.s)
+	e2 := wantdag.NewSerialExec(dst)
 	nrs, err := e2.ExecAll(jc, s, *dag)
 	if err != nil {
 		return nil, err

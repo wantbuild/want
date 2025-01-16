@@ -64,7 +64,7 @@ func Build(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, prefix string)
 		return nil, err
 	}
 
-	exec := newExecutor(stores.NewMem())
+	exec := newExecutor()
 	jsys := newJobSys(ctx, db, exec, runtime.GOMAXPROCS(0))
 	defer jsys.Shutdown()
 

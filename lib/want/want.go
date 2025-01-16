@@ -19,7 +19,7 @@ import (
 
 func Eval(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, calledFrom string, expr []byte) (*glfs.Ref, cadata.Getter, error) {
 	s := stores.NewMem()
-	exec := newExecutor(s)
+	exec := newExecutor()
 	jsys := newJobSys(ctx, db, exec, runtime.GOMAXPROCS(0))
 	defer jsys.Shutdown()
 

@@ -162,16 +162,8 @@ func (s *JobSys) process(x *jobState) {
 		// TODO: check cache
 		// compute
 		jc := wantjob.NewCtx(s.bgCtx, s, x.id)
-		out, err := s.exec.Execute(&jc, x.src, x.task)
+		out, err := s.exec.Execute(&jc, x.dst, x.src, x.task)
 		if err != nil {
-			return *wantjob.Result_ErrExec(err)
-		}
-		// TODO: remove sync from here
-		outRef, err := glfstasks.ParseGLFSRef(out)
-		if err != nil {
-			return *wantjob.Result_ErrExec(err)
-		}
-		if err := glfs.Sync(x.ctx, x.dst, s.exec.GetStore(), *outRef); err != nil {
 			return *wantjob.Result_ErrExec(err)
 		}
 		return *wantjob.Success(out)
@@ -284,19 +276,17 @@ func (s *JobSys) getJobState(jobid wantjob.JobID) *jobState {
 }
 
 type executor struct {
-	s     cadata.GetPoster
 	execs map[wantjob.OpName]wantjob.Executor
 	sf    singleflight.Group[wantjob.TaskID, []byte]
 }
 
-func newExecutor(s cadata.Store) *executor {
-	glfsExec := glfsops.NewExecutor(s)
-	wantExec := wantops.NewExecutor(s)
-	dagExec := dagops.NewExecutor(s)
-	impExec := importops.NewExecutor(s)
+func newExecutor() *executor {
+	glfsExec := glfsops.Executor{}
+	wantExec := wantops.Executor{}
+	dagExec := dagops.Executor{}
+	impExec := importops.NewExecutor()
 
 	return &executor{
-		s: s,
 		execs: map[wantjob.OpName]wantjob.Executor{
 			"glfs":   glfsExec,
 			"want":   wantExec,
@@ -306,21 +296,17 @@ func newExecutor(s cadata.Store) *executor {
 	}
 }
 
-func (e *executor) Execute(jc *wantjob.Ctx, src cadata.Getter, task wantjob.Task) ([]byte, error) {
+func (e *executor) Execute(jc *wantjob.Ctx, dst cadata.Store, src cadata.Getter, task wantjob.Task) ([]byte, error) {
 	parts := strings.SplitN(string(task.Op), ".", 2)
 	e2, exists := e.execs[wantjob.OpName(parts[0])]
 	if !exists {
 		return nil, wantjob.ErrOpNotFound{Op: task.Op}
 	}
 	out, err, _ := e.sf.Do(task.ID(), func() ([]byte, error) {
-		return e2.Execute(jc, src, wantjob.Task{
+		return e2.Execute(jc, dst, src, wantjob.Task{
 			Op:    wantjob.OpName(parts[1]),
 			Input: task.Input,
 		})
 	})
 	return out, err
-}
-
-func (e *executor) GetStore() cadata.Getter {
-	return e.s
 }

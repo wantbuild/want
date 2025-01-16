@@ -27,67 +27,53 @@ const MaxSnippetSize = 1e7
 
 var _ wantjob.Executor = &Executor{}
 
-type Executor struct {
-	s    cadata.Store
-	glfs *glfs.Agent
-	c    *wantc.Compiler
-}
+type Executor struct{}
 
-func NewExecutor(s cadata.Store) Executor {
-	return Executor{
-		s:    s,
-		glfs: glfs.NewAgent(),
-		c:    wantc.NewCompiler(s),
-	}
-}
-
-func (e Executor) Execute(jc *wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]byte, error) {
+func (e Executor) Execute(jc *wantjob.Ctx, dst cadata.Store, src cadata.Getter, x wantjob.Task) ([]byte, error) {
 	ctx := jc.Context()
 	switch x.Op {
 	case OpCompile:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
-			return e.Compile(ctx, src, x)
+			return e.Compile(ctx, dst, src, x)
 		})
 	case OpCompileSnippet:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
-			return e.CompileSnippet(ctx, src, x)
+			return e.CompileSnippet(ctx, dst, src, x)
 		})
 	case OpPathSetRegexp:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
-			return e.PathSetRegexp(jc, src, x)
+			return e.PathSetRegexp(jc, dst, src, x)
 		})
 	default:
 		return nil, wantjob.NewErrUnknownOperator(x.Op)
 	}
 }
 
-func (e Executor) GetStore() cadata.Getter {
-	return e.s
-}
-
-func (e Executor) Compile(ctx context.Context, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
-	plan, err := e.c.Compile(ctx, s, ref, "")
+func (e Executor) Compile(ctx context.Context, dst cadata.Store, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+	c := wantc.NewCompiler(dst)
+	plan, err := c.Compile(ctx, s, ref, "")
 	if err != nil {
 		return nil, err
 	}
 	return &plan.Graph, nil
 }
 
-func (e Executor) CompileSnippet(ctx context.Context, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
-	data, err := e.glfs.GetBlobBytes(ctx, s, ref, MaxSnippetSize)
+func (e Executor) CompileSnippet(ctx context.Context, dst cadata.Store, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+	c := wantc.NewCompiler(dst)
+	data, err := glfs.GetBlobBytes(ctx, s, ref, MaxSnippetSize)
 	if err != nil {
 		return nil, err
 	}
-	dag, err := e.c.CompileSnippet(ctx, data)
+	dag, err := c.CompileSnippet(ctx, data)
 	if err != nil {
 		return nil, err
 	}
-	return wantdag.PostDAG(ctx, e.s, *dag)
+	return wantdag.PostDAG(ctx, dst, *dag)
 }
 
-func (e Executor) PathSetRegexp(jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+func (e Executor) PathSetRegexp(jc *wantjob.Ctx, dst cadata.Store, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
 	ctx := jc.Context()
-	data, err := e.glfs.GetBlobBytes(ctx, s, ref, 1e6)
+	data, err := glfs.GetBlobBytes(ctx, s, ref, 1e6)
 	if err != nil {
 		return nil, err
 	}
@@ -100,5 +86,5 @@ func (e Executor) PathSetRegexp(jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) 
 	jc.Infof("set: %v", set)
 	re := set.Regexp()
 	jc.Infof("re: %v", re)
-	return e.glfs.PostBlob(ctx, e.s, strings.NewReader(re.String()))
+	return glfs.PostBlob(ctx, dst, strings.NewReader(re.String()))
 }
