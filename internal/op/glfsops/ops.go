@@ -142,11 +142,11 @@ func Chmod(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.Re
 	}
 	xEnt := inputTree.Lookup("x")
 	if xEnt == nil {
-		return nil, wantjob.NewErrInvalidInput(inputRef, "set-permissions requires input 'x'")
+		return nil, NewErrInvalidInput(inputRef, "set-permissions requires input 'x'")
 	}
 	pathEnt := inputTree.Lookup("path")
 	if pathEnt == nil {
-		return nil, wantjob.NewErrInvalidInput(inputRef, "set-permissions requires input 'path'")
+		return nil, NewErrInvalidInput(inputRef, "set-permissions requires input 'path'")
 	}
 	pathData, err := glfs.GetBlobBytes(ctx, s, pathEnt.Ref, MaxPathLen)
 	if err != nil {
@@ -208,4 +208,17 @@ func getFileMode(x glfs.Ref) os.FileMode {
 type AssertChecks struct {
 	SubsetOf *wantdag.NodeID
 	Message  string
+}
+
+type ErrInvalidInput struct {
+	Input glfs.Ref
+	Msg   string
+}
+
+func NewErrInvalidInput(input glfs.Ref, msg string) ErrInvalidInput {
+	return ErrInvalidInput{Input: input, Msg: msg}
+}
+
+func (e ErrInvalidInput) Error() string {
+	return fmt.Sprintf("invalid input. input=%v msg=%v", e.Input, e.Msg)
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"go.brendoncarroll.net/state/cadata"
 
+	"wantbuild.io/want/internal/glfstasks"
 	"wantbuild.io/want/internal/op/dagops"
 	"wantbuild.io/want/internal/stores"
 	"wantbuild.io/want/internal/wantc"
@@ -33,7 +34,7 @@ func Eval(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, calledFrom stri
 	}
 	task := wantjob.Task{
 		Op:    joinOpName("dag", dagops.OpExecLast),
-		Input: *dagRef,
+		Input: glfstasks.MarshalGLFSRef(*dagRef),
 	}
 	return runRootJob(ctx, jsys, s, task)
 }
@@ -53,7 +54,7 @@ func runRootJob(ctx context.Context, jsys *JobSys, src cadata.Getter, task wantj
 	if err := job.Result.Err(); err != nil {
 		return nil, nil, err
 	} else {
-		ref, err := job.Result.AsGLFS()
+		ref, err := glfstasks.ParseGLFSRef(job.Result.Data)
 		rootState := jsys.getJobState(wantjob.JobID{rootIdx})
 		return ref, rootState.dst, err
 	}

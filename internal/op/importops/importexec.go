@@ -8,6 +8,7 @@ import (
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
+	"wantbuild.io/want/internal/glfstasks"
 	"wantbuild.io/want/internal/stores"
 	"wantbuild.io/want/internal/wantjob"
 )
@@ -32,39 +33,51 @@ func NewExecutor(s cadata.GetPoster) *Executor {
 	return &Executor{s: s, hc: http.DefaultClient}
 }
 
-func (e *Executor) Compute(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter, x wantjob.Task) (*glfs.Ref, error) {
+func (e *Executor) Execute(jc *wantjob.Ctx, s cadata.Getter, x wantjob.Task) ([]byte, error) {
+	ctx := jc.Context()
 	s2 := stores.Fork{W: e.s, R: s}
+
 	switch x.Op {
 	case OpFromURL:
-		spec, err := GetImportURLTask(ctx, s, x.Input)
-		if err != nil {
-			return nil, err
-		}
-		return e.ImportURL(ctx, jc, s2, *spec)
+		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
+			spec, err := GetImportURLTask(ctx, s, x)
+			if err != nil {
+				return nil, err
+			}
+			return e.ImportURL(ctx, jc, s2, *spec)
+		})
 	case OpFromGit:
-		spec, err := GetImportGitTask(ctx, s, x.Input)
-		if err != nil {
-			return nil, err
-		}
-		return e.ImportGit(ctx, s2, *spec)
+		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
+			spec, err := GetImportGitTask(ctx, s, x)
+			if err != nil {
+				return nil, err
+			}
+			return e.ImportGit(ctx, s2, *spec)
+		})
 	case OpUnpack:
-		spec, err := GetUnpackTask(ctx, s, x.Input)
-		if err != nil {
-			return nil, err
-		}
-		return e.Unpack(ctx, s2, *spec)
+		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
+			spec, err := GetUnpackTask(ctx, s, x)
+			if err != nil {
+				return nil, err
+			}
+			return e.Unpack(ctx, s2, *spec)
+		})
 	case OpFromGoZip:
-		spec, err := GetImportGoZipTask(ctx, s, x.Input)
-		if err != nil {
-			return nil, err
-		}
-		return e.ImportGoZip(ctx, jc, s2, *spec)
+		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
+			spec, err := GetImportGoZipTask(ctx, s, x)
+			if err != nil {
+				return nil, err
+			}
+			return e.ImportGoZip(ctx, jc, s2, *spec)
+		})
 	case OpFromOCIImage:
-		spec, err := GetImportOCIImageTask(ctx, s, x.Input)
-		if err != nil {
-			return nil, err
-		}
-		return e.ImportOCIImage(ctx, jc, s, *spec)
+		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
+			spec, err := GetImportOCIImageTask(ctx, s, x)
+			if err != nil {
+				return nil, err
+			}
+			return e.ImportOCIImage(ctx, jc, s, *spec)
+		})
 	default:
 		return nil, wantjob.NewErrUnknownOperator(x.Op)
 	}

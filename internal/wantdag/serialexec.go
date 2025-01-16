@@ -1,11 +1,9 @@
 package wantdag
 
 import (
-	"context"
-	"encoding/json"
-
 	"go.brendoncarroll.net/state/cadata"
 
+	"wantbuild.io/want/internal/glfstasks"
 	"wantbuild.io/want/internal/wantjob"
 )
 
@@ -24,18 +22,15 @@ func (e *SerialExec) GetStore() cadata.Getter {
 	return e.store
 }
 
-func (e *SerialExec) Execute(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter, x DAG) ([]wantjob.Result, error) {
+func (e *SerialExec) ExecAll(jc *wantjob.Ctx, s cadata.Getter, x DAG) ([]wantjob.Result, error) {
+	ctx := jc.Context()
 	nodeResults := make([]wantjob.Result, len(x.Nodes))
 	resolve := func(nid NodeID) wantjob.Result {
 		return nodeResults[nid]
 	}
 	for i, n := range x.Nodes {
 		if n.IsFact() {
-			data, err := json.Marshal(*n.Value)
-			if err != nil {
-				return nil, err
-			}
-			nodeResults[i] = wantjob.Result{Data: data}
+			nodeResults[i] = *glfstasks.Success(*n.Value)
 			continue
 		}
 		input, err := PrepareInput(ctx, s, e.store, n, resolve)
@@ -44,7 +39,7 @@ func (e *SerialExec) Execute(ctx context.Context, jc *wantjob.Ctx, s cadata.Gett
 		}
 		out, err := wantjob.Do(ctx, jc, wantjob.Task{
 			Op:    n.Op,
-			Input: *input,
+			Input: glfstasks.MarshalGLFSRef(*input),
 		})
 		if err != nil {
 			return nil, err

@@ -2,7 +2,6 @@ package want
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"go.brendoncarroll.net/tai64"
 
 	"wantbuild.io/want/internal/dbutil"
+	"wantbuild.io/want/internal/glfstasks"
 	"wantbuild.io/want/internal/op/dagops"
 	"wantbuild.io/want/internal/op/glfsops"
 	"wantbuild.io/want/internal/op/importops"
@@ -161,19 +161,20 @@ func (s *JobSys) process(x *jobState) {
 	res := func() wantjob.Result {
 		// TODO: check cache
 		// compute
-		jc := wantjob.NewCtx(s, x.id)
-		out, err := s.exec.Compute(x.ctx, &jc, x.src, x.task)
+		jc := wantjob.NewCtx(s.bgCtx, s, x.id)
+		out, err := s.exec.Execute(&jc, x.src, x.task)
 		if err != nil {
 			return *wantjob.Result_ErrExec(err)
 		}
-		if err := glfs.Sync(x.ctx, x.dst, s.exec.GetStore(), *out); err != nil {
+		// TODO: remove sync from here
+		outRef, err := glfstasks.ParseGLFSRef(out)
+		if err != nil {
 			return *wantjob.Result_ErrExec(err)
 		}
-		data, err := json.Marshal(out)
-		if err != nil {
-			panic(err)
+		if err := glfs.Sync(x.ctx, x.dst, s.exec.GetStore(), *outRef); err != nil {
+			return *wantjob.Result_ErrExec(err)
 		}
-		return *wantjob.Succeed(data)
+		return *wantjob.Success(out)
 	}()
 	if err := s.finishJob(x.ctx, x.id, res); err != nil {
 		panic(err) // TODO: need other way to signal internal failure
@@ -204,7 +205,11 @@ func (s *JobSys) Init(ctx context.Context, src cadata.Getter, task wantjob.Task)
 		return 0, err
 	}
 	dst := wantdb.NewDBStore(s.db, sid)
-	if err := glfs.Sync(ctx, dst, src, task.Input); err != nil {
+	input, err := glfstasks.ParseGLFSRef(task.Input)
+	if err != nil {
+		return 0, err
+	}
+	if err := glfs.Sync(ctx, dst, src, *input); err != nil {
 		return 0, err
 	}
 
@@ -281,7 +286,7 @@ func (s *JobSys) getJobState(jobid wantjob.JobID) *jobState {
 type executor struct {
 	s     cadata.GetPoster
 	execs map[wantjob.OpName]wantjob.Executor
-	sf    singleflight.Group[wantjob.Task, *glfs.Ref]
+	sf    singleflight.Group[wantjob.TaskID, []byte]
 }
 
 func newExecutor(s cadata.Store) *executor {
@@ -301,14 +306,14 @@ func newExecutor(s cadata.Store) *executor {
 	}
 }
 
-func (e *executor) Compute(ctx context.Context, jc *wantjob.Ctx, src cadata.Getter, task wantjob.Task) (*glfs.Ref, error) {
+func (e *executor) Execute(jc *wantjob.Ctx, src cadata.Getter, task wantjob.Task) ([]byte, error) {
 	parts := strings.SplitN(string(task.Op), ".", 2)
 	e2, exists := e.execs[wantjob.OpName(parts[0])]
 	if !exists {
 		return nil, wantjob.ErrOpNotFound{Op: task.Op}
 	}
-	out, err, _ := e.sf.Do(task, func() (*glfs.Ref, error) {
-		return e2.Compute(ctx, jc, src, wantjob.Task{
+	out, err, _ := e.sf.Do(task.ID(), func() ([]byte, error) {
+		return e2.Execute(jc, src, wantjob.Task{
 			Op:    wantjob.OpName(parts[1]),
 			Input: task.Input,
 		})

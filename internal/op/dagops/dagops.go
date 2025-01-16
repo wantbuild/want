@@ -1,11 +1,11 @@
 package dagops
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
+	"wantbuild.io/want/internal/glfstasks"
 	"wantbuild.io/want/internal/wantdag"
 	"wantbuild.io/want/internal/wantjob"
 )
@@ -33,14 +33,20 @@ func NewExecutor(s cadata.GetPoster) Executor {
 	}
 }
 
-func (e Executor) Compute(ctx context.Context, jc *wantjob.Ctx, src cadata.Getter, x wantjob.Task) (*glfs.Ref, error) {
+func (e Executor) Execute(jc *wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]byte, error) {
 	switch x.Op {
 	case OpExecAll:
-		return e.ExecAll(ctx, jc, src, x.Input)
+		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
+			return e.ExecAll(jc, src, x)
+		})
 	case OpExecLast:
-		return e.ExecLast(ctx, jc, src, x.Input)
+		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
+			return e.ExecLast(jc, src, x)
+		})
 	case OpPickLastValue:
-		return e.PickLast(ctx, jc, src, x.Input)
+		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
+			return e.PickLast(jc, src, x)
+		})
 	default:
 		return nil, wantjob.NewErrUnknownOperator(x.Op)
 	}
@@ -50,20 +56,22 @@ func (e Executor) GetStore() cadata.Getter {
 	return e.s
 }
 
-func (e Executor) ExecAll(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+func (e Executor) ExecAll(jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+	ctx := jc.Context()
 	dag, err := wantdag.GetDAG(ctx, s, ref)
 	if err != nil {
 		return nil, err
 	}
 	e2 := wantdag.NewSerialExec(e.s)
-	nrs, err := e2.Execute(ctx, jc, s, *dag)
+	nrs, err := e2.ExecAll(jc, s, *dag)
 	if err != nil {
 		return nil, err
 	}
 	return wantdag.PostNodeResults(ctx, e.s, nrs)
 }
 
-func (e Executor) PickLast(ctx context.Context, _ *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+func (e Executor) PickLast(jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+	ctx := jc.Context()
 	nrs, err := wantdag.GetNodeResults(ctx, s, ref)
 	if err != nil {
 		return nil, err
@@ -75,16 +83,17 @@ func (e Executor) PickLast(ctx context.Context, _ *wantjob.Ctx, s cadata.Getter,
 	if err := res.Err(); err != nil {
 		return nil, err
 	}
-	return res.AsGLFS()
+	return glfstasks.ParseGLFSRef(res.Data)
 }
 
-func (e Executor) ExecLast(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+func (e Executor) ExecLast(jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+	ctx := jc.Context()
 	dag, err := wantdag.GetDAG(ctx, s, ref)
 	if err != nil {
 		return nil, err
 	}
 	e2 := wantdag.NewSerialExec(e.s)
-	nrs, err := e2.Execute(ctx, jc, s, *dag)
+	nrs, err := e2.ExecAll(jc, s, *dag)
 	if err != nil {
 		return nil, err
 	}
@@ -95,5 +104,5 @@ func (e Executor) ExecLast(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter
 	if err := res.Err(); err != nil {
 		return nil, err
 	}
-	return res.AsGLFS()
+	return glfstasks.ParseGLFSRef(res.Data)
 }

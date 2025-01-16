@@ -9,6 +9,7 @@ import (
 	"go.brendoncarroll.net/exp/slices2"
 	"go.brendoncarroll.net/state/cadata"
 
+	"wantbuild.io/want/internal/glfstasks"
 	"wantbuild.io/want/internal/op/dagops"
 	"wantbuild.io/want/internal/stores"
 	"wantbuild.io/want/internal/wantc"
@@ -69,7 +70,7 @@ func Build(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, prefix string)
 
 	dagRes, outStore, err := runRootJob(ctx, jsys, stores.Union{srcStore, cstore}, wantjob.Task{
 		Op:    joinOpName("dag", dagops.OpExecAll),
-		Input: plan.Graph,
+		Input: glfstasks.MarshalGLFSRef(plan.Graph),
 	})
 	if err != nil {
 		return nil, err
@@ -79,7 +80,7 @@ func Build(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, prefix string)
 		return nil, err
 	}
 	rootRes := nrs[plan.Root]
-	outRoot, err := rootRes.AsGLFS()
+	outRoot, err := glfstasks.ParseGLFSRef(rootRes.Data)
 	if err != nil {
 		return nil, err
 	}

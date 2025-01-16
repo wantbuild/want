@@ -10,6 +10,7 @@ import (
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
+	"wantbuild.io/want/internal/glfstasks"
 	"wantbuild.io/want/internal/wantjob"
 )
 
@@ -23,9 +24,9 @@ func PrepareInput(ctx context.Context, s cadata.Getter, dst cadata.Poster, n Nod
 		if err := res.Err(); err != nil {
 			return nil, fmt.Errorf("upstream node %d errored: %v", in.Node, err)
 		}
-		ref, err := res.AsGLFS()
+		ref, err := glfstasks.ParseGLFSRef(res.Data)
 		if err != nil {
-			return nil, fmt.Errorf("cannot convert job output to GLFS Ref: %v", err)
+			return nil, fmt.Errorf("cannot convert job output (%s) to GLFS Ref: %v", res.Data, err)
 		}
 		mode := InputFileMode
 		if ref.Type == glfs.TypeTree {

@@ -9,6 +9,7 @@ import (
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
+	"wantbuild.io/want/internal/glfstasks"
 	"wantbuild.io/want/internal/stringsets"
 	"wantbuild.io/want/internal/wantc"
 	"wantbuild.io/want/internal/wantdag"
@@ -40,14 +41,21 @@ func NewExecutor(s cadata.Store) Executor {
 	}
 }
 
-func (e Executor) Compute(ctx context.Context, jc *wantjob.Ctx, src cadata.Getter, x wantjob.Task) (*glfs.Ref, error) {
+func (e Executor) Execute(jc *wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]byte, error) {
+	ctx := jc.Context()
 	switch x.Op {
 	case OpCompile:
-		return e.Compile(ctx, src, x.Input)
+		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
+			return e.Compile(ctx, src, x)
+		})
 	case OpCompileSnippet:
-		return e.CompileSnippet(ctx, src, x.Input)
+		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
+			return e.CompileSnippet(ctx, src, x)
+		})
 	case OpPathSetRegexp:
-		return e.PathSetRegexp(ctx, jc, src, x.Input)
+		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
+			return e.PathSetRegexp(jc, src, x)
+		})
 	default:
 		return nil, wantjob.NewErrUnknownOperator(x.Op)
 	}
@@ -77,7 +85,8 @@ func (e Executor) CompileSnippet(ctx context.Context, s cadata.Getter, ref glfs.
 	return wantdag.PostDAG(ctx, e.s, *dag)
 }
 
-func (e Executor) PathSetRegexp(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+func (e Executor) PathSetRegexp(jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+	ctx := jc.Context()
 	data, err := e.glfs.GetBlobBytes(ctx, s, ref, 1e6)
 	if err != nil {
 		return nil, err

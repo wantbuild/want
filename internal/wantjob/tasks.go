@@ -1,12 +1,8 @@
 package wantjob
 
 import (
-	"context"
 	"fmt"
-	"slices"
 
-	"github.com/blobcache/glfs"
-	"go.brendoncarroll.net/exp/slices2"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/internal/stores"
@@ -15,43 +11,27 @@ import (
 // OpName refers to a Operation in Want.
 type OpName string
 
-// OpSet is a set of OpNames
-type OpSet []OpName
-
-func NewOpSet(ops ...OpName) OpSet {
-	ops = slices.Clone(ops)
-	slices.Sort(ops)
-	ops = slices2.DedupSorted(ops)
-	return OpSet(ops)
-}
-
-func (s OpSet) Add(x OpName) OpSet {
-	return NewOpSet(append(s, x)...)
-}
-
 type TaskID = cadata.ID
 
 // Task is a well defined unit of work.
 type Task struct {
 	Op    OpName
-	Input glfs.Ref
+	Input []byte
 }
 
 func (t Task) ID() cadata.ID {
-	data, err := t.Input.MarshalBinary()
-	if err != nil {
-		panic(err)
-	}
-	return productHash(stores.Hash, []byte(t.Op), data)
+	return productHash(stores.Hash, []byte(t.Op), t.Input)
 }
 
 func (t Task) String() string {
-	return fmt.Sprintf("%s(%v)", t.Op, t.Input.CID)
+	return fmt.Sprintf("(%s %s)", t.Op, t.Input)
 }
 
 // Executors execute Tasks
 type Executor interface {
-	Compute(ctx context.Context, jc *Ctx, src cadata.Getter, task Task) (*glfs.Ref, error)
+	// Execute blocks while the task is executing, and returns the result or an error.
+	Execute(jc *Ctx, src cadata.Getter, task Task) ([]byte, error)
+	// GetStore returns the internal store where additional data referenced by a task output may have been written.
 	GetStore() cadata.Getter
 }
 

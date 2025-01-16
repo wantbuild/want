@@ -2,13 +2,11 @@ package wantjob
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/exp/slices2"
 	"go.brendoncarroll.net/tai64"
 )
@@ -52,25 +50,19 @@ const (
 	ErrCode_EXEC
 )
 
+// Result is produced by finished jobs.
+// Jobs will also have results when cancelled or timed out, with the situation reflected in the ErrCode
 type Result struct {
 	ErrCode ErrCode `json:"ec"`
-	Data    []byte  `json:"data"`
+	Data    []byte  `json:"d"`
 }
 
-func Succeed(data []byte) *Result {
+func Success(data []byte) *Result {
 	return &Result{Data: data}
 }
 
 func Result_ErrExec(err error) *Result {
 	return &Result{ErrCode: ErrCode_EXEC, Data: []byte(err.Error())}
-}
-
-func (r *Result) AsGLFS() (*glfs.Ref, error) {
-	var ret glfs.Ref
-	if err := json.Unmarshal(r.Data, &ret); err != nil {
-		return nil, err
-	}
-	return &ret, nil
 }
 
 func (r *Result) Err() error {
@@ -106,12 +98,17 @@ type System interface {
 
 // Ctx is a Job Context.  It is the API available from within a running job
 type Ctx struct {
+	ctx context.Context
 	sys System
 	id  JobID
 }
 
-func NewCtx(sys System, id JobID) Ctx {
-	return Ctx{sys: sys, id: id}
+func NewCtx(ctx context.Context, sys System, id JobID) Ctx {
+	return Ctx{sys: sys, id: id, ctx: ctx}
+}
+
+func (jc *Ctx) Context() context.Context {
+	return jc.ctx
 }
 
 func (jc *Ctx) Spawn(ctx context.Context, task Task) (Idx, error) {
