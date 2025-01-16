@@ -52,15 +52,12 @@ func Import(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo) (wantdb.Sourc
 
 // AccessSource calls fn with the root of the source and a store containing
 // all of the sources blobs.
-func AccessSource(ctx context.Context, db *sqlx.DB, id SourceID, fn func(ctx context.Context, s cadata.Getter, root glfs.Ref) error) error {
-	return dbutil.ROTx(ctx, db, func(tx *sqlx.Tx) error {
-		ctx, cf := context.WithCancel(ctx)
-		defer cf()
-		src, err := wantdb.GetSource(tx, id)
-		if err != nil {
-			return err
-		}
-		s := wantdb.NewTxStore(tx, src.Store)
-		return fn(ctx, s, src.Root)
+func AccessSource(ctx context.Context, db *sqlx.DB, id SourceID) (*glfs.Ref, cadata.Getter, error) {
+	src, err := dbutil.ROTx1(ctx, db, func(tx *sqlx.Tx) (*wantdb.Source, error) {
+		return wantdb.GetSource(tx, id)
 	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return &src.Root, wantdb.NewDBStore(db, src.Store), nil
 }

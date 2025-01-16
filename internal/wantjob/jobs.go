@@ -2,6 +2,7 @@ package wantjob
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -29,37 +30,63 @@ func (jid JobID) String() string {
 	}), "/")
 }
 
+type JobState uint32
+
+const (
+	JobState_UNKNOWN = iota
+	JobState_QUEUED
+	JobState_RUNNING
+	JobState_DONE
+)
+
 type ErrCode uint32
 
 const (
 	// OK means the job completed successfully
-	ErrCode_OK = 0
+	ErrCode_OK = iota
 	// TIMEOUT means the system lost contact with the job or it was taking too long
-	ErrCode_TIMEOUT = 1
+	ErrCode_TIMEOUT
 	// CANCELLED means the job was cancelled before it could complete
-	ErrCode_CANCELLED = 2
+	ErrCode_CANCELLED
 	// Exec is an execution error
-	ErrCode_EXEC = 3
+	ErrCode_EXEC
 )
 
 type Result struct {
-	ErrCode ErrCode
-	Data    glfs.Ref
+	ErrCode ErrCode `json:"ec"`
+	Data    []byte  `json:"data"`
 }
 
-func (r Result) Err() error {
+func Succeed(data []byte) *Result {
+	return &Result{Data: data}
+}
+
+func Result_ErrExec(err error) *Result {
+	return &Result{ErrCode: ErrCode_EXEC, Data: []byte(err.Error())}
+}
+
+func (r *Result) AsGLFS() (*glfs.Ref, error) {
+	var ret glfs.Ref
+	if err := json.Unmarshal(r.Data, &ret); err != nil {
+		return nil, err
+	}
+	return &ret, nil
+}
+
+func (r *Result) Err() error {
 	if r.ErrCode == 0 {
 		return nil
 	}
-	return fmt.Errorf("job errored %v", r.ErrCode)
+	return fmt.Errorf("job failed errcode=%v data=%q", r.ErrCode, r.Data)
 }
 
 type Job struct {
-	Task   Task
-	Result *Result
-
+	Task    Task
+	State   JobState
 	StartAt tai64.TAI64N
-	EndAt   *tai64.TAI64N
+
+	Result *Result
+	EndAt  *tai64.TAI64N
 }
 
 func (j Job) Elapsed() time.Duration {
@@ -103,12 +130,16 @@ func (jc *Ctx) Inspect(ctx context.Context, idx Idx) (*Job, error) {
 	return jc.sys.Inspect(ctx, jc.id, idx)
 }
 
+func (jc *Ctx) Errorf(msg string, args ...any) {
+	fmt.Fprintf(os.Stderr, jc.id.String()+": "+msg+"\n", args...)
+}
+
 func (jc *Ctx) Infof(msg string, args ...any) {
-	fmt.Fprintf(os.Stderr, msg+"\n", args)
+	fmt.Fprintf(os.Stderr, jc.id.String()+": "+msg+"\n", args...)
 }
 
 func (jc *Ctx) Debugf(msg string, args ...any) {
-	fmt.Fprintf(os.Stderr, msg+"\n", args)
+	fmt.Fprintf(os.Stderr, msg+"\n", args...)
 }
 
 // Do spawns a child job to compute the Task, then awaits it and returns the result

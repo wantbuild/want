@@ -6,6 +6,7 @@ import (
 
 	"github.com/blobcache/glfs"
 	"github.com/jmoiron/sqlx"
+	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/internal/op/dagops"
 	"wantbuild.io/want/internal/stores"
@@ -15,44 +16,55 @@ import (
 	"wantbuild.io/want/lib/wantrepo"
 )
 
-func Build(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, prefix string) (*glfs.Ref, error) {
-	panic("not implemented")
-}
-
-func Eval(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, calledFrom string, expr []byte) (*glfs.Ref, error) {
+func Eval(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, calledFrom string, expr []byte) (*glfs.Ref, cadata.Getter, error) {
 	s := stores.NewMem()
 	exec := newExecutor(s)
-	jsys := newJobSys(ctx, db, exec, s, runtime.GOMAXPROCS(0))
+	jsys := newJobSys(ctx, db, exec, runtime.GOMAXPROCS(0))
 	defer jsys.Shutdown()
 
 	c := wantc.NewCompiler(s)
 	dag, err := c.CompileSnippet(ctx, expr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	dagRef, err := wantdag.PostDAG(ctx, s, *dag)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	task := wantjob.Task{
-		Op:    "dag." + dagops.OpExecLast,
+		Op:    joinOpName("dag", dagops.OpExecLast),
 		Input: *dagRef,
 	}
+	return runRootJob(ctx, jsys, s, task)
+}
 
-	rootIdx, err := jsys.Init(ctx, task)
+func runRootJob(ctx context.Context, jsys *JobSys, src cadata.Getter, task wantjob.Task) (*glfs.Ref, cadata.Getter, error) {
+	rootIdx, err := jsys.Init(ctx, src, task)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := jsys.Await(ctx, nil, rootIdx); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	job, err := jsys.Inspect(ctx, nil, rootIdx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := job.Result.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	} else {
-		return &job.Result.Data, nil
+		ref, err := job.Result.AsGLFS()
+		rootState := jsys.getJobState(wantjob.JobID{rootIdx})
+		return ref, rootState.dst, err
 	}
+}
+
+func joinOpName(xs ...dagops.OpName) (ret dagops.OpName) {
+	for i, x := range xs {
+		if i > 0 {
+			ret += "."
+		}
+		ret += x
+	}
+	return ret
 }

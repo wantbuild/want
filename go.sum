@@ -139,8 +139,8 @@ github.com/xanzy/ssh-agent v0.3.3 h1:+/15pJfg/RsTxqYcX6fHqOXZwwMP+2VyYWJeWM2qQFM
 github.com/xanzy/ssh-agent v0.3.3/go.mod h1:6dzNDKs0J9rVPHPhaGCukekBHKqfl+L3KghI1Bc68Uw=
 go.brendoncarroll.net/exp v0.0.0-20241118183830-280772e567eb h1:y2ipVu+xk+Vstj592FoTF55Dly2e6M3z4gjFp9+FBc8=
 go.brendoncarroll.net/exp v0.0.0-20241118183830-280772e567eb/go.mod h1:7C3uhanAQUJFF9w9m4Zeif5gDoh1eJlgQ3/aJfuJo9A=
-go.brendoncarroll.net/star v0.0.0-20241118192826-d8f73b537798 h1:FJQe7qDn/lGuShz8LGjo4L4bChk0rZABBNt53lyXjNs=
-go.brendoncarroll.net/star v0.0.0-20241118192826-d8f73b537798/go.mod h1:2OxTqeTvQQdSeziKkxsXjRD0SUFzkyL5Cq7bHbZw9eE=
+go.brendoncarroll.net/star v0.0.0-20250115203425-ce38abe9f6b4 h1:1g7MCIifxQFUz9J8lY98orPMxCw8mcsEoIE9Rg5J1oY=
+go.brendoncarroll.net/star v0.0.0-20250115203425-ce38abe9f6b4/go.mod h1:2OxTqeTvQQdSeziKkxsXjRD0SUFzkyL5Cq7bHbZw9eE=
 go.brendoncarroll.net/state v0.0.0-20241118200920-627c9c196901 h1:EEzKLl/9qvDlm20k/eSaFV56omRdPKgS5uf2H//OB7A=
 go.brendoncarroll.net/state v0.0.0-20241118200920-627c9c196901/go.mod h1:mLgp/r9TXnMuaQqr9tzS7iS5H6Z97EuQH/Z7hfWeCtM=
 go.brendoncarroll.net/stdctx v0.0.0-20241118190518-40d09f4d11e7 h1:Fj7e7nplSTGghtILY5QdTAh8chXwkKjjiLJvmbcgddY=

@@ -10,6 +10,7 @@ import (
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/star"
 	"go.brendoncarroll.net/state/cadata"
+
 	"wantbuild.io/want/lib/want"
 )
 
@@ -29,9 +30,11 @@ var importCmd = star.Command{
 			return err
 		}
 		dur := time.Since(startTime)
-		if want.AccessSource(ctx, db, srcid, func(ctx context.Context, s cadata.Getter, root glfs.Ref) error {
-			return printTreeRef(ctx, s, c.StdOut, root)
-		}); err != nil {
+		root, s, err := want.AccessSource(ctx, db, srcid)
+		if err != nil {
+			return err
+		}
+		if err := printTreeRef(ctx, s, c.StdOut, *root); err != nil {
 			return err
 		}
 		fmt.Fprintf(c.StdErr, "%v\n", dur)
@@ -54,8 +57,8 @@ func printTreeRef(ctx context.Context, store cadata.Getter, w io.Writer, treeRef
 		if ent.Ref.Type == glfs.TypeTree {
 			name += "/"
 		}
-		fmt.Fprintf(w, "%-70s %s\n", indent+name, fmtCID(ent.Ref, true))
-		return nil
+		_, err := fmt.Fprintf(w, "%-70s %s\n", indent+name, fmtCID(ent.Ref, true))
+		return err
 	})
 }
 

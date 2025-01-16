@@ -51,7 +51,7 @@ func ROTx(ctx context.Context, db *sqlx.DB, fn func(tx *sqlx.Tx) error) error {
 	if err := fn(tx); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return tx.Rollback()
 }
 
 func ROTx1[T any](ctx context.Context, db *sqlx.DB, fn func(tx *sqlx.Tx) (T, error)) (T, error) {

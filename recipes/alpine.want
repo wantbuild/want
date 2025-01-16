@@ -1,0 +1,3 @@
+local alpine = import "./alpine.libsonnet";
+
+alpine.rootfs("x86_64", "3.21.2")

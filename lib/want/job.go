@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -14,6 +15,11 @@ import (
 	"go.brendoncarroll.net/tai64"
 
 	"wantbuild.io/want/internal/dbutil"
+	"wantbuild.io/want/internal/op/dagops"
+	"wantbuild.io/want/internal/op/glfsops"
+	"wantbuild.io/want/internal/op/importops"
+	"wantbuild.io/want/internal/op/wantops"
+	"wantbuild.io/want/internal/singleflight"
 	"wantbuild.io/want/internal/wantdb"
 	"wantbuild.io/want/internal/wantjob"
 )
@@ -23,6 +29,8 @@ var _ wantjob.System = &JobSys{}
 type jobState struct {
 	id      wantjob.JobID
 	task    wantjob.Task
+	src     cadata.Getter
+	dst     cadata.Store
 	startAt tai64.TAI64N
 
 	ctx      context.Context
@@ -36,16 +44,22 @@ type jobState struct {
 	children []*jobState
 }
 
-func newJobState(bgCtx context.Context, task wantjob.Task) *jobState {
+func newJobState(bgCtx context.Context, src cadata.Getter, task wantjob.Task) *jobState {
 	ctx, cf := context.WithCancel(bgCtx)
 	return &jobState{
 		task:    task,
+		src:     src,
 		startAt: tai64.Now(),
 
 		ctx:  ctx,
 		cf:   cf,
 		done: make(chan struct{}),
 	}
+}
+
+func (js *jobState) createChild(task wantjob.Task) (wantjob.Idx, *jobState) {
+	child := newJobState(js.ctx, js.dst, task)
+	return js.addChild(child), child
 }
 
 func (js *jobState) getChild(idx wantjob.Idx) *jobState {
@@ -64,6 +78,7 @@ func (js *jobState) addChild(child *jobState) wantjob.Idx {
 	js.children = append(js.children, child)
 
 	child.id = append(slices.Clone(js.id), idx)
+	child.dst = js.dst
 	return idx
 }
 
@@ -96,7 +111,6 @@ func (js *jobState) isDone() bool {
 type JobSys struct {
 	db   *sqlx.DB
 	exec wantjob.Executor
-	s    cadata.Store
 
 	bgCtx context.Context
 	cf    context.CancelFunc
@@ -107,12 +121,11 @@ type JobSys struct {
 	queue chan *jobState
 }
 
-func newJobSys(bgCtx context.Context, db *sqlx.DB, exec wantjob.Executor, s cadata.Store, numWorkers int) *JobSys {
+func newJobSys(bgCtx context.Context, db *sqlx.DB, exec wantjob.Executor, numWorkers int) *JobSys {
 	bgCtx, cf := context.WithCancel(bgCtx)
 	sys := &JobSys{
 		db:   db,
 		exec: exec,
-		s:    s,
 
 		bgCtx: bgCtx,
 		cf:    cf,
@@ -135,27 +148,9 @@ func newJobSys(bgCtx context.Context, db *sqlx.DB, exec wantjob.Executor, s cada
 	return sys
 }
 
-func (s *JobSys) cacheRead(ctx context.Context, tid wantjob.TaskID) []byte {
-	outData, err := dbutil.DoTx1(ctx, s.db, func(tx *sqlx.Tx) ([]byte, error) {
-		return wantdb.CacheRead(tx, tid)
-	})
-	if err != nil {
-		outData = nil
-	}
-	return outData
-}
-
 func (s *JobSys) finishJob(ctx context.Context, jobid wantjob.JobID, res wantjob.Result) error {
-	var resData []byte
-	if !res.Data.CID.IsZero() {
-		var err error
-		resData, err = json.Marshal(res.Data)
-		if err != nil {
-			return err
-		}
-	}
 	return dbutil.DoTx(ctx, s.db, func(tx *sqlx.Tx) error {
-		return wantdb.FinishJob(tx, jobid, res.ErrCode, resData)
+		return wantdb.FinishJob(tx, jobid, res)
 	})
 }
 
@@ -163,33 +158,22 @@ func (s *JobSys) process(x *jobState) {
 	defer close(x.done)
 	x.dequeued.Store(true)
 
-	// check cache
 	res := func() wantjob.Result {
-		tid := x.task.ID()
-		if outData := s.cacheRead(x.ctx, tid); len(outData) > 0 {
-			var outRoot glfs.Ref
-			if err := json.Unmarshal(outData, &outRoot); err != nil {
-				return wantjob.Result{
-					ErrCode: wantjob.ErrCode_EXEC,
-				}
-			}
-			return wantjob.Result{
-				Data: outRoot,
-			}
-		}
+		// TODO: check cache
 		// compute
 		jc := wantjob.NewCtx(s, x.id)
-		out, err := s.exec.Compute(x.ctx, &jc, s.s, x.task)
+		out, err := s.exec.Compute(x.ctx, &jc, x.src, x.task)
 		if err != nil {
-			return wantjob.Result{
-				// TODO: encode error as data
-				ErrCode: wantjob.ErrCode_EXEC,
-			}
-		} else {
-			return wantjob.Result{
-				Data: *out,
-			}
+			return *wantjob.Result_ErrExec(err)
 		}
+		if err := glfs.Sync(x.ctx, x.dst, s.exec.GetStore(), *out); err != nil {
+			return *wantjob.Result_ErrExec(err)
+		}
+		data, err := json.Marshal(out)
+		if err != nil {
+			panic(err)
+		}
+		return *wantjob.Succeed(data)
 	}()
 	if err := s.finishJob(x.ctx, x.id, res); err != nil {
 		panic(err) // TODO: need other way to signal internal failure
@@ -206,15 +190,27 @@ func (s *JobSys) Shutdown() {
 	}
 }
 
-func (s *JobSys) Init(ctx context.Context, task wantjob.Task) (wantjob.Idx, error) {
+func (s *JobSys) Init(ctx context.Context, src cadata.Getter, task wantjob.Task) (wantjob.Idx, error) {
 	rootIdx, err := dbutil.DoTx1(ctx, s.db, func(tx *sqlx.Tx) (wantjob.Idx, error) {
 		return wantdb.CreateRootJob(tx, task)
 	})
 	if err != nil {
-		return 0, nil
+		return 0, err
 	}
-	js := newJobState(s.bgCtx, task)
+	sid, err := dbutil.DoTx1(ctx, s.db, func(tx *sqlx.Tx) (wantdb.StoreID, error) {
+		return wantdb.GetJobStoreID(tx, wantjob.JobID{rootIdx})
+	})
+	if err != nil {
+		return 0, err
+	}
+	dst := wantdb.NewDBStore(s.db, sid)
+	if err := glfs.Sync(ctx, dst, src, task.Input); err != nil {
+		return 0, err
+	}
+
+	js := newJobState(s.bgCtx, src, task)
 	js.id = wantjob.JobID{rootIdx}
+	js.dst = dst
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -229,8 +225,16 @@ func (s *JobSys) Spawn(ctx context.Context, parent wantjob.JobID, task wantjob.T
 		return 0, fmt.Errorf("parent %v not found", parent)
 	}
 
-	child := newJobState(context.Background(), task)
-	idx := ps.addChild(child)
+	idx, err := dbutil.DoTx1(ctx, s.db, func(tx *sqlx.Tx) (wantjob.Idx, error) {
+		return wantdb.CreateChildJob(tx, ps.id, task)
+	})
+	if err != nil {
+		return 0, err
+	}
+	idx2, child := ps.createChild(task)
+	if idx != idx2 {
+		panic("jobidx mismatch")
+	}
 	s.queue <- child
 	return idx, nil
 }
@@ -272,4 +276,46 @@ func (s *JobSys) getJobState(jobid wantjob.JobID) *jobState {
 		x = x.getChild(idx)
 	}
 	return x
+}
+
+type executor struct {
+	s     cadata.GetPoster
+	execs map[wantjob.OpName]wantjob.Executor
+	sf    singleflight.Group[wantjob.Task, *glfs.Ref]
+}
+
+func newExecutor(s cadata.Store) *executor {
+	glfsExec := glfsops.NewExecutor(s)
+	wantExec := wantops.NewExecutor(s)
+	dagExec := dagops.NewExecutor(s)
+	impExec := importops.NewExecutor(s)
+
+	return &executor{
+		s: s,
+		execs: map[wantjob.OpName]wantjob.Executor{
+			"glfs":   glfsExec,
+			"want":   wantExec,
+			"dag":    dagExec,
+			"import": impExec,
+		},
+	}
+}
+
+func (e *executor) Compute(ctx context.Context, jc *wantjob.Ctx, src cadata.Getter, task wantjob.Task) (*glfs.Ref, error) {
+	parts := strings.SplitN(string(task.Op), ".", 2)
+	e2, exists := e.execs[wantjob.OpName(parts[0])]
+	if !exists {
+		return nil, wantjob.ErrOpNotFound{Op: task.Op}
+	}
+	out, err, _ := e.sf.Do(task, func() (*glfs.Ref, error) {
+		return e2.Compute(ctx, jc, src, wantjob.Task{
+			Op:    wantjob.OpName(parts[1]),
+			Input: task.Input,
+		})
+	})
+	return out, err
+}
+
+func (e *executor) GetStore() cadata.Getter {
+	return e.s
 }

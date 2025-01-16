@@ -22,7 +22,12 @@ func Open(p string) (*sqlx.DB, error) {
 	}
 	// How To for PRAGMAs with the modernc.org/sqlite driver
 	// https://pkg.go.dev/modernc.org/sqlite@v1.34.4#Driver.Open
-	return sqlx.Open("sqlite", "file:"+p+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)")
+	db, err := sqlx.Open("sqlite", "file:"+p+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)")
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1) // TODO: remove
+	return db, nil
 }
 
 // NewMemory creates an in memory database

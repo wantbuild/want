@@ -30,3 +30,11 @@ func NewErrInvalidInput(input glfs.Ref, msg string) ErrInvalidInput {
 func (e ErrInvalidInput) Error() string {
 	return fmt.Sprintf("invalid input. input=%v msg=%v", e.Input, e.Msg)
 }
+
+type ErrJobNotFound struct {
+	ID JobID
+}
+
+func (e ErrJobNotFound) Error() string {
+	return fmt.Sprintf("job not found: %v", e.ID)
+}

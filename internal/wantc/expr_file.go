@@ -25,7 +25,7 @@ type ExprRoot struct {
 func (c *Compiler) parseExprRoot(ctx context.Context, cs *compileState, p string, data []byte) (*ExprRoot, error) {
 	vm := newJsonnetVM(cs.jsImporter, cs.config.metadata)
 	p = strings.Trim(p, "/")
-	jsonStr, err := vm.EvaluateAnonymousSnippet(p, string(data))
+	jsonStr, err := vm.EvaluateSnippet(p, string(data))
 	if err != nil {
 		return nil, err
 	}

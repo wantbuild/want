@@ -94,7 +94,7 @@ func PostDAG(ctx context.Context, s cadata.Poster, x DAG) (*glfs.Ref, error) {
 }
 
 func nodeName(x NodeID) string {
-	return fmt.Sprintf("%016d", x)
+	return fmt.Sprintf("%016x", x)
 }
 
 // Builder performs checks while building a DAG.

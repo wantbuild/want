@@ -1,0 +1,8 @@
+local want = import "want";
+local oci = import "./oci.libsonnet";
+
+oci.importImage(
+    "docker.io/library/alpine",
+    algo="sha256",
+    hash="48d9183eb12a05c99bcc0bf44a003607b8e941e1d4f41f9ad12bdcc4b5672f86",
+)

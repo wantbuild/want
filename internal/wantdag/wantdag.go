@@ -1,24 +1,31 @@
 package wantdag
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"strconv"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
+	"wantbuild.io/want/internal/wantjob"
 )
 
-type Resolver = func(NodeID) *glfs.Ref
+type Resolver = func(NodeID) wantjob.Result
 
 // PrepareInput prepares the input for a node.
 func PrepareInput(ctx context.Context, s cadata.Getter, dst cadata.Poster, n Node, getResult Resolver) (*glfs.Ref, error) {
 	ents := []glfs.TreeEntry{}
 	for _, in := range n.Inputs {
-		ref := getResult(in.Node)
-		if ref.CID.IsZero() {
-			return nil, fmt.Errorf("node input %q from %d is not available", in.Name, in.Node)
+		res := getResult(in.Node)
+		if err := res.Err(); err != nil {
+			return nil, fmt.Errorf("upstream node %d errored: %v", in.Node, err)
+		}
+		ref, err := res.AsGLFS()
+		if err != nil {
+			return nil, fmt.Errorf("cannot convert job output to GLFS Ref: %v", err)
 		}
 		mode := InputFileMode
 		if ref.Type == glfs.TypeTree {
@@ -36,23 +43,31 @@ func PrepareInput(ctx context.Context, s cadata.Getter, dst cadata.Poster, n Nod
 	return glfs.PostTreeEntries(ctx, dst, ents)
 }
 
-func PostNodeResults(ctx context.Context, s cadata.Poster, results []glfs.Ref) (*glfs.Ref, error) {
+func PostNodeResults(ctx context.Context, s cadata.Poster, results []wantjob.Result) (*glfs.Ref, error) {
 	var ents []glfs.TreeEntry
 	for i, out := range results {
+		data, err := json.Marshal(out)
+		if err != nil {
+			return nil, err
+		}
+		ref, err := glfs.PostBlob(ctx, s, bytes.NewReader(data))
+		if err != nil {
+			return nil, err
+		}
 		ents = append(ents, glfs.TreeEntry{
 			Name: nodeName(NodeID(i)),
-			Ref:  out,
+			Ref:  *ref,
 		})
 	}
 	return glfs.PostTreeEntries(ctx, s, ents)
 }
 
-func GetNodeResults(ctx context.Context, s cadata.Getter, ref glfs.Ref) ([]glfs.Ref, error) {
+func GetNodeResults(ctx context.Context, s cadata.Getter, ref glfs.Ref) ([]wantjob.Result, error) {
 	tree, err := glfs.GetTree(ctx, s, ref)
 	if err != nil {
 		return nil, err
 	}
-	var ret []glfs.Ref
+	var ret []wantjob.Result
 	for i, ent := range tree.Entries {
 		n, err := strconv.ParseUint(ent.Name, 16, 64)
 		if err != nil {
@@ -61,7 +76,15 @@ func GetNodeResults(ctx context.Context, s cadata.Getter, ref glfs.Ref) ([]glfs.
 		if NodeID(i) != NodeID(n) {
 			return nil, fmt.Errorf("missing result for %d", n)
 		}
-		ret = append(ret, ent.Ref)
+		data, err := glfs.GetBlobBytes(ctx, s, ent.Ref, 1024)
+		if err != nil {
+			return nil, err
+		}
+		var res wantjob.Result
+		if err := json.Unmarshal(data, &res); err != nil {
+			return nil, err
+		}
+		ret = append(ret, res)
 	}
 	return ret, nil
 }

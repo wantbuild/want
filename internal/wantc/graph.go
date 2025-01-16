@@ -10,7 +10,6 @@ import (
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
-	"wantbuild.io/want/internal/op/glfsops"
 	"wantbuild.io/want/internal/wantdag"
 )
 
@@ -114,7 +113,7 @@ func (gb *GraphBuilder) computeInput(ctx context.Context, src cadata.Getter, inp
 
 func (gb *GraphBuilder) mergeLayers(ctx context.Context, xs []wantdag.NodeID) wantdag.NodeID {
 	if len(xs) <= wantdag.MaxNodeInputs {
-		return glfsops.DeriveMerge(gb, xs)
+		return DeriveMerge(&gb.b, xs)
 	}
 	batchSize := len(xs) / wantdag.MaxNodeInputs
 	if len(xs)%wantdag.MaxNodeInputs > 0 {
@@ -132,7 +131,7 @@ func (gb *GraphBuilder) mergeLayers(ctx context.Context, xs []wantdag.NodeID) wa
 			ys = append(ys, n)
 		}
 	}
-	return glfsops.DeriveMerge(gb, ys)
+	return DeriveMerge(&gb.b, ys)
 }
 
 func (gb *GraphBuilder) blob(ctx context.Context, data []byte) (wantdag.NodeID, error) {
@@ -158,7 +157,7 @@ func (gb *GraphBuilder) place(ctx context.Context, to string, from wantdag.NodeI
 		if err != nil {
 			return 0, err
 		}
-		from = glfsops.DerivePlace(&gb.b, from, pathNode)
+		from = DerivePlace(&gb.b, from, pathNode)
 	}
 	return from, nil
 }

@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"os"
 	"regexp"
-	"strings"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
@@ -49,35 +48,6 @@ var ops = map[OpName]Operator{
 
 type Operator func(ctx context.Context, s cadata.GetPoster, x glfs.Ref) (*glfs.Ref, error)
 
-type GraphBuilder interface {
-	Fact(context.Context, cadata.Getter, glfs.Ref) (NodeID, error)
-	Derived(context.Context, wantjob.OpName, []wantdag.NodeInput) (NodeID, error)
-}
-
-func mustDerived(gb GraphBuilder, op wantjob.OpName, ins []wantdag.NodeInput) NodeID {
-	ctx := context.Background()
-	nid, err := gb.Derived(ctx, op, ins)
-	if err != nil {
-		panic(err)
-	}
-	return nid
-}
-
-func DeriveMerge(g GraphBuilder, layers []NodeID) NodeID {
-	if len(layers) > wantdag.MaxNodeInputs {
-		// TODO: recurse here
-		panic(len(layers))
-	}
-	var inputs []NodeInput
-	for i, layer := range layers {
-		inputs = append(inputs, NodeInput{
-			Name: fmt.Sprintf("%02x", i),
-			Node: layer,
-		})
-	}
-	return mustDerived(g, OpMerge, inputs)
-}
-
 func Merge(ctx context.Context, s cadata.GetPoster, inputsRef glfs.Ref) (*glfs.Ref, error) {
 	t, err := glfs.GetTree(ctx, s, inputsRef)
 	if err != nil {
@@ -91,13 +61,6 @@ func Merge(ctx context.Context, s cadata.GetPoster, inputsRef glfs.Ref) (*glfs.R
 		return nil, errors.New("cannot merge 0 layers")
 	}
 	return glfs.Merge(ctx, s, layers...)
-}
-
-func DerivePick(g GraphBuilder, x, path NodeID) wantdag.NodeID {
-	return mustDerived(g, OpPick, []wantdag.NodeInput{
-		{Name: "x", Node: x},
-		{Name: "path", Node: path},
-	})
 }
 
 func Pick(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.Ref, error) {
@@ -118,13 +81,6 @@ func Pick(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.Ref
 		return nil, fmt.Errorf("pick: while reading path %w", err)
 	}
 	return glfs.GetAtPath(ctx, s, xent.Ref, string(pathBytes))
-}
-
-func DerivePlace(g GraphBuilder, x, path NodeID) NodeID {
-	return mustDerived(g, OpPlace, []NodeInput{
-		{Name: "x", Node: x},
-		{Name: "path", Node: path},
-	})
 }
 
 func Place(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.Ref, error) {
@@ -153,13 +109,6 @@ func Passthrough(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*g
 	return &inputRef, nil
 }
 
-func DeriveFilter(g GraphBuilder, x, filter NodeID) NodeID {
-	return mustDerived(g, OpFilter, []NodeInput{
-		{Name: "x", Node: x},
-		{Name: "filter", Node: filter},
-	})
-}
-
 func Filter(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.Ref, error) {
 	root, err := glfs.GetTree(ctx, s, inputRef)
 	if err != nil {
@@ -186,13 +135,6 @@ func Filter(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.R
 	})
 }
 
-func DeriveChmod(g GraphBuilder, x, path NodeID) NodeID {
-	return mustDerived(g, OpChmod, []NodeInput{
-		{Name: "path", Node: path},
-		{Name: "x", Node: x},
-	})
-}
-
 func Chmod(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.Ref, error) {
 	inputTree, err := glfs.GetTree(ctx, s, inputRef)
 	if err != nil {
@@ -215,13 +157,6 @@ func Chmod(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.Re
 	return glfs.MapEntryAt(ctx, s, xEnt.Ref, p, func(ent glfs.TreeEntry) (*glfs.TreeEntry, error) {
 		ent.FileMode |= 0o111
 		return &ent, nil
-	})
-}
-
-func DeriveDiff(g GraphBuilder, left, right NodeID) NodeID {
-	return mustDerived(g, OpDiff, []NodeInput{
-		{Name: "left", Node: left},
-		{Name: "right", Node: right},
 	})
 }
 
@@ -273,42 +208,4 @@ func getFileMode(x glfs.Ref) os.FileMode {
 type AssertChecks struct {
 	SubsetOf *wantdag.NodeID
 	Message  string
-}
-
-func DeriveAssert(ctx context.Context, s cadata.GetPoster, gb GraphBuilder, x wantdag.NodeID, ac AssertChecks) wantdag.NodeID {
-	inputs := []NodeInput{
-		{Name: "x", Node: x},
-	}
-	if ac.SubsetOf != nil {
-		inputs = append(inputs, NodeInput{Name: "subsetOf", Node: *ac.SubsetOf})
-	}
-	if ac.Message != "" {
-		nid := FactString(ctx, gb, s, ac.Message)
-		inputs = append(inputs, NodeInput{Name: "message", Node: nid})
-	}
-	return mustDerived(gb, OpAssert, inputs)
-}
-
-func FactString(ctx context.Context, gb GraphBuilder, s cadata.GetPoster, p string) wantdag.NodeID {
-	ref, err := glfs.PostBlob(ctx, s, strings.NewReader(p))
-	if err != nil {
-		panic(err)
-	}
-	nid, err := gb.Fact(ctx, s, *ref)
-	if err != nil {
-		panic(err)
-	}
-	return nid
-}
-
-func FactTree(ctx context.Context, gb GraphBuilder, s cadata.GetPoster, ents []glfs.TreeEntry) wantdag.NodeID {
-	ref, err := glfs.PostTreeEntries(ctx, s, ents)
-	if err != nil {
-		panic(err)
-	}
-	nid, err := gb.Fact(ctx, s, *ref)
-	if err != nil {
-		panic(err)
-	}
-	return nid
 }

@@ -17,7 +17,7 @@ import (
 func (c *Compiler) CompileSnippet(ctx context.Context, x []byte) (*wantdag.DAG, error) {
 	vm := jsonnet.MakeVM()
 	vm.Importer(libOnlyImporter{})
-	jsonData, err := vm.EvaluateAnonymousSnippet("", string(x))
+	jsonData, err := vm.EvaluateSnippet("", string(x))
 	if err != nil {
 		return nil, err
 	}

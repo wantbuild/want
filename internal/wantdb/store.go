@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/jmoiron/sqlx"
@@ -182,6 +183,9 @@ func GetBlob(tx *sqlx.Tx, sid StoreID, id cadata.ID, buf []byte) (int, error) {
 			return 0, cadata.ErrNotFound{Key: id}
 		}
 		return 0, err
+	}
+	if stores.Hash(data) != id {
+		return 0, fmt.Errorf("db returned bad data for %v", id)
 	}
 	return copy(buf, data), nil
 }

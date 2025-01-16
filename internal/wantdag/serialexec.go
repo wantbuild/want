@@ -2,9 +2,8 @@ package wantdag
 
 import (
 	"context"
+	"encoding/json"
 
-	"github.com/blobcache/glfs"
-	"go.brendoncarroll.net/exp/slices2"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/internal/wantjob"
@@ -25,18 +24,18 @@ func (e *SerialExec) GetStore() cadata.Getter {
 	return e.store
 }
 
-func (e *SerialExec) Execute(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter, x DAG) ([]glfs.Ref, error) {
-	nodeResults := make([]*wantjob.Result, len(x.Nodes))
-	resolve := func(nid NodeID) *glfs.Ref {
-		res := nodeResults[nid]
-		if res == nil {
-			return nil
-		}
-		return &res.Data
+func (e *SerialExec) Execute(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter, x DAG) ([]wantjob.Result, error) {
+	nodeResults := make([]wantjob.Result, len(x.Nodes))
+	resolve := func(nid NodeID) wantjob.Result {
+		return nodeResults[nid]
 	}
 	for i, n := range x.Nodes {
 		if n.IsFact() {
-			nodeResults[i] = &wantjob.Result{Data: *n.Value}
+			data, err := json.Marshal(*n.Value)
+			if err != nil {
+				return nil, err
+			}
+			nodeResults[i] = wantjob.Result{Data: data}
 			continue
 		}
 		input, err := PrepareInput(ctx, s, e.store, n, resolve)
@@ -50,9 +49,10 @@ func (e *SerialExec) Execute(ctx context.Context, jc *wantjob.Ctx, s cadata.Gett
 		if err != nil {
 			return nil, err
 		}
-		nodeResults[i] = out
+		if err := out.Err(); err != nil {
+			jc.Infof("ERROR: %v", err)
+		}
+		nodeResults[i] = *out
 	}
-	return slices2.Map(nodeResults, func(res *wantjob.Result) glfs.Ref {
-		return res.Data
-	}), nil
+	return nodeResults, nil
 }

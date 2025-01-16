@@ -20,7 +20,7 @@ type StmtSet struct {
 
 func (c *Compiler) parseStmtSet(ctx context.Context, cs *compileState, p string, data []byte) (*StmtSet, error) {
 	vm := newJsonnetVM(cs.jsImporter, cs.config.metadata)
-	jsonStr, err := vm.EvaluateAnonymousSnippet(p, string(data))
+	jsonStr, err := vm.EvaluateSnippet(p, string(data))
 	if err != nil {
 		return nil, err
 	}

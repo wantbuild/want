@@ -39,6 +39,7 @@ func NewCompiler(store cadata.Store) *Compiler {
 
 // compileState holds the state for a single run of the compiler
 type compileState struct {
+	src    cadata.Getter
 	ground glfs.Ref
 	root   Expr
 	config compileConfig
@@ -141,11 +142,17 @@ func WithGitMetadata(commitHash, tag string) CompileOption {
 	}
 }
 
-func (c *Compiler) Compile(ctx context.Context, ground glfs.Ref, prefix string, opts ...CompileOption) (*Plan, error) {
+func (c *Compiler) Compile(ctx context.Context, src cadata.Getter, ground glfs.Ref, prefix string, opts ...CompileOption) (*Plan, error) {
 	cfg := collectCompileConfig(opts)
 	cfg.setInputRef(ground)
 
+	// TODO: remove, only copy to dst as needed
+	if err := glfs.Sync(ctx, c.store, src, ground); err != nil {
+		return nil, err
+	}
+
 	cs := &compileState{
+		src:          src,
 		config:       cfg,
 		ground:       ground,
 		root:         &selection{set: stringsets.Prefix(prefix)},

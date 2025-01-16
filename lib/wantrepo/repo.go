@@ -50,14 +50,14 @@ type Repo struct {
 	dir string
 
 	rawConfig string
-	config    wantcfg.ProjectConfig
+	config    wantcfg.ModuleConfig
 }
 
 func (r *Repo) RawConfig() string {
 	return r.rawConfig
 }
 
-func (r *Repo) Config() wantcfg.ProjectConfig {
+func (r *Repo) Config() wantcfg.ModuleConfig {
 	return r.config
 }
 

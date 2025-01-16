@@ -6,7 +6,6 @@ import (
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
-	"wantbuild.io/want/internal/wantc"
 	"wantbuild.io/want/internal/wantdag"
 	"wantbuild.io/want/internal/wantjob"
 )
@@ -16,7 +15,7 @@ type OpName = wantjob.OpName
 
 const (
 	// OpExec evaluates a subgraph.
-	OpExec     = OpName("exec")
+	OpExecAll  = OpName("execAll")
 	OpExecLast = OpName("execLast")
 	// OpPickLast takes as input a result set, and evaluates to the value of the result, or errors if it was not successful.
 	OpPickLastValue = OpName("pickLast")
@@ -25,23 +24,19 @@ const (
 var _ wantjob.Executor = &Executor{}
 
 type Executor struct {
-	s    cadata.Store
-	glfs *glfs.Agent
-	c    *wantc.Compiler
+	s cadata.GetPoster
 }
 
-func NewExecutor(s cadata.Store) Executor {
+func NewExecutor(s cadata.GetPoster) Executor {
 	return Executor{
-		s:    s,
-		glfs: glfs.NewAgent(),
-		c:    wantc.NewCompiler(s),
+		s: s,
 	}
 }
 
 func (e Executor) Compute(ctx context.Context, jc *wantjob.Ctx, src cadata.Getter, x wantjob.Task) (*glfs.Ref, error) {
 	switch x.Op {
-	case OpExec:
-		return e.Exec(ctx, jc, src, x.Input)
+	case OpExecAll:
+		return e.ExecAll(ctx, jc, src, x.Input)
 	case OpExecLast:
 		return e.ExecLast(ctx, jc, src, x.Input)
 	case OpPickLastValue:
@@ -55,7 +50,7 @@ func (e Executor) GetStore() cadata.Getter {
 	return e.s
 }
 
-func (e Executor) Exec(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+func (e Executor) ExecAll(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
 	dag, err := wantdag.GetDAG(ctx, s, ref)
 	if err != nil {
 		return nil, err
@@ -74,9 +69,13 @@ func (e Executor) PickLast(ctx context.Context, _ *wantjob.Ctx, s cadata.Getter,
 		return nil, err
 	}
 	if len(nrs) == 0 {
-		return nil, fmt.Errorf("empty node result list")
+		return nil, fmt.Errorf("empty node results")
 	}
-	return &nrs[len(nrs)-1], nil
+	res := nrs[len(nrs)-1]
+	if err := res.Err(); err != nil {
+		return nil, err
+	}
+	return res.AsGLFS()
 }
 
 func (e Executor) ExecLast(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
@@ -89,8 +88,12 @@ func (e Executor) ExecLast(ctx context.Context, jc *wantjob.Ctx, s cadata.Getter
 	if err != nil {
 		return nil, err
 	}
-	if len(nrs) < 1 {
+	if len(nrs) == 0 {
 		return nil, fmt.Errorf("empty node results")
 	}
-	return &nrs[len(nrs)-1], nil
+	res := nrs[len(nrs)-1]
+	if err := res.Err(); err != nil {
+		return nil, err
+	}
+	return res.AsGLFS()
 }

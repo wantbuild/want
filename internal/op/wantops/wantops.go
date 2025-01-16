@@ -58,7 +58,7 @@ func (e Executor) GetStore() cadata.Getter {
 }
 
 func (e Executor) Compile(ctx context.Context, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
-	plan, err := e.c.Compile(ctx, ref, "")
+	plan, err := e.c.Compile(ctx, s, ref, "")
 	if err != nil {
 		return nil, err
 	}

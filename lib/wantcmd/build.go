@@ -8,6 +8,7 @@ import (
 var buildCmd = star.Command{
 	Metadata: star.Metadata{Short: "run a build"},
 	Flags:    []star.IParam{dbParam},
+	Pos:      []star.IParam{pathParam},
 	F: func(c star.Context) error {
 		ctx := c.Context
 		repo, err := openRepo()
@@ -15,10 +16,25 @@ var buildCmd = star.Command{
 			return err
 		}
 		db := dbParam.Load(c)
-		_, err = want.Import(ctx, db, repo)
+		defer db.Close()
+		res, err := want.Build(ctx, db, repo, "")
 		if err != nil {
 			return err
 		}
-		return nil
+		c.Printf("TARGETS: \n")
+		for _, targ := range res.Targets {
+			c.Printf("%s %s\n", targ.DefinedIn, targ.To)
+		}
+		if res.OutputRoot != nil {
+			c.Printf("OUTPUT: %v\n", *&res.OutputRoot.CID)
+		}
+		return c.StdOut.Flush()
 	},
+}
+
+var pathParam = star.Param[string]{
+	Name:     "paths",
+	Default:  star.Ptr(""),
+	Repeated: true,
+	Parse:    star.ParseString,
 }

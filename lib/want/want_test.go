@@ -56,7 +56,7 @@ func TestEvalNoRepo(t *testing.T) {
 		tc := tc
 		in := `local want = import "want";` + "\n" + tc.I
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
-			out, err := Eval(ctx, db, nil, "", []byte(in))
+			out, _, err := Eval(ctx, db, nil, "", []byte(in))
 			require.NoError(t, err)
 			require.Equal(t, tc.O, *out)
 		})

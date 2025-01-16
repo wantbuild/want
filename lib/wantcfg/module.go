@@ -1,15 +1,15 @@
 package wantcfg
 
-// ProjectConfig contains project level configuration
+// ModuleConfig contains project level configuration
 // which should be committed in version control and is suitable for
 // every contributor to the project
-type ProjectConfig struct {
+type ModuleConfig struct {
 	Name   string  `json:"name"`
 	Ignore PathSet `json:"ignore"`
 }
 
-func DefaultProjectConfig(name string) *ProjectConfig {
-	return &ProjectConfig{
+func DefaultProjectConfig(name string) *ModuleConfig {
+	return &ModuleConfig{
 		Name:   name,
 		Ignore: DirPath(".git"),
 	}

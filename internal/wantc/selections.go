@@ -10,6 +10,7 @@ import (
 
 	"wantbuild.io/want/internal/op/glfsops"
 	"wantbuild.io/want/internal/stringsets"
+	"wantbuild.io/want/internal/wantjob"
 	"wantbuild.io/want/lib/wantcfg"
 )
 
@@ -20,7 +21,7 @@ func (c *Compiler) query(ctx context.Context, vfs *VFS, ks stringsets.Set, pick 
 		return nil, err
 	}
 	return &compute{
-		Op:     glfsops.OpPassthrough,
+		Op:     wantjob.OpName("glfs.") + glfsops.OpPassthrough,
 		Inputs: ni,
 	}, nil
 }

@@ -40,16 +40,20 @@ CREATE TABLE jobs (
     rowid INTEGER PRIMARY KEY AUTOINCREMENT,
 
     task BLOB NOT NULL REFERENCES tasks(id),
+    store_id INT NOT NULL REFERENCES stores(id),
+    start_at BLOB NOT NULL,
+
     next_idx INT NOT NULL DEFAULT 0,
     state INT NOT NULL DEFAULT 1,
+
     res_data BLOB,
-    errcode INT
+    errcode INT,
+    end_at BLOB
 ) STRICT;
 
 CREATE TABLE job_roots (
     idx INTEGER PRIMARY KEY AUTOINCREMENT,
-    job_row INT REFERENCES jobs(id),
-    store_id INT REFERENCES stores(id)
+    job_row INT REFERENCES jobs(rowid)
 ) STRICT;
 
 CREATE TABLE job_children (

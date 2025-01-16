@@ -13,10 +13,10 @@ import (
 var _ wantjob.Executor = Executor{}
 
 type Executor struct {
-	s cadata.Store
+	s cadata.GetPoster
 }
 
-func NewExecutor(s cadata.Store) Executor {
+func NewExecutor(s cadata.GetPoster) Executor {
 	return Executor{s: s}
 }
 
