@@ -7,7 +7,7 @@ import (
 	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/internal/glfstasks"
 	"wantbuild.io/want/internal/wantdag"
-	"wantbuild.io/want/internal/wantjob"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 // OpName uniquely identifies an Operation

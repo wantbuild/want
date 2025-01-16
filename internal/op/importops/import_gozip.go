@@ -13,7 +13,7 @@ import (
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/sumdb/dirhash"
 
-	"wantbuild.io/want/internal/wantjob"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 type ImportGoZipTask struct {

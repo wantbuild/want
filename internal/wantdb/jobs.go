@@ -11,7 +11,7 @@ import (
 	"go.brendoncarroll.net/tai64"
 
 	"wantbuild.io/want/internal/dbutil"
-	"wantbuild.io/want/internal/wantjob"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 func CreateRootJob(tx *sqlx.Tx, task wantjob.Task) (wantjob.Idx, error) {

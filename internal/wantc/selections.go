@@ -10,8 +10,8 @@ import (
 
 	"wantbuild.io/want/internal/op/glfsops"
 	"wantbuild.io/want/internal/stringsets"
-	"wantbuild.io/want/internal/wantjob"
 	"wantbuild.io/want/lib/wantcfg"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 func (c *Compiler) query(ctx context.Context, vfs *VFS, ks stringsets.Set, pick string) (Expr, error) {

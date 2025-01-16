@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/blobcache/glfs"
-	"wantbuild.io/want/internal/wantjob"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 const (

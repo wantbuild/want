@@ -5,7 +5,7 @@ import (
 
 	"github.com/blobcache/glfs"
 
-	"wantbuild.io/want/internal/wantjob"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 func Exec(x []byte, fn func(x glfs.Ref) (*glfs.Ref, error)) ([]byte, error) {

@@ -13,8 +13,8 @@ import (
 	"wantbuild.io/want/internal/stringsets"
 	"wantbuild.io/want/internal/wantc"
 	"wantbuild.io/want/internal/wantdag"
-	"wantbuild.io/want/internal/wantjob"
 	"wantbuild.io/want/lib/wantcfg"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 const (

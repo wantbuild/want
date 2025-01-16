@@ -18,7 +18,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"go.brendoncarroll.net/state/cadata"
 
-	"wantbuild.io/want/internal/wantjob"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 type ImportOCIImageTask struct {

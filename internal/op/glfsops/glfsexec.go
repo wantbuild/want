@@ -6,7 +6,7 @@ import (
 
 	"wantbuild.io/want/internal/glfstasks"
 	"wantbuild.io/want/internal/stores"
-	"wantbuild.io/want/internal/wantjob"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 var _ wantjob.Executor = Executor{}

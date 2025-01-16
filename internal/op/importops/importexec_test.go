@@ -10,7 +10,7 @@ import (
 
 	"wantbuild.io/want/internal/stores"
 	"wantbuild.io/want/internal/testutil"
-	"wantbuild.io/want/internal/wantjob"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 func TestImportURL(t *testing.T) {

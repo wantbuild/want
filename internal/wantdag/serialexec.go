@@ -4,7 +4,7 @@ import (
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/internal/glfstasks"
-	"wantbuild.io/want/internal/wantjob"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 // SerialExec is a serial executor for graphs

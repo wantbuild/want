@@ -11,7 +11,7 @@ import (
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/internal/glfstasks"
-	"wantbuild.io/want/internal/wantjob"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 type Resolver = func(NodeID) wantjob.Result

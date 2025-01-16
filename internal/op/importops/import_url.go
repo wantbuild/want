@@ -33,7 +33,7 @@ import (
 	"lukechampine.com/blake3"
 
 	"wantbuild.io/want/internal/wantdag"
-	"wantbuild.io/want/internal/wantjob"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 // ImportURLTask is a spec for importing data from a URL

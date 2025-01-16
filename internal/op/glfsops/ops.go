@@ -13,7 +13,7 @@ import (
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/internal/wantdag"
-	"wantbuild.io/want/internal/wantjob"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 type (

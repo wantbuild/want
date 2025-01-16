@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"wantbuild.io/want/internal/dbutil"
 	"wantbuild.io/want/internal/testutil"
-	"wantbuild.io/want/internal/wantjob"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 func TestSetup(t *testing.T) {

@@ -21,7 +21,7 @@ import (
 	"wantbuild.io/want/internal/op/wantops"
 	"wantbuild.io/want/internal/singleflight"
 	"wantbuild.io/want/internal/wantdb"
-	"wantbuild.io/want/internal/wantjob"
+	"wantbuild.io/want/lib/wantjob"
 )
 
 var _ wantjob.System = &JobSys{}

@@ -13,7 +13,7 @@ import (
 	"wantbuild.io/want/internal/stores"
 	"wantbuild.io/want/internal/wantc"
 	"wantbuild.io/want/internal/wantdag"
-	"wantbuild.io/want/internal/wantjob"
+	"wantbuild.io/want/lib/wantjob"
 	"wantbuild.io/want/lib/wantrepo"
 )
 
