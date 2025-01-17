@@ -25,6 +25,7 @@ var rootCmd = star.NewDir(star.Metadata{Short: "want build system"},
 		"status": statusCmd,
 		"import": importCmd,
 		"job":    jobCmd,
+		"blame":  blameCmd,
 	},
 )
 

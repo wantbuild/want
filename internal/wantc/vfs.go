@@ -65,7 +65,8 @@ func (v *VFS) nodePath(ks stringsets.Set) []string {
 type VFSEntry struct {
 	K          stringsets.Set
 	V          Expr
-	ConfigFile string
+	DefinedIn  string
+	DefinedNum int
 	IsExport   bool
 }
 

@@ -255,7 +255,7 @@ func (c *Compiler) loadExpr(ctx context.Context, cs *compileState, p string, ref
 	ks := er.Affects()
 	vfs, rel := cs.acquireVFS()
 	defer rel()
-	if err := vfs.Add(VFSEntry{K: ks, V: er.expr, ConfigFile: p}); err != nil {
+	if err := vfs.Add(VFSEntry{K: ks, V: er.expr, DefinedIn: p}); err != nil {
 		panic(err)
 	}
 	cs.appendExprRoot(er)
@@ -283,7 +283,7 @@ func (c *Compiler) loadStmt(ctx context.Context, cs *compileState, p string, ref
 		if isExport && isFactAt(vfs, ks) {
 			cs.vfs.Delete(ks)
 		}
-		if err := vfs.Add(VFSEntry{K: ks, V: stmt.expr(), ConfigFile: p, IsExport: isExport}); err != nil {
+		if err := vfs.Add(VFSEntry{K: ks, V: stmt.expr(), DefinedIn: p, IsExport: isExport}); err != nil {
 			rel()
 			return fmt.Errorf("statement %d in file %q, outputs to conflicted keyspace %w", i, p, err)
 		}

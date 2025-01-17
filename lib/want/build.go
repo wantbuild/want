@@ -36,7 +36,8 @@ type Target struct {
 	// To is the pathset that this target controls
 	To wantcfg.PathSet
 	// From is the expr which defines the desired contents of the PathSet.
-	From wantcfg.Expr
+	// TODO: change to wantcfg.Expr
+	From wantc.Expr
 	// DefinedIn is where this target was defined.
 	DefinedIn string
 	// DefinedNum is the order the statement is defined in the file.
@@ -45,6 +46,35 @@ type Target struct {
 
 type TargetResult struct {
 	Root *glfs.Ref
+}
+
+func Blame(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo) ([]Target, error) {
+	srcid, err := Import(ctx, db, repo)
+	if err != nil {
+		return nil, err
+	}
+	srcRoot, srcStore, err := AccessSource(ctx, db, srcid)
+	if err != nil {
+		return nil, err
+	}
+
+	cstore := stores.NewMem()
+	c := wantc.NewCompiler(cstore)
+	plan, err := c.Compile(ctx, srcStore, *srcRoot, "")
+	if err != nil {
+		return nil, err
+	}
+	var targets []Target
+	for i, xtarg := range plan.Targets {
+		ents := plan.VFS.Get(wantc.SetFromQuery(xtarg.DefinedIn, xtarg.To))
+		targets = append(targets, Target{
+			To:         plan.Targets[i].To,
+			From:       ents[0].V,
+			DefinedIn:  ents[0].DefinedIn,
+			DefinedNum: ents[0].DefinedNum,
+		})
+	}
+	return targets, nil
 }
 
 func Build(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, prefix string) (*BuildResult, error) {

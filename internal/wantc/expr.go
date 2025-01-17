@@ -61,10 +61,10 @@ func (c *compute) Key() (ret [32]byte) {
 
 func (c *compute) PrettyPrint(w io.Writer) error {
 	if len(c.Inputs) == 0 {
-		fmt.Fprintf(w, "%s()", c.Op)
+		fmt.Fprintf(w, "(%s)", c.Op)
 	} else if len(c.Inputs) == 1 && c.Inputs[0].To == "" {
 		in := c.Inputs[0]
-		fmt.Fprintf(w, "%s(", c.Op)
+		fmt.Fprintf(w, "(%s ", c.Op)
 		if err := in.From.PrettyPrint(w); err != nil {
 			return err
 		}
@@ -95,7 +95,7 @@ func (c *compute) Needs() (ret stringsets.Set) {
 }
 
 func (c *compute) String() string {
-	return fmt.Sprintf("%v(%v)", c.Op, c.Inputs)
+	return fmt.Sprintf("(%v %v)", c.Op, c.Inputs)
 }
 
 func (c compute) isExpr() {}
@@ -139,11 +139,11 @@ func (f *value) PrettyPrint(w io.Writer) error {
 	var err error
 	switch f.ref.Type {
 	case glfs.TypeBlob:
-		_, err = fmt.Fprintf(w, "blob %s", f.ref.CID.String())
+		_, err = fmt.Fprintf(w, "{blob %s}", f.ref.CID.String())
 	case glfs.TypeTree:
-		_, err = fmt.Fprintf(w, "tree %s", f.ref.CID.String())
+		_, err = fmt.Fprintf(w, "{tree %s}", f.ref.CID.String())
 	default:
-		_, err = fmt.Fprintf(w, "value %s", f.ref.CID.String())
+		_, err = fmt.Fprintf(w, "{value %s}", f.ref.CID.String())
 	}
 	return err
 }
