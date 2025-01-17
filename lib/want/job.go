@@ -44,10 +44,11 @@ type jobState struct {
 	children []*jobState
 }
 
-func newJobState(bgCtx context.Context, src cadata.Getter, task wantjob.Task) *jobState {
+func newJobState(bgCtx context.Context, dst cadata.Store, src cadata.Getter, task wantjob.Task) *jobState {
 	ctx, cf := context.WithCancel(bgCtx)
 	return &jobState{
 		task:    task,
+		dst:     dst,
 		src:     src,
 		startAt: tai64.Now(),
 
@@ -57,8 +58,8 @@ func newJobState(bgCtx context.Context, src cadata.Getter, task wantjob.Task) *j
 	}
 }
 
-func (js *jobState) createChild(task wantjob.Task) (wantjob.Idx, *jobState) {
-	child := newJobState(js.ctx, js.dst, task)
+func (js *jobState) createChild(dst cadata.Store, src cadata.Getter, task wantjob.Task) (wantjob.Idx, *jobState) {
+	child := newJobState(js.ctx, dst, src, task)
 	return js.addChild(child), child
 }
 
@@ -78,7 +79,6 @@ func (js *jobState) addChild(child *jobState) wantjob.Idx {
 	js.children = append(js.children, child)
 
 	child.id = append(slices.Clone(js.id), idx)
-	child.dst = js.dst
 	return idx
 }
 
@@ -159,12 +159,16 @@ func (s *JobSys) process(x *jobState) {
 	x.dequeued.Store(true)
 
 	res := func() wantjob.Result {
-		// TODO: check cache
-		// compute
-		jc := wantjob.NewCtx(s.bgCtx, s, x.id)
+		jc := wantjob.NewCtx(x.ctx, s, x.id)
 		out, err := s.exec.Execute(&jc, x.dst, x.src, x.task)
 		if err != nil {
 			return *wantjob.Result_ErrExec(err)
+		}
+		// if it is a glfs ref, ensure it is complete
+		if ref, err := glfstasks.ParseGLFSRef(out); err == nil {
+			if err := glfs.WalkRefs(x.ctx, x.dst, *ref, func(ref glfs.Ref) error { return nil }); err != nil {
+				return *wantjob.Result_ErrExec(err)
+			}
 		}
 		return *wantjob.Success(out)
 	}()
@@ -190,24 +194,24 @@ func (s *JobSys) Init(ctx context.Context, src cadata.Getter, task wantjob.Task)
 	if err != nil {
 		return 0, err
 	}
-	sid, err := dbutil.DoTx1(ctx, s.db, func(tx *sqlx.Tx) (wantdb.StoreID, error) {
+	dstID, err := dbutil.DoTx1(ctx, s.db, func(tx *sqlx.Tx) (wantdb.StoreID, error) {
 		return wantdb.GetJobStoreID(tx, wantjob.JobID{rootIdx})
 	})
 	if err != nil {
 		return 0, err
 	}
-	dst := wantdb.NewDBStore(s.db, sid)
-	input, err := glfstasks.ParseGLFSRef(task.Input)
-	if err != nil {
-		return 0, err
-	}
-	if err := glfs.Sync(ctx, dst, src, *input); err != nil {
-		return 0, err
-	}
 
-	js := newJobState(s.bgCtx, src, task)
+	// input, err := glfstasks.ParseGLFSRef(task.Input)
+	// if err != nil {
+	// 	return 0, err
+	// }
+	// if err := glfs.Sync(ctx, dst, src, *input); err != nil {
+	// 	return 0, err
+	// }
+
+	dst := wantdb.NewDBStore(s.db, dstID)
+	js := newJobState(s.bgCtx, dst, src, task)
 	js.id = wantjob.JobID{rootIdx}
-	js.dst = dst
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -216,23 +220,47 @@ func (s *JobSys) Init(ctx context.Context, src cadata.Getter, task wantjob.Task)
 	return rootIdx, nil
 }
 
-func (s *JobSys) Spawn(ctx context.Context, parent wantjob.JobID, task wantjob.Task) (wantjob.Idx, error) {
+func (s *JobSys) Spawn(ctx context.Context, parent wantjob.JobID, src cadata.Getter, task wantjob.Task) (wantjob.Idx, error) {
 	ps := s.getJobState(parent)
 	if ps == nil {
 		return 0, fmt.Errorf("parent %v not found", parent)
 	}
-
-	idx, err := dbutil.DoTx1(ctx, s.db, func(tx *sqlx.Tx) (wantjob.Idx, error) {
-		return wantdb.CreateChildJob(tx, ps.id, task)
-	})
-	if err != nil {
+	var (
+		idx   wantjob.Idx
+		job   *wantjob.Job
+		dstID wantdb.StoreID
+	)
+	if err := dbutil.DoTx(ctx, s.db, func(tx *sqlx.Tx) error {
+		var err error
+		if idx, err = wantdb.CreateChildJob(tx, ps.id, task); err != nil {
+			return err
+		}
+		childid := append(parent, idx)
+		if job, err = wantdb.InspectJob(tx, childid); err != nil {
+			return err
+		}
+		if dstID, err = wantdb.GetJobStoreID(tx, childid); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
 		return 0, err
 	}
-	idx2, child := ps.createChild(task)
+
+	dst := wantdb.NewDBStore(s.db, dstID)
+	idx2, child := ps.createChild(dst, src, task)
 	if idx != idx2 {
 		panic("jobidx mismatch")
 	}
-	s.queue <- child
+	switch job.State {
+	case wantjob.QUEUED:
+		s.queue <- child
+	case wantjob.DONE:
+		child.result = job.Result
+		child.endAt = tai64.Now()
+		close(child.done)
+	}
+
 	return idx, nil
 }
 

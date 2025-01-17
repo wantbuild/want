@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.brendoncarroll.net/exp/slices2"
+	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/tai64"
 )
 
@@ -32,22 +33,22 @@ type JobState uint32
 
 const (
 	JobState_UNKNOWN = iota
-	JobState_QUEUED
-	JobState_RUNNING
-	JobState_DONE
+	QUEUED
+	RUNNING
+	DONE
 )
 
 type ErrCode uint32
 
 const (
 	// OK means the job completed successfully
-	ErrCode_OK = iota
+	OK = iota
 	// TIMEOUT means the system lost contact with the job or it was taking too long
-	ErrCode_TIMEOUT
+	TIMEOUT
 	// CANCELLED means the job was cancelled before it could complete
-	ErrCode_CANCELLED
-	// Exec is an execution error
-	ErrCode_EXEC
+	CANCELLED
+	// EXEC_FAILURE is an execution error
+	EXEC_FAILURE
 )
 
 // Result is produced by finished jobs.
@@ -62,7 +63,7 @@ func Success(data []byte) *Result {
 }
 
 func Result_ErrExec(err error) *Result {
-	return &Result{ErrCode: ErrCode_EXEC, Data: []byte(err.Error())}
+	return &Result{ErrCode: EXEC_FAILURE, Data: []byte(err.Error())}
 }
 
 func (r *Result) Err() error {
@@ -90,7 +91,7 @@ func (j Job) Elapsed() time.Duration {
 
 // System manages spawning, running, and awaiting jobs.
 type System interface {
-	Spawn(ctx context.Context, parent JobID, task Task) (Idx, error)
+	Spawn(ctx context.Context, parent JobID, src cadata.Getter, task Task) (Idx, error)
 	Cancel(ctx context.Context, parent JobID, idx Idx) error
 	Await(ctx context.Context, parent JobID, idx Idx) error
 	Inspect(ctx context.Context, parent JobID, idx Idx) (*Job, error)
@@ -111,8 +112,8 @@ func (jc *Ctx) Context() context.Context {
 	return jc.ctx
 }
 
-func (jc *Ctx) Spawn(ctx context.Context, task Task) (Idx, error) {
-	return jc.sys.Spawn(ctx, jc.id, task)
+func (jc *Ctx) Spawn(ctx context.Context, src cadata.Getter, task Task) (Idx, error) {
+	return jc.sys.Spawn(ctx, jc.id, src, task)
 }
 
 func (jc *Ctx) Await(ctx context.Context, idx Idx) error {
@@ -140,8 +141,8 @@ func (jc *Ctx) Debugf(msg string, args ...any) {
 }
 
 // Do spawns a child job to compute the Task, then awaits it and returns the result
-func Do(ctx context.Context, jc *Ctx, task Task) (*Result, error) {
-	id, err := jc.Spawn(ctx, task)
+func Do(ctx context.Context, jc *Ctx, src cadata.Getter, task Task) (*Result, error) {
+	id, err := jc.Spawn(ctx, src, task)
 	if err != nil {
 		return nil, err
 	}

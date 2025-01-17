@@ -15,50 +15,12 @@ import (
 )
 
 func CreateRootJob(tx *sqlx.Tx, task wantjob.Task) (wantjob.Idx, error) {
-	sid, err := CreateStore(tx)
-	if err != nil {
-		return 0, err
-	}
-	rowid, err := createJob(tx, sid, task)
+	rowid, err := createJob(tx, task)
 	if err != nil {
 		return 0, err
 	}
 	// create the root entry
-	idx, err := dbutil.GetTx[int64](tx, `INSERT INTO job_roots (job_row) VALUES (?) RETURNING idx`, rowid)
-	if err != nil {
-		return 0, err
-	}
-	return wantjob.Idx(idx), nil
-}
-
-func createJob(tx *sqlx.Tx, sid StoreID, task wantjob.Task) (int64, error) {
-	taskID, err := ensureTask(tx, task)
-	if err != nil {
-		return 0, err
-	}
-	now := tai64.Now()
-	return dbutil.GetTx[int64](tx, `INSERT INTO jobs (task, store_id, start_at) VALUES (?, ?, ?) RETURNING rowid`, taskID, sid, now.Marshal())
-}
-
-func DropRootJob(tx *sqlx.Tx, rootIdx wantjob.Idx) error {
-	// TODO: iterate over children and remove them.
-	var row struct {
-		JobRow  int64   `db:"jobrow"`
-		StoreID StoreID `db:"store_id"`
-	}
-	if err := tx.Get(&row, `SELECT jobrow, store_id FROM job_roots WHERE idx = ?`, rootIdx); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil
-		}
-		return err
-	}
-	if err := DropStore(tx, row.StoreID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(`DELETE FROM job_roots WHERE idx = ?`, rootIdx); err != nil {
-		return err
-	}
-	return nil
+	return dbutil.GetTx[wantjob.Idx](tx, `INSERT INTO job_roots (job_row) VALUES (?) RETURNING idx`, rowid)
 }
 
 func CreateChildJob(tx *sqlx.Tx, parentID wantjob.JobID, task wantjob.Task) (wantjob.Idx, error) {
@@ -66,20 +28,50 @@ func CreateChildJob(tx *sqlx.Tx, parentID wantjob.JobID, task wantjob.Task) (wan
 	if err != nil {
 		return 0, err
 	}
-	var row struct {
-		Store   StoreID     `db:"store_id"`
-		NextIdx wantjob.Idx `db:"next_idx"`
-	}
-	if err := tx.Get(&row, `UPDATE jobs SET next_idx = next_idx + 1 WHERE rowid = ? RETURNING next_idx, store_id`, parentRow); err != nil {
+	var nextIdx wantjob.Idx
+	if err := tx.Get(&nextIdx, `UPDATE jobs SET next_idx = next_idx + 1 WHERE rowid = ? RETURNING next_idx`, parentRow); err != nil {
 		return 0, err
 	}
-	nextIdx := row.NextIdx - 1
-	childRow, err := createJob(tx, row.Store, task)
+	nextIdx--
+	childRow, err := createJob(tx, task)
 	if err != nil {
 		return 0, err
 	}
-	err = insertJobChild(tx, parentRow, nextIdx, childRow)
-	return nextIdx, err
+	if err := insertJobChild(tx, parentRow, nextIdx, childRow); err != nil {
+		return 0, err
+	}
+	return nextIdx, nil
+}
+
+func createJob(tx *sqlx.Tx, task wantjob.Task) (int64, error) {
+	taskID, err := ensureTask(tx, task)
+	if err != nil {
+		return 0, err
+	}
+
+	data, sid, err := cacheRead(tx, task.ID())
+	if err != nil {
+		return 0, err
+	}
+	cacheHit := len(data) > 0
+	if !cacheHit {
+		sid, err = CreateStore(tx)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	now := tai64.Now()
+	rowid, err := dbutil.GetTx[int64](tx, `INSERT INTO jobs (task, store_id, start_at) VALUES (?, ?, ?) RETURNING rowid`, taskID, sid, now.Marshal())
+	if err != nil {
+		return 0, err
+	}
+	if cacheHit {
+		if err := finishJobAtRow(tx, rowid, wantjob.Result{Data: data}); err != nil {
+			return 0, err
+		}
+	}
+	return rowid, nil
 }
 
 func insertJobChild(tx *sqlx.Tx, parentRow int64, idx wantjob.Idx, childRow int64) error {
@@ -101,8 +93,12 @@ func FinishJob(tx *sqlx.Tx, jobid wantjob.JobID, res wantjob.Result) error {
 	if err != nil {
 		return err
 	}
+	return finishJobAtRow(tx, rowid, res)
+}
+
+func finishJobAtRow(tx *sqlx.Tx, rowid int64, res wantjob.Result) error {
 	now := tai64.Now()
-	_, err = tx.Exec(`UPDATE jobs
+	_, err := tx.Exec(`UPDATE jobs
 		SET state = 3, errcode = ?, res_data = ?, end_at = ?
 		WHERE state != 3 AND rowid = ?`, res.ErrCode, res.Data, now.Marshal(), rowid)
 	return err
@@ -114,13 +110,14 @@ func InspectJob(tx *sqlx.Tx, jobid wantjob.JobID) (*wantjob.Job, error) {
 		return nil, err
 	}
 	var row struct {
-		State      uint32 `db:"state"`
-		StartAt    []byte `db:"start_at"`
-		ErrCode    uint32 `db:"errcode"`
-		ResultData []byte `db:"res_data"`
-		EndAt      []byte `db:"end_at"`
+		TaskID     wantjob.TaskID            `db:"task"`
+		State      wantjob.JobState          `db:"state"`
+		StartAt    []byte                    `db:"start_at"`
+		ErrCode    sql.Null[wantjob.ErrCode] `db:"errcode"`
+		ResultData []byte                    `db:"res_data"`
+		EndAt      []byte                    `db:"end_at"`
 	}
-	if err := tx.Get(&row, `SELECT state, res_data, errcode, start_at FROM jobs WHERE rowid = ?`, rowid); err != nil {
+	if err := tx.Get(&row, `SELECT task, state, start_at, errcode, res_data, end_at FROM jobs WHERE rowid = ?`, rowid); err != nil {
 		return nil, err
 	}
 
@@ -130,9 +127,9 @@ func InspectJob(tx *sqlx.Tx, jobid wantjob.JobID) (*wantjob.Job, error) {
 	}
 	var result *wantjob.Result
 	var endAt *tai64.TAI64N
-	if row.State == wantjob.JobState_DONE {
+	if row.State == wantjob.DONE {
 		result = &wantjob.Result{
-			ErrCode: wantjob.ErrCode(row.ErrCode),
+			ErrCode: wantjob.ErrCode(row.ErrCode.V),
 			Data:    row.ResultData,
 		}
 		ea, err := tai64.ParseN(row.EndAt)
@@ -143,7 +140,7 @@ func InspectJob(tx *sqlx.Tx, jobid wantjob.JobID) (*wantjob.Job, error) {
 	}
 	job := wantjob.Job{
 		// TODO: GetTask
-		State:   wantjob.JobState(row.State),
+		State:   row.State,
 		StartAt: startAt,
 
 		Result: result,
@@ -152,7 +149,7 @@ func InspectJob(tx *sqlx.Tx, jobid wantjob.JobID) (*wantjob.Job, error) {
 	return &job, nil
 }
 
-func CacheRead(tx *sqlx.Tx, taskID cadata.ID) ([]byte, StoreID, error) {
+func cacheRead(tx *sqlx.Tx, taskID cadata.ID) ([]byte, StoreID, error) {
 	var row struct {
 		Data  []byte  `db:"res_data"`
 		Store StoreID `db:"store_id"`

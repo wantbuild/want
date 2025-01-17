@@ -50,8 +50,8 @@ func (e Executor) ExecAll(jc *wantjob.Ctx, dst cadata.GetPoster, s cadata.Getter
 	if err != nil {
 		return nil, err
 	}
-	e2 := wantdag.NewSerialExec(dst)
-	nrs, err := e2.ExecAll(jc, s, *dag)
+	e2 := wantdag.NewSerialExec()
+	nrs, err := e2.ExecAll(jc, dst, s, *dag)
 	if err != nil {
 		return nil, err
 	}
@@ -80,8 +80,8 @@ func (e Executor) ExecLast(jc *wantjob.Ctx, dst cadata.GetPoster, s cadata.Gette
 	if err != nil {
 		return nil, err
 	}
-	e2 := wantdag.NewSerialExec(dst)
-	nrs, err := e2.ExecAll(jc, s, *dag)
+	e2 := wantdag.NewSerialExec()
+	nrs, err := e2.ExecAll(jc, dst, s, *dag)
 	if err != nil {
 		return nil, err
 	}
