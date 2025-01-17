@@ -24,9 +24,9 @@ func (u Union) Get(ctx context.Context, id cadata.ID, buf []byte) (int, error) {
 }
 
 func (u Union) Hash(x []byte) cadata.ID {
-	return u[0].Hash(x)
+	return Hash(x)
 }
 
 func (u Union) MaxSize() int {
-	return u[0].MaxSize()
+	return MaxBlobSize
 }

@@ -13,8 +13,13 @@ import (
 	"wantbuild.io/want/internal/wantdag"
 )
 
+type (
+	NodeID    = wantdag.NodeID
+	NodeInput = wantdag.NodeInput
+)
+
 type GraphBuilder struct {
-	dst   cadata.Store
+	dst   cadata.GetPoster
 	index map[[32]byte]wantdag.NodeID
 	b     wantdag.Builder
 }

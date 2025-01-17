@@ -9,7 +9,9 @@ import (
 
 	"go.brendoncarroll.net/exp/slices2"
 	"go.brendoncarroll.net/state/cadata"
+	"go.brendoncarroll.net/stdctx/logctx"
 	"go.brendoncarroll.net/tai64"
+	"go.uber.org/zap"
 )
 
 // Idx is a component of a job id.
@@ -32,7 +34,7 @@ func (jid JobID) String() string {
 type JobState uint32
 
 const (
-	JobState_UNKNOWN = iota
+	JobState_UNKNOWN JobState = iota
 	QUEUED
 	RUNNING
 	DONE
@@ -42,7 +44,7 @@ type ErrCode uint32
 
 const (
 	// OK means the job completed successfully
-	OK = iota
+	OK ErrCode = iota
 	// TIMEOUT means the system lost contact with the job or it was taking too long
 	TIMEOUT
 	// CANCELLED means the job was cancelled before it could complete
@@ -105,6 +107,11 @@ type Ctx struct {
 }
 
 func NewCtx(ctx context.Context, sys System, id JobID) Ctx {
+	l, err := zap.NewDevelopment()
+	if err != nil {
+		panic(err)
+	}
+	ctx = logctx.NewContext(ctx, l)
 	return Ctx{sys: sys, id: id, ctx: ctx}
 }
 

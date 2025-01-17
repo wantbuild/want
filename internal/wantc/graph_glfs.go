@@ -13,11 +13,6 @@ import (
 	"wantbuild.io/want/lib/wantjob"
 )
 
-type (
-	NodeID    = wantdag.NodeID
-	NodeInput = wantdag.NodeInput
-)
-
 func mustDerived(gb *wantdag.Builder, prefix, op wantjob.OpName, ins []wantdag.NodeInput) NodeID {
 	ctx := context.Background()
 	nid, err := gb.Derived(ctx, prefix+wantjob.OpName(".")+op, ins)

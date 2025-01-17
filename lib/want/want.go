@@ -23,8 +23,8 @@ func Eval(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, calledFrom stri
 	jsys := newJobSys(ctx, db, exec, runtime.GOMAXPROCS(0))
 	defer jsys.Shutdown()
 
-	c := wantc.NewCompiler(s)
-	dag, err := c.CompileSnippet(ctx, expr)
+	c := wantc.NewCompiler()
+	dag, err := c.CompileSnippet(ctx, s, s, expr)
 	if err != nil {
 		return nil, nil, err
 	}

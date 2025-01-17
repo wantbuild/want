@@ -1,6 +1,8 @@
 package stores
 
 import (
+	"context"
+
 	"go.brendoncarroll.net/state/cadata"
 	"lukechampine.com/blake3"
 )
@@ -17,4 +19,18 @@ func NewMem() cadata.Store {
 
 func NewVoid() cadata.Getter {
 	return Union{}
+}
+
+func ExistsOnGet(ctx context.Context, src cadata.Getter, id cadata.ID) (bool, error) {
+	if e, ok := src.(cadata.Exister); ok {
+		return e.Exists(ctx, id)
+	}
+	_, err := src.Get(ctx, id, make([]byte, src.MaxSize()))
+	if err != nil {
+		if cadata.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"go.brendoncarroll.net/exp/slices2"
+	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/internal/op/glfsops"
 	"wantbuild.io/want/internal/stringsets"
@@ -14,9 +15,9 @@ import (
 	"wantbuild.io/want/lib/wantjob"
 )
 
-func (c *Compiler) query(ctx context.Context, vfs *VFS, ks stringsets.Set, pick string) (Expr, error) {
+func (c *Compiler) query(ctx context.Context, dst cadata.Store, vfs *VFS, ks stringsets.Set, pick string) (Expr, error) {
 	edges := queryEdges(vfs, ks, pick)
-	ni, err := c.flattenEdges(ctx, edges)
+	ni, err := c.flattenEdges(ctx, dst, edges)
 	if err != nil {
 		return nil, err
 	}
@@ -28,13 +29,13 @@ func (c *Compiler) query(ctx context.Context, vfs *VFS, ks stringsets.Set, pick 
 
 // flattenEdges takes a slice of Edges and produces an input set for input to a node.
 // It will create any necessary intermediary nodes for metadata operations.
-func (c *Compiler) flattenEdges(ctx context.Context, xs []*edge) ([]computeInput, error) {
+func (c *Compiler) flattenEdges(ctx context.Context, dst cadata.Store, xs []*edge) ([]computeInput, error) {
 	var ys []computeInput
 	for _, x := range xs {
 		y := x.Expr
 		if x.Subpath != "" {
 			var err error
-			y, err = c.pickExpr(ctx, y, x.Subpath)
+			y, err = c.pickExpr(ctx, dst, y, x.Subpath)
 			if err != nil {
 				return nil, err
 			}
@@ -42,7 +43,7 @@ func (c *Compiler) flattenEdges(ctx context.Context, xs []*edge) ([]computeInput
 		// Filter
 		if x.Filter != nil {
 			var err error
-			y, err = c.filterExpr(ctx, y, x.Filter)
+			y, err = c.filterExpr(ctx, dst, y, x.Filter)
 			if err != nil {
 				return nil, err
 			}

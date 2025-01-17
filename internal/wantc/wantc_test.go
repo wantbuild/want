@@ -64,8 +64,8 @@ func TestRef(t *testing.T) {
 	require.NoError(t, err)
 	t.Log(string(data))
 
-	c := NewCompiler(s)
-	dag, err := c.CompileSnippet(ctx, data)
+	c := NewCompiler()
+	dag, err := c.CompileSnippet(ctx, s, s, data)
 	require.NoError(t, err)
 	require.NoError(t, err)
 	require.Len(t, dag.Nodes, 1)
@@ -90,8 +90,8 @@ func TestSnippets(t *testing.T) {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			ctx := testutil.Context(t)
 			s := stores.NewMem()
-			c := NewCompiler(s)
-			_, err := c.CompileSnippet(ctx, []byte(tc.I))
+			c := NewCompiler()
+			_, err := c.CompileSnippet(ctx, s, stores.Union{}, []byte(tc.I))
 			require.NoError(t, err)
 		})
 	}

@@ -56,9 +56,10 @@ func TestEvalNoRepo(t *testing.T) {
 		tc := tc
 		in := `local want = import "want";` + "\n" + tc.I
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
-			out, _, err := Eval(ctx, db, nil, "", []byte(in))
+			out, src, err := Eval(ctx, db, nil, "", []byte(in))
 			require.NoError(t, err)
 			require.Equal(t, tc.O, *out)
+			require.NoError(t, glfs.WalkRefs(ctx, src, *out, func(ref glfs.Ref) error { return nil }))
 		})
 	}
 }

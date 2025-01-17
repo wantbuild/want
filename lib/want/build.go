@@ -59,8 +59,8 @@ func Blame(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo) ([]Target, err
 	}
 
 	cstore := stores.NewMem()
-	c := wantc.NewCompiler(cstore)
-	plan, err := c.Compile(ctx, srcStore, *srcRoot, "")
+	c := wantc.NewCompiler()
+	plan, err := c.Compile(ctx, cstore, srcStore, *srcRoot, "")
 	if err != nil {
 		return nil, err
 	}
@@ -88,8 +88,8 @@ func Build(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, prefix string)
 	}
 
 	cstore := stores.NewMem()
-	c := wantc.NewCompiler(cstore)
-	plan, err := c.Compile(ctx, srcStore, *srcRoot, prefix)
+	c := wantc.NewCompiler()
+	plan, err := c.Compile(ctx, cstore, srcStore, *srcRoot, prefix)
 	if err != nil {
 		return nil, err
 	}

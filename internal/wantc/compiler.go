@@ -26,20 +26,19 @@ const (
 )
 
 type Compiler struct {
-	glfs  *glfs.Agent
-	store cadata.Store
+	glfs *glfs.Agent
 }
 
-func NewCompiler(store cadata.Store) *Compiler {
+func NewCompiler() *Compiler {
 	return &Compiler{
-		glfs:  glfs.NewAgent(),
-		store: store,
+		glfs: glfs.NewAgent(),
 	}
 }
 
 // compileState holds the state for a single run of the compiler
 type compileState struct {
 	src    cadata.Getter
+	dst    cadata.Store
 	ground glfs.Ref
 	root   Expr
 	config compileConfig
@@ -142,17 +141,13 @@ func WithGitMetadata(commitHash, tag string) CompileOption {
 	}
 }
 
-func (c *Compiler) Compile(ctx context.Context, src cadata.Getter, ground glfs.Ref, prefix string, opts ...CompileOption) (*Plan, error) {
+func (c *Compiler) Compile(ctx context.Context, dst cadata.Store, src cadata.Getter, ground glfs.Ref, prefix string, opts ...CompileOption) (*Plan, error) {
 	cfg := collectCompileConfig(opts)
 	cfg.setInputRef(ground)
 
-	// TODO: remove, only copy to dst as needed
-	if err := glfs.Sync(ctx, c.store, src, ground); err != nil {
-		return nil, err
-	}
-
 	cs := &compileState{
 		src:          src,
+		dst:          dst,
 		config:       cfg,
 		ground:       ground,
 		root:         &selection{set: stringsets.Prefix(prefix)},
@@ -160,7 +155,7 @@ func (c *Compiler) Compile(ctx context.Context, src cadata.Getter, ground glfs.R
 		visitedPaths: make(map[string]chan struct{}),
 	}
 
-	if _, err := glfs.GetAtPath(ctx, c.store, ground, "WANT"); err != nil {
+	if _, err := glfs.GetAtPath(ctx, src, ground, "WANT"); err != nil {
 		return nil, fmt.Errorf("error accessing WANT file. %w", err)
 	}
 	for _, f := range []func(context.Context, *compileState, string) error{
@@ -186,13 +181,13 @@ func (c *Compiler) addSourceFiles(ctx context.Context, cs *compileState, p strin
 	defer logStep(ctx, "adding source files")()
 	eg, ctx := errgroup.WithContext(ctx)
 	cs.jsImporter = newVFSImporter(func(p string) ([]byte, error) {
-		ref, err := c.glfs.GetAtPath(ctx, c.store, cs.ground, p)
+		ref, err := c.glfs.GetAtPath(ctx, cs.src, cs.ground, p)
 		if err != nil {
 			return nil, err
 		}
-		return c.glfs.GetBlobBytes(ctx, c.store, *ref, MaxJsonnetFileSize)
+		return c.glfs.GetBlobBytes(ctx, cs.src, *ref, MaxJsonnetFileSize)
 	})
-	ref, err := c.glfs.GetAtPath(ctx, c.store, cs.ground, p)
+	ref, err := c.glfs.GetAtPath(ctx, cs.src, cs.ground, p)
 	if err != nil {
 		return err
 	}
@@ -209,7 +204,7 @@ func (c *Compiler) addSourceFile(ctx context.Context, cs *compileState, eg *errg
 	defer cs.donePath(p)
 	switch ref.Type {
 	case glfs.TypeTree:
-		tree, err := c.glfs.GetTree(ctx, c.store, ref)
+		tree, err := c.glfs.GetTree(ctx, cs.src, ref)
 		if err != nil {
 			return err
 		}
@@ -244,7 +239,7 @@ func (c *Compiler) addSourceFile(ctx context.Context, cs *compileState, eg *errg
 }
 
 func (c *Compiler) loadExpr(ctx context.Context, cs *compileState, p string, ref glfs.Ref) error {
-	data, err := c.glfs.GetBlobBytes(ctx, c.store, ref, MaxJsonnetFileSize)
+	data, err := c.glfs.GetBlobBytes(ctx, cs.src, ref, MaxJsonnetFileSize)
 	if err != nil {
 		return err
 	}
@@ -263,7 +258,7 @@ func (c *Compiler) loadExpr(ctx context.Context, cs *compileState, p string, ref
 }
 
 func (c *Compiler) loadStmt(ctx context.Context, cs *compileState, p string, ref glfs.Ref) error {
-	data, err := c.glfs.GetBlobBytes(ctx, c.store, ref, MaxJsonnetFileSize)
+	data, err := c.glfs.GetBlobBytes(ctx, cs.src, ref, MaxJsonnetFileSize)
 	if err != nil {
 		return err
 	}
@@ -300,7 +295,7 @@ func (c *Compiler) lowerSelections(ctx context.Context, cs *compileState, p stri
 	vfs, rel := cs.acquireVFS()
 	defer rel()
 	for i, er := range cs.exprRoots {
-		e2, err := c.replaceSelections(ctx, cache, vfs, er.expr)
+		e2, err := c.replaceSelections(ctx, cs.dst, cache, vfs, er.expr)
 		if err != nil {
 			return err
 		}
@@ -309,14 +304,14 @@ func (c *Compiler) lowerSelections(ctx context.Context, cs *compileState, p stri
 	for _, ss := range cs.stmtSets {
 		for _, stmt := range ss.stmts {
 			e1 := stmt.expr()
-			e2, err := c.replaceSelections(ctx, cache, vfs, e1)
+			e2, err := c.replaceSelections(ctx, cs.dst, cache, vfs, e1)
 			if err != nil {
 				return err
 			}
 			stmt.setExpr(e2)
 		}
 	}
-	root, err := c.replaceSelections(ctx, cache, vfs, cs.root)
+	root, err := c.replaceSelections(ctx, cs.dst, cache, vfs, cs.root)
 	if err != nil {
 		return err
 	}
@@ -324,7 +319,7 @@ func (c *Compiler) lowerSelections(ctx context.Context, cs *compileState, p stri
 	return nil
 }
 
-func (c *Compiler) replaceSelections(ctx context.Context, cache map[[32]byte]Expr, vfs *VFS, expr Expr) (ret Expr, retErr error) {
+func (c *Compiler) replaceSelections(ctx context.Context, dst cadata.Store, cache map[[32]byte]Expr, vfs *VFS, expr Expr) (ret Expr, retErr error) {
 	if y, exists := cache[expr.Key()]; exists {
 		return y, nil
 	}
@@ -337,7 +332,7 @@ func (c *Compiler) replaceSelections(ctx context.Context, cache map[[32]byte]Exp
 	case *compute:
 		var yInputs []computeInput
 		for _, input := range x.Inputs {
-			e2, err := c.replaceSelections(ctx, cache, vfs, input.From)
+			e2, err := c.replaceSelections(ctx, dst, cache, vfs, input.From)
 			if err != nil {
 				return nil, err
 			}
@@ -352,11 +347,11 @@ func (c *Compiler) replaceSelections(ctx context.Context, cache map[[32]byte]Exp
 			Inputs: yInputs,
 		}, nil
 	case *selection:
-		e, err := c.query(ctx, vfs, x.set, x.pick)
+		e, err := c.query(ctx, dst, vfs, x.set, x.pick)
 		if err != nil {
 			return nil, err
 		}
-		return c.replaceSelections(ctx, cache, vfs, e)
+		return c.replaceSelections(ctx, dst, cache, vfs, e)
 	case *value:
 		return x, nil
 	default:
@@ -438,12 +433,12 @@ func (c *Compiler) detectCycles(ctx context.Context, cs *compileState, p string)
 
 func (c *Compiler) makeGraph(ctx context.Context, cs *compileState, p string) error {
 	defer logStep(ctx, "making graph")()
-	gb := NewGraphBuilder(c.store)
+	gb := NewGraphBuilder(cs.dst)
 	var targets []Target
 
 	// ExprRoots
 	for _, er := range cs.exprRoots {
-		nid, err := gb.Expr(ctx, c.store, er.expr)
+		nid, err := gb.Expr(ctx, cs.src, er.expr)
 		if err != nil {
 			return err
 		}
@@ -457,7 +452,7 @@ func (c *Compiler) makeGraph(ctx context.Context, cs *compileState, p string) er
 	// StmtSets
 	for _, ss := range cs.stmtSets {
 		for _, stmt := range ss.stmts {
-			nid, err := gb.Expr(ctx, c.store, stmt.expr())
+			nid, err := gb.Expr(ctx, cs.src, stmt.expr())
 			if err != nil {
 				return err
 			}
@@ -471,7 +466,7 @@ func (c *Compiler) makeGraph(ctx context.Context, cs *compileState, p string) er
 		}
 	}
 
-	root, err := gb.Expr(ctx, c.store, cs.root)
+	root, err := gb.Expr(ctx, cs.src, cs.root)
 	if err != nil {
 		return err
 	}
@@ -482,7 +477,7 @@ func (c *Compiler) makeGraph(ctx context.Context, cs *compileState, p string) er
 		return strings.Compare(a.To.String(), b.To.String())
 	})
 	dag := gb.Finish()
-	gref, err := wantdag.PostDAG(ctx, c.store, dag)
+	gref, err := wantdag.PostDAG(ctx, cs.dst, dag)
 	if err != nil {
 		return err
 	}
@@ -493,8 +488,8 @@ func (c *Compiler) makeGraph(ctx context.Context, cs *compileState, p string) er
 	return nil
 }
 
-func (c *Compiler) pickExpr(ctx context.Context, x Expr, p string) (Expr, error) {
-	ref, err := c.glfs.PostBlob(ctx, c.store, strings.NewReader(p))
+func (c *Compiler) pickExpr(ctx context.Context, dst cadata.Store, x Expr, p string) (Expr, error) {
+	ref, err := c.glfs.PostBlob(ctx, dst, strings.NewReader(p))
 	if err != nil {
 		return nil, err
 	}
@@ -508,8 +503,8 @@ func (c *Compiler) pickExpr(ctx context.Context, x Expr, p string) (Expr, error)
 	}, nil
 }
 
-func (c *Compiler) filterExpr(ctx context.Context, x Expr, re *regexp.Regexp) (Expr, error) {
-	ref, err := c.glfs.PostBlob(ctx, c.store, strings.NewReader(re.String()))
+func (c *Compiler) filterExpr(ctx context.Context, dst cadata.Store, x Expr, re *regexp.Regexp) (Expr, error) {
+	ref, err := c.glfs.PostBlob(ctx, dst, strings.NewReader(re.String()))
 	if err != nil {
 		return nil, err
 	}

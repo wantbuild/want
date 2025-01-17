@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 
 	"github.com/google/go-jsonnet"
+	"go.brendoncarroll.net/state/cadata"
 
-	"wantbuild.io/want/internal/stores"
 	"wantbuild.io/want/internal/wantdag"
 	"wantbuild.io/want/lib/wantcfg"
 )
@@ -14,7 +14,7 @@ import (
 // CompileSnippet turns a Jsonnet snippet into a wantdag.Graph.
 // Values are loaded into the compiler's store.
 // Selections are not allowed and will result in a compiler error.
-func (c *Compiler) CompileSnippet(ctx context.Context, x []byte) (*wantdag.DAG, error) {
+func (c *Compiler) CompileSnippet(ctx context.Context, dst cadata.Store, src cadata.Getter, x []byte) (*wantdag.DAG, error) {
 	vm := jsonnet.MakeVM()
 	vm.Importer(libOnlyImporter{})
 	jsonData, err := vm.EvaluateSnippet("", string(x))
@@ -25,13 +25,13 @@ func (c *Compiler) CompileSnippet(ctx context.Context, x []byte) (*wantdag.DAG, 
 	if err := json.Unmarshal([]byte(jsonData), &spec); err != nil {
 		return nil, err
 	}
-	cs := &compileState{}
+	cs := &compileState{dst: dst, src: src}
 	expr, err := c.compileExpr(ctx, cs, "", spec)
 	if err != nil {
 		return nil, err
 	}
-	gb := NewGraphBuilder(c.store)
-	if _, err := gb.Expr(ctx, stores.Union{}, expr); err != nil {
+	gb := NewGraphBuilder(dst)
+	if _, err := gb.Expr(ctx, src, expr); err != nil {
 		return nil, err
 	}
 	dag := gb.Finish()

@@ -50,8 +50,8 @@ func (e Executor) Execute(jc *wantjob.Ctx, dst cadata.Store, src cadata.Getter, 
 }
 
 func (e Executor) Compile(ctx context.Context, dst cadata.Store, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
-	c := wantc.NewCompiler(dst)
-	plan, err := c.Compile(ctx, s, ref, "")
+	c := wantc.NewCompiler()
+	plan, err := c.Compile(ctx, dst, s, ref, "")
 	if err != nil {
 		return nil, err
 	}
@@ -59,12 +59,12 @@ func (e Executor) Compile(ctx context.Context, dst cadata.Store, s cadata.Getter
 }
 
 func (e Executor) CompileSnippet(ctx context.Context, dst cadata.Store, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
-	c := wantc.NewCompiler(dst)
+	c := wantc.NewCompiler()
 	data, err := glfs.GetBlobBytes(ctx, s, ref, MaxSnippetSize)
 	if err != nil {
 		return nil, err
 	}
-	dag, err := c.CompileSnippet(ctx, data)
+	dag, err := c.CompileSnippet(ctx, dst, s, data)
 	if err != nil {
 		return nil, err
 	}
