@@ -97,6 +97,7 @@ type System interface {
 	Cancel(ctx context.Context, parent JobID, idx Idx) error
 	Await(ctx context.Context, parent JobID, idx Idx) error
 	Inspect(ctx context.Context, parent JobID, idx Idx) (*Job, error)
+	ViewResult(ctx context.Context, parent JobID, idx Idx) (*Result, cadata.Getter, error)
 }
 
 // Ctx is a Job Context.  It is the API available from within a running job
@@ -135,6 +136,10 @@ func (jc *Ctx) Inspect(ctx context.Context, idx Idx) (*Job, error) {
 	return jc.sys.Inspect(ctx, jc.id, idx)
 }
 
+func (jc *Ctx) ViewResult(ctx context.Context, idx Idx) (*Result, cadata.Getter, error) {
+	return jc.sys.ViewResult(ctx, jc.id, idx)
+}
+
 func (jc *Ctx) Errorf(msg string, args ...any) {
 	fmt.Fprintf(os.Stderr, jc.id.String()+": "+msg+"\n", args...)
 }
@@ -148,17 +153,13 @@ func (jc *Ctx) Debugf(msg string, args ...any) {
 }
 
 // Do spawns a child job to compute the Task, then awaits it and returns the result
-func Do(ctx context.Context, jc *Ctx, src cadata.Getter, task Task) (*Result, error) {
-	id, err := jc.Spawn(ctx, src, task)
+func Do(ctx context.Context, jc *Ctx, src cadata.Getter, task Task) (*Result, cadata.Getter, error) {
+	idx, err := jc.Spawn(ctx, src, task)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if err := jc.Await(ctx, id); err != nil {
-		return nil, err
+	if err := jc.Await(ctx, idx); err != nil {
+		return nil, nil, err
 	}
-	job, err := jc.Inspect(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	return job.Result, nil
+	return jc.ViewResult(ctx, idx)
 }

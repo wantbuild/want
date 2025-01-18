@@ -20,10 +20,23 @@ import (
 )
 
 const (
+	WantFilename       = "WANT"
 	ExprPathSuffix     = ".want"
 	StmtPathSuffix     = ".wants"
 	MaxJsonnetFileSize = 1e6
 )
+
+func IsModule(ctx context.Context, src cadata.Getter, x glfs.Ref) (bool, error) {
+	t, err := glfs.GetTree(ctx, src, x)
+	if err != nil {
+		return false, err
+	}
+	ent := t.Lookup(WantFilename)
+	if ent == nil {
+		return false, nil
+	}
+	return true, nil
+}
 
 type Compiler struct {
 	glfs *glfs.Agent
@@ -142,6 +155,14 @@ func WithGitMetadata(commitHash, tag string) CompileOption {
 }
 
 func (c *Compiler) Compile(ctx context.Context, dst cadata.Store, src cadata.Getter, ground glfs.Ref, prefix string, opts ...CompileOption) (*Plan, error) {
+	isMod, err := IsModule(ctx, src, ground)
+	if err != nil {
+		return nil, err
+	}
+	if !isMod {
+		return nil, fmt.Errorf("not a want module")
+	}
+
 	cfg := collectCompileConfig(opts)
 	cfg.setInputRef(ground)
 
@@ -155,9 +176,6 @@ func (c *Compiler) Compile(ctx context.Context, dst cadata.Store, src cadata.Get
 		visitedPaths: make(map[string]chan struct{}),
 	}
 
-	if _, err := glfs.GetAtPath(ctx, src, ground, "WANT"); err != nil {
-		return nil, fmt.Errorf("error accessing WANT file. %w", err)
-	}
 	for _, f := range []func(context.Context, *compileState, string) error{
 		c.addSourceFiles,
 		c.detectCycles,

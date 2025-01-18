@@ -47,20 +47,21 @@ func runRootJob(ctx context.Context, jsys *JobSys, src cadata.Getter, task wantj
 	if err := jsys.Await(ctx, nil, rootIdx); err != nil {
 		return nil, nil, err
 	}
-	job, err := jsys.Inspect(ctx, nil, rootIdx)
+	res, s, err := jsys.ViewResult(ctx, nil, rootIdx)
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := job.Result.Err(); err != nil {
+	if err := res.Err(); err != nil {
 		return nil, nil, err
-	} else {
-		ref, err := glfstasks.ParseGLFSRef(job.Result.Data)
-		rootState := jsys.getJobState(wantjob.JobID{rootIdx})
-		return ref, rootState.dst, err
 	}
+	ref, err := glfstasks.ParseGLFSRef(res.Data)
+	if err != nil {
+		return nil, nil, err
+	}
+	return ref, s, nil
 }
 
-func joinOpName(xs ...dagops.OpName) (ret dagops.OpName) {
+func joinOpName(xs ...wantjob.OpName) (ret wantjob.OpName) {
 	for i, x := range xs {
 		if i > 0 {
 			ret += "."

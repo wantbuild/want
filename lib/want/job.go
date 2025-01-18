@@ -2,19 +2,18 @@ package want
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 
-	"github.com/blobcache/glfs"
 	"github.com/jmoiron/sqlx"
 	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/tai64"
 
 	"wantbuild.io/want/internal/dbutil"
-	"wantbuild.io/want/internal/glfstasks"
 	"wantbuild.io/want/internal/op/dagops"
 	"wantbuild.io/want/internal/op/glfsops"
 	"wantbuild.io/want/internal/op/importops"
@@ -164,12 +163,6 @@ func (s *JobSys) process(x *jobState) {
 		if err != nil {
 			return *wantjob.Result_ErrExec(err)
 		}
-		// if it is a glfs ref, ensure it is complete
-		if ref, err := glfstasks.ParseGLFSRef(out); err == nil {
-			if err := glfs.WalkRefs(x.ctx, x.dst, *ref, func(ref glfs.Ref) error { return nil }); err != nil {
-				return *wantjob.Result_ErrExec(err)
-			}
-		}
 		return *wantjob.Success(out)
 	}()
 	if err := s.finishJob(x.ctx, x.id, res); err != nil {
@@ -200,14 +193,6 @@ func (s *JobSys) Init(ctx context.Context, src cadata.Getter, task wantjob.Task)
 	if err != nil {
 		return 0, err
 	}
-
-	// input, err := glfstasks.ParseGLFSRef(task.Input)
-	// if err != nil {
-	// 	return 0, err
-	// }
-	// if err := glfs.Sync(ctx, dst, src, *input); err != nil {
-	// 	return 0, err
-	// }
 
 	dst := wantdb.NewDBStore(s.db, dstID)
 	js := newJobState(s.bgCtx, dst, src, task)
@@ -288,6 +273,24 @@ func (s *JobSys) Await(ctx context.Context, parent wantjob.JobID, idx wantjob.Id
 	case <-x.done:
 		return nil
 	}
+}
+
+func (s *JobSys) ViewResult(ctx context.Context, parent wantjob.JobID, idx wantjob.Idx) (*wantjob.Result, cadata.Getter, error) {
+	jobid := append(parent, idx)
+	x := s.getJobState(jobid)
+	if x != nil {
+		if !x.isDone() {
+			return nil, nil, errors.New("ViewResult called on job which is not done")
+		}
+		return x.result, x.dst, nil
+	}
+	res, sid, err := dbutil.DoTx2(ctx, s.db, func(tx *sqlx.Tx) (*wantjob.Result, wantdb.StoreID, error) {
+		return wantdb.ViewResult(tx, jobid)
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return res, wantdb.NewDBStore(s.db, sid), nil
 }
 
 func (s *JobSys) getJobState(jobid wantjob.JobID) *jobState {

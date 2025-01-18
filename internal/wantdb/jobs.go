@@ -149,6 +149,26 @@ func InspectJob(tx *sqlx.Tx, jobid wantjob.JobID) (*wantjob.Job, error) {
 	return &job, nil
 }
 
+func ViewResult(tx *sqlx.Tx, jobid wantjob.JobID) (*wantjob.Result, StoreID, error) {
+	rowid, err := lookupJobRowID(tx, jobid)
+	if err != nil {
+		return nil, 0, err
+	}
+	var row struct {
+		State      wantjob.JobState          `db:"state"`
+		ErrCode    sql.Null[wantjob.ErrCode] `db:"errcode"`
+		ResultData []byte                    `db:"res_data"`
+		StoreID    StoreID                   `db:"store_id"`
+	}
+	if err := tx.Get(&row, `SELECT state, errcode, res_data, store_id FROM jobs WHERE rowid = ?`, rowid); err != nil {
+		return nil, 0, err
+	}
+	if row.State != wantjob.DONE {
+		return nil, 0, fmt.Errorf("ViewResult called on job in state %v", row.State)
+	}
+	return &wantjob.Result{Data: row.ResultData, ErrCode: row.ErrCode.V}, row.StoreID, nil
+}
+
 func cacheRead(tx *sqlx.Tx, taskID cadata.ID) ([]byte, StoreID, error) {
 	var row struct {
 		Data  []byte  `db:"res_data"`

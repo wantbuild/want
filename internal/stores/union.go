@@ -10,7 +10,8 @@ type Union []cadata.Getter
 
 func (u Union) Get(ctx context.Context, id cadata.ID, buf []byte) (int, error) {
 	var err error
-	for _, s := range u {
+	for i := len(u) - 1; i >= 0; i-- {
+		s := u[i]
 		var n int
 		n, err = s.Get(ctx, id, buf)
 		if err == nil {

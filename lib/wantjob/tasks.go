@@ -33,6 +33,8 @@ type Executor interface {
 	Execute(jc *Ctx, dst cadata.Store, src cadata.Getter, task Task) ([]byte, error)
 }
 
+type OpFunc = func(jc *Ctx, dst cadata.Store, src cadata.Getter, data []byte) ([]byte, error)
+
 func productHash(hf cadata.HashFunc, xs ...[]byte) cadata.ID {
 	var data []byte
 	for _, x := range xs {
