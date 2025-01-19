@@ -20,6 +20,7 @@ import (
 
 // BuildResult is the output of a build
 type BuildResult struct {
+	Source        glfs.Ref
 	Targets       []Target
 	TargetResults []TargetResult
 	OutputRoot    *glfs.Ref
@@ -95,11 +96,14 @@ func Build(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, prefix string)
 	for i := range targetResults {
 		targ := plan.Targets[i]
 		res := nrs[targ.Node]
+		ref, _ := glfstasks.ParseGLFSRef(res.Data)
 		targetResults[i] = TargetResult{
 			ErrCode: res.ErrCode,
+			Ref:     ref,
 		}
 	}
 	return &BuildResult{
+		Source:        *srcRoot,
 		OutputRoot:    outRoot,
 		Targets:       plan.Targets,
 		TargetResults: targetResults,

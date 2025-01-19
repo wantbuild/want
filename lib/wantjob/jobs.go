@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +42,21 @@ const (
 )
 
 type ErrCode uint32
+
+func (ec ErrCode) String() string {
+	switch ec {
+	case OK:
+		return "OK"
+	case TIMEOUT:
+		return "TIMEOUT"
+	case CANCELLED:
+		return "CANCELLED"
+	case EXEC_FAILURE:
+		return "EXECUTION_FAILURE"
+	default:
+		return strconv.Itoa(int(ec))
+	}
+}
 
 const (
 	// OK means the job completed successfully

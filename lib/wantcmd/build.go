@@ -26,13 +26,15 @@ var buildCmd = star.Command{
 		if err != nil {
 			return err
 		}
-		c.Printf("TARGETS: \n")
-		for _, targ := range res.Targets {
-			c.Printf("%s %s\n", targ.DefinedIn, targ.To)
-		}
 		if res.OutputRoot != nil {
-			c.Printf("OUTPUT: %v\n", res.OutputRoot.CID)
+			c.Printf("%v\n", res.OutputRoot.CID)
 		}
+		for i, targ := range res.Targets {
+			tres := res.TargetResults[i]
+			c.Printf("%s %s\n", targ.DefinedIn, targ.To)
+			c.Printf("  %v %v\n", tres.ErrCode, tres.Ref)
+		}
+
 		return c.StdOut.Flush()
 	},
 }
