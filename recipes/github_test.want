@@ -1,0 +1,3 @@
+local github = import "./github.libsonnet";
+
+github.repo("blobcache", "glfs", "4a27d63c9f7e64cc0a5393bcb55fa4795586263a")

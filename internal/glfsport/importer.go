@@ -54,7 +54,8 @@ func (im *Importer) importDir(ctx context.Context, sem *semaphore.Weighted, p st
 	if err != nil {
 		return nil, err
 	}
-	eg, ctx := errgroup.WithContext(ctx)
+	// TODO: find out why this context was being cancelled early
+	eg, _ := errgroup.WithContext(ctx)
 	ents := make([]glfs.TreeEntry, len(dirEnts))
 	for i, dirEnt := range dirEnts {
 		i := i

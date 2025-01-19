@@ -1,0 +1,5 @@
+local want = import "want";
+
+local x = want.metadata();
+
+want.blob(std.manifestJson(x))

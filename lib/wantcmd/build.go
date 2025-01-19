@@ -7,6 +7,7 @@ import (
 	"github.com/blobcache/glfs"
 	"github.com/pkg/errors"
 	"go.brendoncarroll.net/star"
+
 	"wantbuild.io/want/lib/want"
 )
 
@@ -31,7 +32,11 @@ var buildCmd = star.Command{
 		}
 		for i, targ := range res.Targets {
 			tres := res.TargetResults[i]
-			c.Printf("%s %s\n", targ.DefinedIn, targ.To)
+			if targ.IsStatement {
+				c.Printf("%s %v:\n", targ.DefinedIn, targ.DefinedNum)
+			} else {
+				c.Printf("%s:\n", targ.DefinedIn)
+			}
 			c.Printf("  %v %v\n", tres.ErrCode, tres.Ref)
 		}
 

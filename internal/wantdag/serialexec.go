@@ -58,8 +58,10 @@ func ExecAll(jc *wantjob.Ctx, dst cadata.Store, s cadata.Getter, x DAG) ([]wantj
 			nodeStores[i] = outSrc
 			outRef, _ = glfstasks.ParseGLFSRef(out.Data)
 		}
-		if err := glfs.Sync(ctx, dst, union, *outRef); err != nil {
-			return nil, err
+		if outRef != nil {
+			if err := glfs.Sync(ctx, dst, union, *outRef); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return nodeResults, nil
