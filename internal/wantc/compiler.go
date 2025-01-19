@@ -26,6 +26,7 @@ const (
 	MaxJsonnetFileSize = 1e6
 )
 
+// IsModule returns true if x is valid Want Module.
 func IsModule(ctx context.Context, src cadata.Getter, x glfs.Ref) (bool, error) {
 	t, err := glfs.GetTree(ctx, src, x)
 	if err != nil {
@@ -48,13 +49,15 @@ func NewCompiler() *Compiler {
 	}
 }
 
+type Metadata = map[string]any
+
 // compileState holds the state for a single run of the compiler
 type compileState struct {
-	src    cadata.Getter
-	dst    cadata.Store
-	ground glfs.Ref
-	root   Expr
-	config compileConfig
+	src      cadata.Getter
+	dst      cadata.Store
+	buildCtx Metadata
+	ground   glfs.Ref
+	root     Expr
 
 	jsImporter   *jsImporter
 	vpMu         sync.Mutex
@@ -66,10 +69,9 @@ type compileState struct {
 	ssMu         sync.Mutex
 	stmtSets     []*StmtSet
 
-	graph     glfs.Ref
-	nodeCount uint64
-	targets   []Target
-	rootNode  wantdag.NodeID
+	graph    glfs.Ref
+	targets  []Target
+	rootNode wantdag.NodeID
 }
 
 func (cs *compileState) claimPath(p string) bool {
@@ -123,38 +125,12 @@ func (cs *compileState) acquireVFS() (*VFS, func()) {
 	return cs.vfs, cs.vfsMu.Unlock
 }
 
-type compileConfig struct {
-	metadata map[string]any
+func WithGitMetadata(buildCtx map[string]any, commitHash string, tags []string) {
+	buildCtx["gitCommitHash"] = commitHash
+	buildCtx["gitTags"] = tags
 }
 
-func (cc *compileConfig) setInputRef(x glfs.Ref) {
-	if cc.metadata == nil {
-		cc.metadata = make(map[string]any)
-	}
-	cc.metadata["inputRef"] = x
-}
-
-func collectCompileConfig(opts []CompileOption) compileConfig {
-	ret := &compileConfig{}
-	for _, o := range opts {
-		o(ret)
-	}
-	return *ret
-}
-
-type CompileOption func(*compileConfig)
-
-func WithGitMetadata(commitHash, tag string) CompileOption {
-	return func(co *compileConfig) {
-		if co.metadata == nil {
-			co.metadata = make(map[string]any)
-		}
-		co.metadata["gitCommitHash"] = commitHash
-		co.metadata["gitTag"] = tag
-	}
-}
-
-func (c *Compiler) Compile(ctx context.Context, dst cadata.Store, src cadata.Getter, ground glfs.Ref, prefix string, opts ...CompileOption) (*Plan, error) {
+func (c *Compiler) Compile(ctx context.Context, dst cadata.Store, src cadata.Getter, metadata Metadata, ground glfs.Ref) (*Plan, error) {
 	isMod, err := IsModule(ctx, src, ground)
 	if err != nil {
 		return nil, err
@@ -163,39 +139,34 @@ func (c *Compiler) Compile(ctx context.Context, dst cadata.Store, src cadata.Get
 		return nil, fmt.Errorf("not a want module")
 	}
 
-	cfg := collectCompileConfig(opts)
-	cfg.setInputRef(ground)
-
 	cs := &compileState{
 		src:          src,
 		dst:          dst,
-		config:       cfg,
+		buildCtx:     metadata,
 		ground:       ground,
-		root:         &selection{set: stringsets.Prefix(prefix)},
+		root:         &selection{set: stringsets.Prefix("")},
 		vfs:          &VFS{},
 		visitedPaths: make(map[string]chan struct{}),
 	}
 
-	for _, f := range []func(context.Context, *compileState, string) error{
+	for _, f := range []func(context.Context, *compileState) error{
 		c.addSourceFiles,
 		c.detectCycles,
 		c.lowerSelections,
 		c.makeGraph,
 	} {
-		if err := f(ctx, cs, prefix); err != nil {
+		if err := f(ctx, cs); err != nil {
 			return nil, err
 		}
 	}
 	return &Plan{
-		Graph:     cs.graph,
-		Root:      cs.rootNode,
-		VFS:       cs.vfs,
-		Targets:   cs.targets,
-		NodeCount: cs.nodeCount,
+		DAG:      cs.graph,
+		Targets:  cs.targets,
+		LastNode: cs.rootNode,
 	}, nil
 }
 
-func (c *Compiler) addSourceFiles(ctx context.Context, cs *compileState, p string) error {
+func (c *Compiler) addSourceFiles(ctx context.Context, cs *compileState) error {
 	defer logStep(ctx, "adding source files")()
 	eg, ctx := errgroup.WithContext(ctx)
 	cs.jsImporter = newVFSImporter(func(p string) ([]byte, error) {
@@ -205,11 +176,7 @@ func (c *Compiler) addSourceFiles(ctx context.Context, cs *compileState, p strin
 		}
 		return c.glfs.GetBlobBytes(ctx, cs.src, *ref, MaxJsonnetFileSize)
 	})
-	ref, err := c.glfs.GetAtPath(ctx, cs.src, cs.ground, p)
-	if err != nil {
-		return err
-	}
-	if err := c.addSourceFile(ctx, cs, eg, p, *ref); err != nil {
+	if err := c.addSourceFile(ctx, cs, eg, "", cs.ground); err != nil {
 		return err
 	}
 	return eg.Wait()
@@ -307,7 +274,7 @@ func (c *Compiler) loadStmt(ctx context.Context, cs *compileState, p string, ref
 }
 
 // lowerSelections turns all selections in all the expressions into compute and fact
-func (c *Compiler) lowerSelections(ctx context.Context, cs *compileState, p string) error {
+func (c *Compiler) lowerSelections(ctx context.Context, cs *compileState) error {
 	defer logStep(ctx, "lowering selections")()
 	cache := make(map[[32]byte]Expr)
 	vfs, rel := cs.acquireVFS()
@@ -377,7 +344,7 @@ func (c *Compiler) replaceSelections(ctx context.Context, dst cadata.Store, cach
 	}
 }
 
-func (c *Compiler) detectCycles(ctx context.Context, cs *compileState, p string) error {
+func (c *Compiler) detectCycles(ctx context.Context, cs *compileState) error {
 	defer logStep(ctx, "detecting cycles")()
 	visited := make(map[string]struct{})
 	current := make(map[string]struct{})
@@ -449,7 +416,7 @@ func (c *Compiler) detectCycles(ctx context.Context, cs *compileState, p string)
 	return check()
 }
 
-func (c *Compiler) makeGraph(ctx context.Context, cs *compileState, p string) error {
+func (c *Compiler) makeGraph(ctx context.Context, cs *compileState) error {
 	defer logStep(ctx, "making graph")()
 	gb := NewGraphBuilder(cs.dst)
 	var targets []Target
@@ -462,7 +429,8 @@ func (c *Compiler) makeGraph(ctx context.Context, cs *compileState, p string) er
 		}
 		targets = append(targets, Target{
 			To:        makePathSet(er.Affects()),
-			From:      nid,
+			Node:      nid,
+			Expr:      er.spec,
 			DefinedIn: er.path,
 		})
 	}
@@ -475,9 +443,10 @@ func (c *Compiler) makeGraph(ctx context.Context, cs *compileState, p string) er
 				return err
 			}
 			_, isExport := stmt.(*exportStmt)
+			to := makePathSet(stmt.Affects())
 			targets = append(targets, Target{
-				To:        makePathSet(stmt.Affects()),
-				From:      nid,
+				To:        to,
+				Node:      nid,
 				DefinedIn: ss.path,
 				IsExport:  isExport,
 			})
@@ -502,7 +471,6 @@ func (c *Compiler) makeGraph(ctx context.Context, cs *compileState, p string) er
 	cs.graph = *gref
 	cs.rootNode = root
 	cs.targets = targets
-	cs.nodeCount = uint64(gb.Count())
 	return nil
 }
 

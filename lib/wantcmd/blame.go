@@ -5,7 +5,9 @@ import (
 
 	"github.com/kr/text"
 	"go.brendoncarroll.net/star"
+
 	"wantbuild.io/want/internal/wantc"
+	"wantbuild.io/want/internal/wantfmt"
 	"wantbuild.io/want/lib/want"
 )
 
@@ -28,10 +30,15 @@ var blameCmd = star.Command{
 
 		w := c.StdOut
 		for _, target := range targets {
+			// key
 			ss := wantc.SetFromQuery(target.DefinedIn, target.To)
 			fmt.Fprintf(w, "%s\n", ss.String())
-			w2 := text.NewIndentWriter(w, []byte("\t"))
-			target.From.PrettyPrint(w2)
+
+			// value
+			w2 := text.NewIndentWriter(w, []byte("  "))
+			if err := wantfmt.PrettyExpr(w2, target.Expr); err != nil {
+				return err
+			}
 			fmt.Fprintln(w)
 		}
 		return c.StdOut.Flush()

@@ -172,6 +172,18 @@ func (s *JobSys) process(x *jobState) {
 	x.endAt = tai64.Now()
 }
 
+// maybeEnqueue enqueues the job if it was advanced to DONE using the cache.
+func (s *JobSys) maybeEnqueue(jstate *jobState, dbJob *wantjob.Job) {
+	switch dbJob.State {
+	case wantjob.QUEUED:
+		s.queue <- jstate
+	case wantjob.DONE:
+		jstate.result = dbJob.Result
+		jstate.endAt = tai64.Now()
+		close(jstate.done)
+	}
+}
+
 func (s *JobSys) Shutdown() {
 	s.cf()
 	close(s.queue)
@@ -181,28 +193,37 @@ func (s *JobSys) Shutdown() {
 }
 
 func (s *JobSys) Init(ctx context.Context, src cadata.Getter, task wantjob.Task) (wantjob.Idx, error) {
-	rootIdx, err := dbutil.DoTx1(ctx, s.db, func(tx *sqlx.Tx) (wantjob.Idx, error) {
-		return wantdb.CreateRootJob(tx, task)
-	})
-	if err != nil {
-		return 0, err
-	}
-	dstID, err := dbutil.DoTx1(ctx, s.db, func(tx *sqlx.Tx) (wantdb.StoreID, error) {
-		return wantdb.GetJobStoreID(tx, wantjob.JobID{rootIdx})
-	})
-	if err != nil {
+	var (
+		idx   wantjob.Idx
+		job   *wantjob.Job
+		dstID wantdb.StoreID
+	)
+	if err := dbutil.DoTx(ctx, s.db, func(tx *sqlx.Tx) error {
+		var err error
+		if idx, err = wantdb.CreateRootJob(tx, task); err != nil {
+			return err
+		}
+		jobid := wantjob.JobID{idx}
+		if job, err = wantdb.InspectJob(tx, jobid); err != nil {
+			return err
+		}
+		if dstID, err = wantdb.GetJobStoreID(tx, jobid); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
 		return 0, err
 	}
 
 	dst := wantdb.NewDBStore(s.db, dstID)
 	js := newJobState(s.bgCtx, dst, src, task)
-	js.id = wantjob.JobID{rootIdx}
+	js.id = wantjob.JobID{idx}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.roots[rootIdx] = js
-	s.queue <- js
-	return rootIdx, nil
+	s.roots[idx] = js
+	s.maybeEnqueue(js, job)
+	return idx, nil
 }
 
 func (s *JobSys) Spawn(ctx context.Context, parent wantjob.JobID, src cadata.Getter, task wantjob.Task) (wantjob.Idx, error) {
@@ -237,15 +258,7 @@ func (s *JobSys) Spawn(ctx context.Context, parent wantjob.JobID, src cadata.Get
 	if idx != idx2 {
 		panic("jobidx mismatch")
 	}
-	switch job.State {
-	case wantjob.QUEUED:
-		s.queue <- child
-	case wantjob.DONE:
-		child.result = job.Result
-		child.endAt = tai64.Now()
-		close(child.done)
-	}
-
+	s.maybeEnqueue(child, job)
 	return idx, nil
 }
 

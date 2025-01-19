@@ -7,6 +7,8 @@ import (
 	"github.com/blobcache/glfs"
 )
 
+type Tree = map[string]TreeEntry
+
 type TreeEntry struct {
 	Mode  fs.FileMode `json:"mode"`
 	Value Expr        `json:"value"`
@@ -15,18 +17,18 @@ type TreeEntry struct {
 type Ref = glfs.Ref
 
 type Expr struct {
-	Blob      *string              `json:"blob,omitempty"`
-	Tree      map[string]TreeEntry `json:"tree,omitempty"`
-	Ref       *Ref                 `json:"ref,omitempty"`
-	Compute   *Compute             `json:"compute,omitempty"`
-	Selection *Selection           `json:"selection,omitempty"`
+	Blob      *string    `json:"blob,omitempty"`
+	Tree      Tree       `json:"tree,omitempty"`
+	Ref       *Ref       `json:"ref,omitempty"`
+	Compute   *Compute   `json:"compute,omitempty"`
+	Selection *Selection `json:"selection,omitempty"`
 }
 
 func (e Expr) IsValue() bool {
 	return e.Blob != nil || e.Tree != nil
 }
 
-func (n Expr) Pretty() string {
+func (n Expr) String() string {
 	switch {
 	case n.Blob != nil:
 		return fmt.Sprintf("{FileLiteral: %s}", *n.Blob)

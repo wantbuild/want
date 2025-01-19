@@ -69,6 +69,10 @@ func (r *Repo) PathFilter(x string) bool {
 	return x != ".git" && !strings.HasPrefix(x, ".git/")
 }
 
+func (r *Repo) Metadata() map[string]any {
+	return map[string]any{}
+}
+
 // IsRepo returns (true, nil) if the directory contains a want repo
 func IsRepo(p string) (bool, error) {
 	info, err := os.Stat(p)

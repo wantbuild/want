@@ -23,7 +23,7 @@ type ExprRoot struct {
 // newExpr creates an *ExprRoot from a spec.
 // If the spec specifies any literals they will be posted to the store.
 func (c *Compiler) parseExprRoot(ctx context.Context, cs *compileState, p string, data []byte) (*ExprRoot, error) {
-	vm := newJsonnetVM(cs.jsImporter, cs.config.metadata)
+	vm := newJsonnetVM(cs.jsImporter, cs.buildCtx)
 	p = strings.Trim(p, "/")
 	jsonStr, err := vm.EvaluateSnippet(p, string(data))
 	if err != nil {
