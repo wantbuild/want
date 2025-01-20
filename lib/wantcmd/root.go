@@ -1,15 +1,13 @@
 package wantcmd
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"path/filepath"
+	"runtime"
 
-	"github.com/jmoiron/sqlx"
 	"go.brendoncarroll.net/star"
 
-	"wantbuild.io/want/internal/wantdb"
+	"wantbuild.io/want/lib/want"
 	"wantbuild.io/want/lib/wantrepo"
 )
 
@@ -48,7 +46,7 @@ var initCmd = star.Command{
 
 var statusCmd = star.Command{
 	Metadata: star.Metadata{Short: "print status information"},
-	Flags:    []star.IParam{dbParam},
+	Flags:    []star.IParam{},
 	F: func(c star.Context) error {
 		wd, err := os.Getwd()
 		if err != nil {
@@ -72,40 +70,16 @@ var statusCmd = star.Command{
 	},
 }
 
-var dbParam = star.Param[*sqlx.DB]{
-	Name:    "db",
-	Default: star.Ptr(""),
-	Parse: func(p string) (*sqlx.DB, error) {
-		if p == "" {
-			// TODO:
-			// var err error
-			// if p, err = defaultDBPath(); err != nil {
-			// 	return nil, err
-			// }
-			p = filepath.Join(os.TempDir(), "want.db")
-		}
-		db, err := wantdb.Open(p)
-		if err != nil {
-			return nil, err
-		}
-		if err := wantdb.Setup(context.Background(), db); err != nil {
-			return nil, err
-		}
-		return db, nil
-	},
-}
-
-// defaultDBPath sets up and returns the default path for the global DB.
-func defaultDBPath() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
+func newSys(c *star.Context) (*want.System, error) {
+	const stateDir = "/tmp/want"
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		return nil, err
 	}
-	wantStateDir := filepath.Join(homeDir, ".local", "want")
-	if err := os.MkdirAll(wantStateDir, 0o755); err != nil {
-		return "", err
+	s := want.New(stateDir, runtime.GOMAXPROCS(0))
+	if err := s.Init(c.Context); err != nil {
+		return nil, err
 	}
-	return filepath.Join(wantStateDir, "want.db"), nil
+	return s, nil
 }
 
 var projNameParam = star.Param[string]{

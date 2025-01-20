@@ -2,6 +2,7 @@ package want
 
 import (
 	"context"
+	"path/filepath"
 	"runtime"
 
 	"github.com/blobcache/glfs"
@@ -13,15 +14,59 @@ import (
 	"wantbuild.io/want/internal/stores"
 	"wantbuild.io/want/internal/wantc"
 	"wantbuild.io/want/internal/wantdag"
+	"wantbuild.io/want/internal/wantdb"
 	"wantbuild.io/want/lib/wantjob"
 	"wantbuild.io/want/lib/wantrepo"
 )
 
-func Eval(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, calledFrom string, expr []byte) (*glfs.Ref, cadata.Getter, error) {
+// System is an instance of the Want Build System
+type System struct {
+	stateDir   string
+	numWorkers int
+
+	db   *sqlx.DB
+	jobs *jobSystem
+}
+
+func New(stateDir string, numWorkers int) *System {
+	db, err := wantdb.Open(filepath.Join(stateDir, "want.db"))
+	if err != nil {
+		panic(err)
+	}
+	return &System{
+		stateDir:   stateDir,
+		numWorkers: numWorkers,
+
+		db: db,
+	}
+}
+
+// Init initializes the system
+func (s *System) Init(ctx context.Context) error {
+	if err := s.db.PingContext(ctx); err != nil {
+		return err
+	}
+	if err := wantdb.Setup(ctx, s.db); err != nil {
+		return err
+	}
+	s.jobs = newJobSystem(s.db, newProtoExecutor(), runtime.GOMAXPROCS(0))
+	return nil
+}
+
+func (s *System) Close() error {
+	if s.jobs != nil {
+		s.jobs.Shutdown()
+		s.jobs = nil
+	}
+	if err := s.db.Close(); err != nil {
+		return err
+	}
+	s.db = nil
+	return nil
+}
+
+func (sys *System) Eval(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, calledFrom string, expr []byte) (*glfs.Ref, cadata.Getter, error) {
 	s := stores.NewMem()
-	exec := newExecutor()
-	jsys := newJobSys(ctx, db, exec, runtime.GOMAXPROCS(0))
-	defer jsys.Shutdown()
 
 	c := wantc.NewCompiler()
 	dag, err := c.CompileSnippet(ctx, s, s, expr)
@@ -32,22 +77,14 @@ func Eval(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, calledFrom stri
 	if err != nil {
 		return nil, nil, err
 	}
-	task := wantjob.Task{
-		Op:    joinOpName("dag", dagops.OpExecLast),
-		Input: glfstasks.MarshalGLFSRef(*dagRef),
-	}
-	return runRootJob(ctx, jsys, s, task)
+	return sys.doGLFS(ctx, s, joinOpName("dag", dagops.OpExecLast), *dagRef)
 }
 
-func runRootJob(ctx context.Context, jsys *JobSys, src cadata.Getter, task wantjob.Task) (*glfs.Ref, cadata.Getter, error) {
-	rootIdx, err := jsys.Init(ctx, src, task)
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := jsys.Await(ctx, nil, rootIdx); err != nil {
-		return nil, nil, err
-	}
-	res, s, err := jsys.ViewResult(ctx, nil, rootIdx)
+func (sys *System) doGLFS(ctx context.Context, src cadata.Getter, op wantjob.OpName, input glfs.Ref) (*glfs.Ref, cadata.Getter, error) {
+	res, s, err := wantjob.Do(ctx, sys.jobs, src, wantjob.Task{
+		Op:    op,
+		Input: glfstasks.MarshalGLFSRef(input),
+	})
 	if err != nil {
 		return nil, nil, err
 	}

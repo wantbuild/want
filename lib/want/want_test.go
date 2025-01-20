@@ -2,6 +2,7 @@ package want
 
 import (
 	"fmt"
+	"runtime"
 	"testing"
 
 	"github.com/blobcache/glfs"
@@ -12,10 +13,19 @@ import (
 	"wantbuild.io/want/internal/wantdb"
 )
 
+func TestInit(t *testing.T) {
+	ctx := testutil.Context(t)
+	dir := t.TempDir()
+	sys := New(dir, runtime.GOMAXPROCS(0))
+	require.NoError(t, sys.Init(ctx))
+}
+
 func TestEvalNoRepo(t *testing.T) {
 	ctx := testutil.Context(t)
 	db := wantdb.NewMemory()
 	require.NoError(t, wantdb.Setup(ctx, db))
+	sys := New(t.TempDir(), runtime.GOMAXPROCS(0))
+	require.NoError(t, sys.Init(ctx))
 	s := stores.NewMem()
 
 	tcs := []struct {
@@ -56,7 +66,7 @@ func TestEvalNoRepo(t *testing.T) {
 		tc := tc
 		in := `local want = import "want";` + "\n" + tc.I
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
-			out, src, err := Eval(ctx, db, nil, "", []byte(in))
+			out, src, err := sys.Eval(ctx, db, nil, "", []byte(in))
 			require.NoError(t, err)
 			require.Equal(t, tc.O, *out)
 			require.NoError(t, glfs.WalkRefs(ctx, src, *out, func(ref glfs.Ref) error { return nil }))

@@ -9,9 +9,9 @@ import (
 	"wantbuild.io/want/lib/wantjob"
 )
 
-func ExecLast(jc *wantjob.Ctx, dst cadata.Store, s cadata.Getter, x DAG) (wantjob.Result, error) {
+func ExecLast(jc wantjob.Ctx, s cadata.Getter, x DAG) (wantjob.Result, error) {
 	// TODO: lazy execution
-	nrs, err := ExecAll(jc, dst, s, x)
+	nrs, err := ExecAll(jc, s, x)
 	if err != nil {
 		return wantjob.Result{}, err
 	}
@@ -19,8 +19,8 @@ func ExecLast(jc *wantjob.Ctx, dst cadata.Store, s cadata.Getter, x DAG) (wantjo
 }
 
 // ExecAll executes all nodes in the DAG, and returns the result of returning each.
-func ExecAll(jc *wantjob.Ctx, dst cadata.Store, s cadata.Getter, x DAG) ([]wantjob.Result, error) {
-	ctx := jc.Context()
+func ExecAll(jc wantjob.Ctx, s cadata.Getter, x DAG) ([]wantjob.Result, error) {
+	ctx := jc.Context
 	nodeStores := make([]cadata.Getter, len(x.Nodes))
 	nodeResults := make([]wantjob.Result, len(x.Nodes))
 	resolve := func(nid NodeID) wantjob.Result {
@@ -29,7 +29,7 @@ func ExecAll(jc *wantjob.Ctx, dst cadata.Store, s cadata.Getter, x DAG) ([]wantj
 	scratch := stores.NewMem()
 	for i, n := range x.Nodes {
 		var outRef *glfs.Ref
-		union := stores.Union{s, dst, scratch}
+		union := stores.Union{s, jc.Dst, scratch}
 		switch {
 		case n.IsFact():
 			nodeResults[i] = *glfstasks.Success(*n.Value)
@@ -59,7 +59,7 @@ func ExecAll(jc *wantjob.Ctx, dst cadata.Store, s cadata.Getter, x DAG) ([]wantj
 			outRef, _ = glfstasks.ParseGLFSRef(out.Data)
 		}
 		if outRef != nil {
-			if err := glfs.Sync(ctx, dst, union, *outRef); err != nil {
+			if err := glfs.Sync(ctx, jc.Dst, union, *outRef); err != nil {
 				return nil, err
 			}
 		}

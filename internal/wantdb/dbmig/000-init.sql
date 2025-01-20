@@ -41,13 +41,14 @@ CREATE TABLE jobs (
 
     task BLOB NOT NULL REFERENCES tasks(id),
     store_id INT NOT NULL REFERENCES stores(id),
-    start_at BLOB NOT NULL,
+    created_at BLOB NOT NULL,
 
     next_idx INT NOT NULL DEFAULT 0,
     state INT NOT NULL DEFAULT 1,
 
     res_data BLOB,
     errcode INT,
+    start_at BLOB,
     end_at BLOB
 ) STRICT;
 

@@ -62,7 +62,7 @@ func createJob(tx *sqlx.Tx, task wantjob.Task) (int64, error) {
 	}
 
 	now := tai64.Now()
-	rowid, err := dbutil.GetTx[int64](tx, `INSERT INTO jobs (task, store_id, start_at) VALUES (?, ?, ?) RETURNING rowid`, taskID, sid, now.Marshal())
+	rowid, err := dbutil.GetTx[int64](tx, `INSERT INTO jobs (task, store_id, created_at) VALUES (?, ?, ?) RETURNING rowid`, taskID, sid, now.Marshal())
 	if err != nil {
 		return 0, err
 	}
@@ -112,16 +112,16 @@ func InspectJob(tx *sqlx.Tx, jobid wantjob.JobID) (*wantjob.Job, error) {
 	var row struct {
 		TaskID     wantjob.TaskID            `db:"task"`
 		State      wantjob.JobState          `db:"state"`
-		StartAt    []byte                    `db:"start_at"`
+		CreatedAt  []byte                    `db:"created_at"`
 		ErrCode    sql.Null[wantjob.ErrCode] `db:"errcode"`
 		ResultData []byte                    `db:"res_data"`
 		EndAt      []byte                    `db:"end_at"`
 	}
-	if err := tx.Get(&row, `SELECT task, state, start_at, errcode, res_data, end_at FROM jobs WHERE rowid = ?`, rowid); err != nil {
+	if err := tx.Get(&row, `SELECT task, state, created_at, errcode, res_data, end_at FROM jobs WHERE rowid = ?`, rowid); err != nil {
 		return nil, err
 	}
 
-	startAt, err := tai64.ParseN(row.StartAt)
+	createdAt, err := tai64.ParseN(row.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -140,8 +140,8 @@ func InspectJob(tx *sqlx.Tx, jobid wantjob.JobID) (*wantjob.Job, error) {
 	}
 	job := wantjob.Job{
 		// TODO: GetTask
-		State:   row.State,
-		StartAt: startAt,
+		State:     row.State,
+		CreatedAt: createdAt,
 
 		Result: result,
 		EndAt:  endAt,
@@ -218,6 +218,7 @@ func lookupJobRowID(tx *sqlx.Tx, jobid wantjob.JobID) (int64, error) {
 	rowid, err := dbutil.GetTx[int64](tx, `SELECT job_row FROM job_roots WHERE idx = ?`, jobid[0])
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			panic(jobid)
 			return 0, wantjob.ErrJobNotFound{ID: jobid}
 		}
 		return 0, err

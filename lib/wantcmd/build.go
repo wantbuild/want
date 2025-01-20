@@ -7,23 +7,24 @@ import (
 	"github.com/blobcache/glfs"
 	"github.com/pkg/errors"
 	"go.brendoncarroll.net/star"
-
-	"wantbuild.io/want/lib/want"
 )
 
 var buildCmd = star.Command{
 	Metadata: star.Metadata{Short: "run a build"},
-	Flags:    []star.IParam{dbParam},
+	Flags:    []star.IParam{},
 	Pos:      []star.IParam{pathsParam},
 	F: func(c star.Context) error {
 		ctx := c.Context
+		wbs, err := newSys(&c)
+		if err != nil {
+			return err
+		}
+		defer wbs.Close()
 		repo, err := openRepo()
 		if err != nil {
 			return err
 		}
-		db := dbParam.Load(c)
-		defer db.Close()
-		res, err := want.Build(ctx, db, repo, "")
+		res, err := wbs.Build(ctx, repo, "")
 		if err != nil {
 			return err
 		}
@@ -46,20 +47,23 @@ var buildCmd = star.Command{
 
 var lsCmd = star.Command{
 	Metadata: star.Metadata{Short: "list tree entries in the build output"},
-	Flags:    []star.IParam{dbParam},
+	Flags:    []star.IParam{},
 	Pos:      []star.IParam{pathParam},
 	F: func(c star.Context) error {
 		ctx := c.Context
+		wbs, err := newSys(&c)
+		if err != nil {
+			return err
+		}
+		defer wbs.Close()
 		repo, err := openRepo()
 		if err != nil {
 			return err
 		}
-		db := dbParam.Load(c)
-		defer db.Close()
 		p := pathParam.Load(c)
 
 		// do the build
-		res, err := want.Build(ctx, db, repo, "")
+		res, err := wbs.Build(ctx, repo, "")
 		if err != nil {
 			return err
 		}
@@ -88,20 +92,23 @@ var lsCmd = star.Command{
 
 var catCmd = star.Command{
 	Metadata: star.Metadata{Short: "concatenate files from the build output and write them to stdout"},
-	Flags:    []star.IParam{dbParam},
+	Flags:    []star.IParam{},
 	Pos:      []star.IParam{pathsParam},
 	F: func(c star.Context) error {
 		ctx := c.Context
+		wbs, err := newSys(&c)
+		if err != nil {
+			return err
+		}
+		defer wbs.Close()
 		repo, err := openRepo()
 		if err != nil {
 			return err
 		}
-		db := dbParam.Load(c)
-		defer db.Close()
 		ps := pathsParam.LoadAll(c)
 
 		// do the build
-		res, err := want.Build(ctx, db, repo, "")
+		res, err := wbs.Build(ctx, repo, "")
 		if err != nil {
 			return err
 		}

@@ -5,27 +5,29 @@ import (
 	"time"
 
 	"go.brendoncarroll.net/star"
-
-	"wantbuild.io/want/lib/want"
 )
 
 var importCmd = star.Command{
 	Metadata: star.Metadata{Short: "import the repository, then exit"},
-	Flags:    []star.IParam{dbParam},
+	Flags:    []star.IParam{},
 	F: func(c star.Context) error {
 		ctx := c.Context
 		startTime := time.Now()
+		wbs, err := newSys(&c)
+		if err != nil {
+			return err
+		}
+		defer wbs.Close()
 		repo, err := openRepo()
 		if err != nil {
 			return err
 		}
-		db := dbParam.Load(c)
-		srcid, err := want.Import(ctx, db, repo)
+		srcid, err := wbs.Import(ctx, repo)
 		if err != nil {
 			return err
 		}
 		dur := time.Since(startTime)
-		root, s, err := want.AccessSource(ctx, db, srcid)
+		root, s, err := wbs.AccessSource(ctx, srcid)
 		if err != nil {
 			return err
 		}

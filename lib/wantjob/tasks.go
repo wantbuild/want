@@ -30,10 +30,20 @@ func (t Task) String() string {
 // Executors execute Tasks
 type Executor interface {
 	// Execute blocks while the task is executing, and returns the result or an error.
-	Execute(jc *Ctx, dst cadata.Store, src cadata.Getter, task Task) ([]byte, error)
+	Execute(jc Ctx, src cadata.Getter, task Task) ([]byte, error)
 }
 
-type OpFunc = func(jc *Ctx, dst cadata.Store, src cadata.Getter, data []byte) ([]byte, error)
+type OpFunc = func(jc Ctx, src cadata.Getter, data []byte) ([]byte, error)
+
+type BasicExecutor map[OpName]OpFunc
+
+func (exec BasicExecutor) Execute(jc Ctx, src cadata.Getter, task Task) ([]byte, error) {
+	fn, exists := exec[task.Op]
+	if !exists {
+		return nil, NewErrUnknownOperator(task.Op)
+	}
+	return fn(jc, src, task.Input)
+}
 
 func productHash(hf cadata.HashFunc, xs ...[]byte) cadata.ID {
 	var data []byte

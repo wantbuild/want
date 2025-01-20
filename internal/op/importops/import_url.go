@@ -78,7 +78,7 @@ func DeriveFromURL(ctx context.Context, gb GraphBuilder, s cadata.Poster, x Impo
 }
 
 // ImportURL imports data from a URL, checking that it matches a hash, and applying any transformations.
-func (e *Executor) ImportURL(ctx context.Context, jc *wantjob.Ctx, s cadata.GetPoster, spec ImportURLTask) (*glfs.Ref, error) {
+func (e *Executor) ImportURL(jc wantjob.Ctx, s cadata.GetPoster, spec ImportURLTask) (*glfs.Ref, error) {
 	u, err := url.Parse(spec.URL)
 	if err != nil {
 		return nil, err
@@ -94,12 +94,12 @@ func (e *Executor) ImportURL(ctx context.Context, jc *wantjob.Ctx, s cadata.GetP
 	var stages = []pipelineStage{
 		checkHash(newHash(), sum),
 	}
-	r, err := e.download(ctx, jc, u)
+	r, err := e.download(jc, u)
 	if err != nil {
 		return nil, err
 	}
 	defer r.Close()
-	return importStream(ctx, s, r, stages, spec.Transforms)
+	return importStream(jc.Context, s, r, stages, spec.Transforms)
 }
 
 type pipelineStage = func(w io.Writer, r io.Reader) error
@@ -259,17 +259,17 @@ func pipeline(r io.Reader, stages []func(w io.Writer, r io.Reader) error, collec
 	return ret, nil
 }
 
-func (e *Executor) download(ctx context.Context, jc *wantjob.Ctx, u *url.URL) (io.ReadCloser, error) {
+func (e *Executor) download(jc wantjob.Ctx, u *url.URL) (io.ReadCloser, error) {
 	switch u.Scheme {
 	case "http", "https":
-		return e.downloadHTTP(ctx, jc, u)
+		return e.downloadHTTP(jc, u)
 	default:
 		return nil, errors.New("url scheme not supported")
 	}
 }
 
-func (e *Executor) downloadHTTP(ctx context.Context, jc *wantjob.Ctx, u *url.URL) (io.ReadCloser, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+func (e *Executor) downloadHTTP(jc wantjob.Ctx, u *url.URL) (io.ReadCloser, error) {
+	req, err := http.NewRequestWithContext(jc.Context, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, err
 	}

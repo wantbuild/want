@@ -35,7 +35,7 @@ func MarshalGoZipTask(x ImportGoZipTask) []byte {
 }
 
 // ImportGoZip imports and validates a go module zip file
-func (e *Executor) ImportGoZip(ctx context.Context, jc *wantjob.Ctx, s cadata.GetPoster, x ImportGoZipTask) (*glfs.Ref, error) {
+func (e *Executor) ImportGoZip(jc wantjob.Ctx, s cadata.GetPoster, x ImportGoZipTask) (*glfs.Ref, error) {
 	const proxy = "https://proxy.golang.org"
 	escapedPath, err := module.EscapePath(x.Path)
 	if err != nil {
@@ -50,7 +50,7 @@ func (e *Executor) ImportGoZip(ctx context.Context, jc *wantjob.Ctx, s cadata.Ge
 	if err != nil {
 		panic(err)
 	}
-	rc, err := e.downloadHTTP(ctx, jc, u)
+	rc, err := e.downloadHTTP(jc, u)
 	if err != nil {
 		return nil, err
 	}
@@ -74,5 +74,5 @@ func (e *Executor) ImportGoZip(ctx context.Context, jc *wantjob.Ctx, s cadata.Ge
 	if _, err := zipFile.Seek(0, io.SeekStart); err != nil {
 		return nil, err
 	}
-	return importStream(ctx, s, zipFile, nil, []string{"unzip"})
+	return importStream(jc.Context, s, zipFile, nil, []string{"unzip"})
 }

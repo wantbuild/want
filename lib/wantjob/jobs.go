@@ -3,16 +3,16 @@ package wantjob
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/kr/text"
 	"go.brendoncarroll.net/exp/slices2"
 	"go.brendoncarroll.net/state/cadata"
-	"go.brendoncarroll.net/stdctx/logctx"
 	"go.brendoncarroll.net/tai64"
-	"go.uber.org/zap"
 )
 
 // Idx is a component of a job id.
@@ -40,6 +40,21 @@ const (
 	RUNNING
 	DONE
 )
+
+func (js JobState) String() string {
+	switch js {
+	case JobState_UNKNOWN:
+		return "UNKNOWN"
+	case QUEUED:
+		return "QUEUED"
+	case RUNNING:
+		return "RUNNING"
+	case DONE:
+		return "DONE"
+	default:
+		return "UNKNOWN(" + strconv.Itoa(int(js)) + ")"
+	}
+}
 
 type ErrCode uint32
 
@@ -92,12 +107,14 @@ func (r *Result) Err() error {
 }
 
 type Job struct {
-	Task    Task
-	State   JobState
-	StartAt tai64.TAI64N
+	Task  Task
+	State JobState
 
 	Result *Result
-	EndAt  *tai64.TAI64N
+
+	CreatedAt tai64.TAI64N
+	StartAt   *tai64.TAI64N
+	EndAt     *tai64.TAI64N
 }
 
 func (j Job) Elapsed() time.Duration {
@@ -109,73 +126,46 @@ func (j Job) Elapsed() time.Duration {
 
 // System manages spawning, running, and awaiting jobs.
 type System interface {
-	Spawn(ctx context.Context, parent JobID, src cadata.Getter, task Task) (Idx, error)
-	Cancel(ctx context.Context, parent JobID, idx Idx) error
-	Await(ctx context.Context, parent JobID, idx Idx) error
-	Inspect(ctx context.Context, parent JobID, idx Idx) (*Job, error)
-	ViewResult(ctx context.Context, parent JobID, idx Idx) (*Result, cadata.Getter, error)
+	Spawn(ctx context.Context, src cadata.Getter, task Task) (Idx, error)
+	Cancel(ctx context.Context, idx Idx) error
+	Await(ctx context.Context, idx Idx) error
+	Inspect(ctx context.Context, idx Idx) (*Job, error)
+	ViewResult(ctx context.Context, idx Idx) (*Result, cadata.Getter, error)
 }
+
+var _ System = Ctx{}
 
 // Ctx is a Job Context.  It is the API available from within a running job
 type Ctx struct {
-	ctx context.Context
-	sys System
-	id  JobID
-}
-
-func NewCtx(ctx context.Context, sys System, id JobID) Ctx {
-	l, err := zap.NewDevelopment()
-	if err != nil {
-		panic(err)
-	}
-	ctx = logctx.NewContext(ctx, l)
-	return Ctx{sys: sys, id: id, ctx: ctx}
-}
-
-func (jc *Ctx) Context() context.Context {
-	return jc.ctx
-}
-
-func (jc *Ctx) Spawn(ctx context.Context, src cadata.Getter, task Task) (Idx, error) {
-	return jc.sys.Spawn(ctx, jc.id, src, task)
-}
-
-func (jc *Ctx) Await(ctx context.Context, idx Idx) error {
-	return jc.sys.Await(ctx, jc.id, idx)
-}
-
-func (jc *Ctx) Cancel(ctx context.Context, idx Idx) error {
-	return jc.sys.Cancel(ctx, jc.id, idx)
-}
-
-func (jc *Ctx) Inspect(ctx context.Context, idx Idx) (*Job, error) {
-	return jc.sys.Inspect(ctx, jc.id, idx)
-}
-
-func (jc *Ctx) ViewResult(ctx context.Context, idx Idx) (*Result, cadata.Getter, error) {
-	return jc.sys.ViewResult(ctx, jc.id, idx)
+	Context context.Context
+	System
+	Dst cadata.Store
 }
 
 func (jc *Ctx) Errorf(msg string, args ...any) {
-	fmt.Fprintf(os.Stderr, jc.id.String()+": "+msg+"\n", args...)
+	fmt.Fprintf(os.Stderr, msg+"\n", args...)
 }
 
 func (jc *Ctx) Infof(msg string, args ...any) {
-	fmt.Fprintf(os.Stderr, jc.id.String()+": "+msg+"\n", args...)
+	fmt.Fprintf(os.Stderr, msg+"\n", args...)
 }
 
 func (jc *Ctx) Debugf(msg string, args ...any) {
 	fmt.Fprintf(os.Stderr, msg+"\n", args...)
 }
 
+func (jc *Ctx) Writer(topic string) io.Writer {
+	return text.NewIndentWriter(os.Stderr, []byte(topic))
+}
+
 // Do spawns a child job to compute the Task, then awaits it and returns the result
-func Do(ctx context.Context, jc *Ctx, src cadata.Getter, task Task) (*Result, cadata.Getter, error) {
-	idx, err := jc.Spawn(ctx, src, task)
+func Do(ctx context.Context, sys System, src cadata.Getter, task Task) (*Result, cadata.Getter, error) {
+	idx, err := sys.Spawn(ctx, src, task)
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := jc.Await(ctx, idx); err != nil {
+	if err := sys.Await(ctx, idx); err != nil {
 		return nil, nil, err
 	}
-	return jc.ViewResult(ctx, idx)
+	return sys.ViewResult(ctx, idx)
 }

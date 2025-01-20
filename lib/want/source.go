@@ -20,11 +20,11 @@ type (
 )
 
 // Import imports the repo into the database
-func Import(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo) (wantdb.SourceID, error) {
+func (sys *System) Import(ctx context.Context, repo *wantrepo.Repo) (wantdb.SourceID, error) {
 	if repo == nil {
 		return 0, errors.New("import requires a repo, got nil")
 	}
-	return dbutil.DoTx1(ctx, db, func(tx *sqlx.Tx) (SourceID, error) {
+	return dbutil.DoTx1(ctx, sys.db, func(tx *sqlx.Tx) (SourceID, error) {
 		sid, err := wantdb.CreateStore(tx)
 		if err != nil {
 			return 0, err
@@ -52,12 +52,12 @@ func Import(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo) (wantdb.Sourc
 
 // AccessSource calls fn with the root of the source and a store containing
 // all of the sources blobs.
-func AccessSource(ctx context.Context, db *sqlx.DB, id SourceID) (*glfs.Ref, cadata.Getter, error) {
-	src, err := dbutil.ROTx1(ctx, db, func(tx *sqlx.Tx) (*wantdb.Source, error) {
+func (sys *System) AccessSource(ctx context.Context, id SourceID) (*glfs.Ref, cadata.Getter, error) {
+	src, err := dbutil.ROTx1(ctx, sys.db, func(tx *sqlx.Tx) (*wantdb.Source, error) {
 		return wantdb.GetSource(tx, id)
 	})
 	if err != nil {
 		return nil, nil, err
 	}
-	return &src.Root, wantdb.NewDBStore(db, src.Store), nil
+	return &src.Root, wantdb.NewDBStore(sys.db, src.Store), nil
 }

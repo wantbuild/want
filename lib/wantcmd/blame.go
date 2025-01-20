@@ -8,22 +8,25 @@ import (
 
 	"wantbuild.io/want/internal/wantc"
 	"wantbuild.io/want/internal/wantfmt"
-	"wantbuild.io/want/lib/want"
 )
 
 var blameCmd = star.Command{
 	Metadata: star.Metadata{
 		Short: "check what produces what",
 	},
-	Flags: []star.IParam{dbParam},
+	Flags: []star.IParam{},
 	F: func(c star.Context) error {
 		ctx := c.Context
+		wbs, err := newSys(&c)
+		if err != nil {
+			return err
+		}
+		defer wbs.Close()
 		repo, err := openRepo()
 		if err != nil {
 			return err
 		}
-		db := dbParam.Load(c)
-		targets, err := want.Blame(ctx, db, repo)
+		targets, err := wbs.Blame(ctx, repo)
 		if err != nil {
 			return err
 		}

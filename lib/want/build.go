@@ -2,10 +2,8 @@ package want
 
 import (
 	"context"
-	"runtime"
 
 	"github.com/blobcache/glfs"
-	"github.com/jmoiron/sqlx"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/internal/glfstasks"
@@ -37,12 +35,13 @@ type TargetResult struct {
 	Ref     *glfs.Ref
 }
 
-func Blame(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo) ([]Target, error) {
-	srcid, err := Import(ctx, db, repo)
+// Blame lists the build targets
+func (sys *System) Blame(ctx context.Context, repo *wantrepo.Repo) ([]Target, error) {
+	srcid, err := sys.Import(ctx, repo)
 	if err != nil {
 		return nil, err
 	}
-	srcRoot, srcStore, err := AccessSource(ctx, db, srcid)
+	srcRoot, srcStore, err := sys.AccessSource(ctx, srcid)
 	if err != nil {
 		return nil, err
 	}
@@ -56,29 +55,26 @@ func Blame(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo) ([]Target, err
 	return plan.Targets, nil
 }
 
-func Build(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, prefix string) (*BuildResult, error) {
-	srcid, err := Import(ctx, db, repo)
+func (sys *System) Build(ctx context.Context, repo *wantrepo.Repo, prefix string) (*BuildResult, error) {
+	srcid, err := sys.Import(ctx, repo)
 	if err != nil {
 		return nil, err
 	}
-	srcRoot, srcStore, err := AccessSource(ctx, db, srcid)
+	srcRoot, srcStore, err := sys.AccessSource(ctx, srcid)
 	if err != nil {
 		return nil, err
 	}
-	exec := newExecutor()
-	jsys := newJobSys(ctx, db, exec, runtime.GOMAXPROCS(0))
-	defer jsys.Shutdown()
 
 	// compile
-	plan, planStore, err := compile(ctx, jsys, repo.Metadata(), srcStore, *srcRoot)
+	plan, planStore, err := sys.doCompile(ctx, repo.Metadata(), srcStore, *srcRoot)
 	if err != nil {
 		return nil, err
 	}
 	// execute build DAG
-	dagRes, outStore, err := runRootJob(ctx, jsys, stores.Union{srcStore, planStore}, wantjob.Task{
-		Op:    joinOpName("dag", dagops.OpExecAll),
-		Input: glfstasks.MarshalGLFSRef(plan.DAG),
-	})
+	dagRes, outStore, err := sys.doGLFS(ctx,
+		stores.Union{srcStore, planStore},
+		joinOpName("dag",
+			dagops.OpExecAll), plan.DAG)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +108,7 @@ func Build(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, prefix string)
 	}, nil
 }
 
-func compile(ctx context.Context, jsys *JobSys, buildCtx wantc.Metadata, srcStore cadata.Getter, srcRoot glfs.Ref) (*wantc.Plan, cadata.Getter, error) {
+func (sys *System) doCompile(ctx context.Context, buildCtx wantc.Metadata, srcStore cadata.Getter, srcRoot glfs.Ref) (*wantc.Plan, cadata.Getter, error) {
 	scratch := stores.NewMem()
 	ctRef, err := wantops.PostCompileTask(ctx, scratch, wantops.CompileTask{
 		Ground:   srcRoot,
@@ -121,10 +117,10 @@ func compile(ctx context.Context, jsys *JobSys, buildCtx wantc.Metadata, srcStor
 	if err != nil {
 		return nil, nil, err
 	}
-	planRef, planStore, err := runRootJob(ctx, jsys, stores.Union{srcStore, scratch}, wantjob.Task{
-		Op:    joinOpName("want", wantops.OpCompile),
-		Input: glfstasks.MarshalGLFSRef(*ctRef),
-	})
+	planRef, planStore, err := sys.doGLFS(ctx,
+		stores.Union{srcStore, scratch},
+		joinOpName("want", wantops.OpCompile),
+		*ctRef)
 	if err != nil {
 		return nil, nil, err
 	}

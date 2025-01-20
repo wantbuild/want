@@ -31,20 +31,20 @@ var _ wantjob.Executor = &Executor{}
 
 type Executor struct{}
 
-func (e Executor) Execute(jc *wantjob.Ctx, dst cadata.Store, src cadata.Getter, x wantjob.Task) ([]byte, error) {
-	ctx := jc.Context()
+func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]byte, error) {
+	ctx := jc.Context
 	switch x.Op {
 	case OpCompile:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
-			return e.Compile(ctx, dst, src, x)
+			return e.Compile(ctx, jc.Dst, src, x)
 		})
 	case OpCompileSnippet:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
-			return e.CompileSnippet(ctx, dst, src, x)
+			return e.CompileSnippet(ctx, jc.Dst, src, x)
 		})
 	case OpPathSetRegexp:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
-			return e.PathSetRegexp(jc, dst, src, x)
+			return e.PathSetRegexp(jc, jc.Dst, src, x)
 		})
 	default:
 		return nil, wantjob.NewErrUnknownOperator(x.Op)
@@ -77,8 +77,8 @@ func (e Executor) CompileSnippet(ctx context.Context, dst cadata.Store, s cadata
 	return wantdag.PostDAG(ctx, dst, *dag)
 }
 
-func (e Executor) PathSetRegexp(jc *wantjob.Ctx, dst cadata.Store, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
-	ctx := jc.Context()
+func (e Executor) PathSetRegexp(jc wantjob.Ctx, dst cadata.Store, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+	ctx := jc.Context
 	data, err := glfs.GetBlobBytes(ctx, s, ref, 1e6)
 	if err != nil {
 		return nil, err

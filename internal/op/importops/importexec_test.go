@@ -36,8 +36,8 @@ func TestImportURL(t *testing.T) {
 			t.Parallel()
 			s := stores.NewMem()
 			e := NewExecutor()
-			jc := wantjob.NewCtx(ctx, nil, nil)
-			y, err := e.ImportURL(ctx, &jc, s, tc)
+			jc := wantjob.Ctx{Context: ctx, Dst: s}
+			y, err := e.ImportURL(jc, s, tc)
 			require.NoError(t, err)
 			require.NotNil(t, y)
 		})
@@ -60,8 +60,8 @@ func TestImportGoZip(t *testing.T) {
 			t.Parallel()
 			s := stores.NewMem()
 			e := NewExecutor()
-			jc := wantjob.NewCtx(ctx, nil, nil)
-			y, err := e.ImportGoZip(ctx, &jc, s, tc)
+			jc := wantjob.Ctx{Context: ctx, Dst: s}
+			y, err := e.ImportGoZip(jc, s, tc)
 			require.NoError(t, err)
 			require.NotNil(t, y)
 		})
@@ -88,8 +88,8 @@ func TestImportOCIImage(t *testing.T) {
 			t.Parallel()
 			s := stores.NewMem()
 			e := NewExecutor()
-			jc := wantjob.NewCtx(ctx, nil, nil)
-			ref, err := e.ImportOCIImage(&jc, s, s, tc)
+			jc := wantjob.Ctx{Context: ctx, Dst: s}
+			ref, err := e.ImportOCIImage(jc, s, tc)
 			require.NoError(t, err)
 			require.NotNil(t, ref)
 			// testutil.PrintFS(t, s, *ref)
@@ -113,7 +113,7 @@ func TestImportOCILayers(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			s := stores.NewMem()
 			e := NewExecutor()
-			jc := wantjob.NewCtx(ctx, nil, nil)
+			jc := wantjob.Ctx{Context: ctx, Dst: s}
 			mf, err := e.ImportOCIManifest(ctx, &jc, s, tc)
 			require.NoError(t, err)
 			require.NotNil(t, mf)

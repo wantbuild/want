@@ -32,9 +32,9 @@ func NewExecutor() *Executor {
 	return &Executor{hc: http.DefaultClient}
 }
 
-func (e *Executor) Execute(jc *wantjob.Ctx, dst cadata.Store, s cadata.Getter, x wantjob.Task) ([]byte, error) {
-	ctx := jc.Context()
-	s2 := stores.Fork{W: dst, R: s}
+func (e *Executor) Execute(jc wantjob.Ctx, s cadata.Getter, x wantjob.Task) ([]byte, error) {
+	ctx := jc.Context
+	s2 := stores.Fork{W: jc.Dst, R: s}
 
 	switch x.Op {
 	case OpFromURL:
@@ -43,7 +43,7 @@ func (e *Executor) Execute(jc *wantjob.Ctx, dst cadata.Store, s cadata.Getter, x
 			if err != nil {
 				return nil, err
 			}
-			return e.ImportURL(ctx, jc, s2, *spec)
+			return e.ImportURL(jc, s2, *spec)
 		})
 	case OpFromGit:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
@@ -67,7 +67,7 @@ func (e *Executor) Execute(jc *wantjob.Ctx, dst cadata.Store, s cadata.Getter, x
 			if err != nil {
 				return nil, err
 			}
-			return e.ImportGoZip(ctx, jc, s2, *spec)
+			return e.ImportGoZip(jc, s2, *spec)
 		})
 	case OpFromOCIImage:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
@@ -75,7 +75,7 @@ func (e *Executor) Execute(jc *wantjob.Ctx, dst cadata.Store, s cadata.Getter, x
 			if err != nil {
 				return nil, err
 			}
-			return e.ImportOCIImage(jc, dst, s, *spec)
+			return e.ImportOCIImage(jc, s, *spec)
 		})
 	default:
 		return nil, wantjob.NewErrUnknownOperator(x.Op)

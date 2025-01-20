@@ -31,7 +31,7 @@ func GetImportOCIImageTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*I
 	return loadJSON[ImportOCIImageTask](ctx, s, x)
 }
 
-func (e *Executor) ImportOCIImage(jc *wantjob.Ctx, dst cadata.GetPoster, s cadata.Getter, task ImportOCIImageTask) (*glfs.Ref, error) {
+func (e *Executor) ImportOCIImage(jc wantjob.Ctx, s cadata.Getter, task ImportOCIImageTask) (*glfs.Ref, error) {
 	ag := glfs.NewAgent()
 	if len(task.Hash) < 40 {
 		return nil, fmt.Errorf("hash too short %q len=%d", task.Hash, len(task.Hash))
@@ -51,8 +51,8 @@ func (e *Executor) ImportOCIImage(jc *wantjob.Ctx, dst cadata.GetPoster, s cadat
 	rc := mutate.Extract(img)
 	defer rc.Close()
 	tr := tar.NewReader(rc)
-	ctx := jc.Context()
-	return glfstar.ReadTAR(ctx, ag, dst, tr)
+	ctx := jc.Context
+	return glfstar.ReadTAR(ctx, ag, jc.Dst, tr)
 }
 
 type ImportOCIManifestTask struct {
@@ -108,7 +108,7 @@ func (e *Executor) ImportOCILayer(jc *wantjob.Ctx, dst cadata.Store, s cadata.Ge
 	defer rc.Close()
 	ag := glfs.NewAgent()
 	tr := tar.NewReader(rc)
-	ctx := jc.Context()
+	ctx := jc.Context
 	return glfstar.ReadTAR(ctx, ag, dst, tr)
 }
 
@@ -117,7 +117,7 @@ type MergeOCILayersTask struct {
 }
 
 func (e *Executor) MergeOCILayers(jc *wantjob.Ctx, dst cadata.GetPoster, s cadata.Getter, task MergeOCILayersTask) (*glfs.Ref, error) {
-	ctx := jc.Context()
+	ctx := jc.Context
 	ag := glfs.NewAgent()
 	img := empty.Image
 	for _, layer := range task.Layers {
