@@ -1,0 +1,12 @@
+local want = import "want";
+local alpine = import "./alpine.libsonnet";
+
+local kernel = want.selectFile(want.FACT, "recipes/linux/bzImage");
+local alpineRoot = want.selectDir(want.DERIVED, "recipes/alpine.want");
+
+local rootfs = want.pass([
+    want.input("", alpineRoot),
+    want.input("/initscript", want.blob("reboot -f"))
+]);
+
+want.qemu.amd64_microvm_virtiofs(1, 1e9, kernel, rootfs, init="/bin/sh", args=["initscript", ""])

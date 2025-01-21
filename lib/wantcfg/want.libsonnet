@@ -197,6 +197,22 @@ local evalSnippet(snip) =
     local output = compute("graph.eval", [input("", graph)]);
     compute("graph.pickLastValue", [input("", output)]);
 
+local qemu = {
+    amd64_microvm_virtiofs :: function(cpus, memory, kernel, root, init=null, args=[], output="")
+        local config = blob(std.manifestJsonEx({
+            args: args,
+            cpus: cpus,
+            memory: memory,
+            init: init,
+            output: output,
+        }, ""));
+        compute("qemu.amd64_microvm_virtiofs", [
+            input("kernel", kernel),
+            input("root", root),
+            input("config.json", config),
+        ]),
+};
+
 
 {
     // Literal
@@ -235,7 +251,6 @@ local evalSnippet(snip) =
     export :: export,
 
     // GLFS
-
     pick :: pick,
     place :: place,
     filter :: filter,
@@ -247,7 +262,6 @@ local evalSnippet(snip) =
     metadata :: metadata,
 
     // Import
-
     importURL :: importURL,
     importGit :: importGit,
     importGoZip :: importGoZip,
@@ -256,4 +270,7 @@ local evalSnippet(snip) =
 
     // Want
     evalSnippet :: evalSnippet,
+
+    // QEMU
+    qemu :: qemu,
 }

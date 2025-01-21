@@ -155,7 +155,7 @@ func (jc *Ctx) Debugf(msg string, args ...any) {
 }
 
 func (jc *Ctx) Writer(topic string) io.Writer {
-	return text.NewIndentWriter(os.Stderr, []byte(topic))
+	return text.NewIndentWriter(os.Stderr, []byte(topic+"| "))
 }
 
 // Do spawns a child job to compute the Task, then awaits it and returns the result

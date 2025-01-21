@@ -15,6 +15,7 @@ import (
 	"wantbuild.io/want/internal/op/dagops"
 	"wantbuild.io/want/internal/op/glfsops"
 	"wantbuild.io/want/internal/op/importops"
+	"wantbuild.io/want/internal/op/qemuops"
 	"wantbuild.io/want/internal/op/wantops"
 	"wantbuild.io/want/internal/singleflight"
 	"wantbuild.io/want/internal/wantdb"
@@ -362,18 +363,24 @@ type executor struct {
 	sf    singleflight.Group[wantjob.TaskID, []byte]
 }
 
-func newProtoExecutor() *executor {
+// newExecutor
+// qemuDir is the qemu install dir
+func newExecutor(qemuDir string, qemuMemLimit uint64) *executor {
 	glfsExec := glfsops.Executor{}
 	wantExec := wantops.Executor{}
 	dagExec := dagops.Executor{}
 	impExec := importops.NewExecutor()
+	qemuExec := qemuops.NewExecutor(qemuDir, qemuMemLimit)
 
 	return &executor{
 		execs: map[wantjob.OpName]wantjob.Executor{
 			"glfs":   glfsExec,
-			"want":   wantExec,
-			"dag":    dagExec,
 			"import": impExec,
+
+			"dag":  dagExec,
+			"want": wantExec,
+
+			"qemu": qemuExec,
 		},
 	}
 }

@@ -2,6 +2,7 @@ package want
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"runtime"
 
@@ -11,10 +12,12 @@ import (
 
 	"wantbuild.io/want/internal/glfstasks"
 	"wantbuild.io/want/internal/op/dagops"
+	"wantbuild.io/want/internal/op/qemuops"
 	"wantbuild.io/want/internal/stores"
 	"wantbuild.io/want/internal/wantc"
 	"wantbuild.io/want/internal/wantdag"
 	"wantbuild.io/want/internal/wantdb"
+	"wantbuild.io/want/internal/wantsetup"
 	"wantbuild.io/want/lib/wantjob"
 	"wantbuild.io/want/lib/wantrepo"
 )
@@ -41,6 +44,10 @@ func New(stateDir string, numWorkers int) *System {
 	}
 }
 
+func (s *System) qemuPath() string {
+	return filepath.Join(s.stateDir, "qemu")
+}
+
 // Init initializes the system
 func (s *System) Init(ctx context.Context) error {
 	if err := s.db.PingContext(ctx); err != nil {
@@ -49,7 +56,21 @@ func (s *System) Init(ctx context.Context) error {
 	if err := wantdb.Setup(ctx, s.db); err != nil {
 		return err
 	}
-	s.jobs = newJobSystem(s.db, newProtoExecutor(), runtime.GOMAXPROCS(0))
+	numWorkers := runtime.GOMAXPROCS(0)
+	earlyJobs := newJobSystem(s.db, wantsetup.NewExecutor(), numWorkers)
+	defer earlyJobs.Shutdown()
+	for p, snippet := range map[string]string{
+		s.qemuPath(): qemuops.InstallSnippet(),
+	} {
+		if _, err := os.Stat(p); err == nil {
+			continue // TODO: better way to verify the integrity of the install.
+		}
+		if err := wantsetup.Install(ctx, earlyJobs, p, snippet); err != nil {
+			return err
+		}
+	}
+
+	s.jobs = newJobSystem(s.db, newExecutor(s.qemuPath(), 4e9), numWorkers)
 	return nil
 }
 

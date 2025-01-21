@@ -2,6 +2,7 @@ package wantjob
 
 import (
 	"fmt"
+	"strings"
 
 	"go.brendoncarroll.net/state/cadata"
 
@@ -43,6 +44,20 @@ func (exec BasicExecutor) Execute(jc Ctx, src cadata.Getter, task Task) ([]byte,
 		return nil, NewErrUnknownOperator(task.Op)
 	}
 	return fn(jc, src, task.Input)
+}
+
+type MultiExecutor map[OpName]Executor
+
+func (me MultiExecutor) Execute(jc Ctx, src cadata.Getter, task Task) ([]byte, error) {
+	parts := strings.SplitN(string(task.Op), ".", 2)
+	e2, exists := me[OpName(parts[0])]
+	if !exists {
+		return nil, ErrOpNotFound{Op: task.Op}
+	}
+	return e2.Execute(jc, src, Task{
+		Op:    OpName(parts[1]),
+		Input: task.Input,
+	})
 }
 
 func productHash(hf cadata.HashFunc, xs ...[]byte) cadata.ID {

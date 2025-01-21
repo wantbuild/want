@@ -43,7 +43,11 @@ func (j *memJob) Spawn(ctx context.Context, src cadata.Getter, task Task) (Idx, 
 	j.children = append(j.children, child)
 
 	go func() {
-		jc := Ctx{Context: j.ctx, System: child}
+		jc := Ctx{
+			Context: j.ctx,
+			Dst:     child.dst,
+			System:  child,
+		}
 		out, err := j.exec.Execute(jc, src, task)
 		if err != nil {
 			child.res = Result_ErrExec(err)
