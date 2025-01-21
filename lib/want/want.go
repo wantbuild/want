@@ -98,11 +98,11 @@ func (sys *System) Eval(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, c
 	if err != nil {
 		return nil, nil, err
 	}
-	return sys.doGLFS(ctx, s, joinOpName("dag", dagops.OpExecLast), *dagRef)
+	return doGLFS(ctx, sys.jobs, s, joinOpName("dag", dagops.OpExecLast), *dagRef)
 }
 
-func (sys *System) doGLFS(ctx context.Context, src cadata.Getter, op wantjob.OpName, input glfs.Ref) (*glfs.Ref, cadata.Getter, error) {
-	res, s, err := wantjob.Do(ctx, sys.jobs, src, wantjob.Task{
+func doGLFS(ctx context.Context, jobs wantjob.System, src cadata.Getter, op wantjob.OpName, input glfs.Ref) (*glfs.Ref, cadata.Getter, error) {
+	res, s, err := wantjob.Do(ctx, jobs, src, wantjob.Task{
 		Op:    op,
 		Input: glfstasks.MarshalGLFSRef(input),
 	})
