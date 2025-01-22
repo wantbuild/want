@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kr/text"
 	"go.brendoncarroll.net/exp/slices2"
 	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/tai64"
@@ -106,6 +105,11 @@ func (r *Result) Err() error {
 	return fmt.Errorf("job failed errcode=%v data=%q", r.ErrCode, r.Data)
 }
 
+type JobInfo struct {
+	ID JobID
+	Job
+}
+
 type Job struct {
 	Task  Task
 	State JobState
@@ -139,7 +143,8 @@ var _ System = Ctx{}
 type Ctx struct {
 	Context context.Context
 	System
-	Dst cadata.Store
+	Dst    cadata.Store
+	Writer func(string) io.Writer
 }
 
 func (jc *Ctx) Errorf(msg string, args ...any) {
@@ -152,10 +157,6 @@ func (jc *Ctx) Infof(msg string, args ...any) {
 
 func (jc *Ctx) Debugf(msg string, args ...any) {
 	fmt.Fprintf(os.Stderr, msg+"\n", args...)
-}
-
-func (jc *Ctx) Writer(topic string) io.Writer {
-	return text.NewIndentWriter(os.Stderr, []byte(topic+"| "))
 }
 
 // Do spawns a child job to compute the Task, then awaits it and returns the result

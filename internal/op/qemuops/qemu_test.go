@@ -1,6 +1,8 @@
 package qemuops
 
 import (
+	"io"
+	"os"
 	"testing"
 
 	"github.com/blobcache/glfs"
@@ -88,5 +90,8 @@ func setupTest(t testing.TB) (wantjob.Ctx, cadata.Store, *Executor) {
 	require.NoError(t, err)
 
 	e := NewExecutor(installDir, 4*1e9)
-	return wantjob.Ctx{Context: ctx, Dst: s, System: jsys}, s, e
+	newWriter := func(_ string) io.Writer {
+		return os.Stderr
+	}
+	return wantjob.Ctx{Context: ctx, Dst: s, System: jsys, Writer: newWriter}, s, e
 }

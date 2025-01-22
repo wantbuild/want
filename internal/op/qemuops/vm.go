@@ -120,8 +120,8 @@ func (e *Executor) newVM(jc wantjob.Ctx, src cadata.Getter, vmcfg vmConfig, kcfg
 
 		cmd := e.systemx86Cmd(args...)
 
-		cmd.Stdout = jc.Writer("stdout")
-		cmd.Stderr = jc.Writer("stderr")
+		cmd.Stdout = jc.Writer("qemu/stdout")
+		cmd.Stderr = jc.Writer("qemu/stderr")
 
 		return cmd
 	}()

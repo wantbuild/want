@@ -37,7 +37,8 @@ func TestJobStores(t *testing.T) {
 			return glfstasks.MarshalGLFSRef(*ref), nil
 		},
 	}
-	jsys := newJobSystem(db, exec, runtime.GOMAXPROCS(0))
+	logDir := t.TempDir()
+	jsys := newJobSystem(db, logDir, exec, runtime.GOMAXPROCS(0))
 	defer jsys.Shutdown()
 
 	s := stores.NewMem()

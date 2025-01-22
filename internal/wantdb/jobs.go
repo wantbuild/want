@@ -2,7 +2,6 @@ package wantdb
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -104,23 +103,18 @@ func finishJobAtRow(tx *sqlx.Tx, rowid int64, res wantjob.Result) error {
 	return err
 }
 
-func InspectJob(tx *sqlx.Tx, jobid wantjob.JobID) (*wantjob.Job, error) {
-	rowid, err := lookupJobRowID(tx, jobid)
-	if err != nil {
-		return nil, err
-	}
-	var row struct {
-		TaskID     wantjob.TaskID            `db:"task"`
-		State      wantjob.JobState          `db:"state"`
-		CreatedAt  []byte                    `db:"created_at"`
-		ErrCode    sql.Null[wantjob.ErrCode] `db:"errcode"`
-		ResultData []byte                    `db:"res_data"`
-		EndAt      []byte                    `db:"end_at"`
-	}
-	if err := tx.Get(&row, `SELECT task, state, created_at, errcode, res_data, end_at FROM jobs WHERE rowid = ?`, rowid); err != nil {
-		return nil, err
-	}
+type jobRow struct {
+	Idx        wantjob.Idx               `db:"idx"`
+	TaskID     wantjob.TaskID            `db:"task"`
+	State      wantjob.JobState          `db:"state"`
+	CreatedAt  []byte                    `db:"created_at"`
+	ErrCode    sql.Null[wantjob.ErrCode] `db:"errcode"`
+	ResultData []byte                    `db:"res_data"`
+	EndAt      []byte                    `db:"end_at"`
+	StoreID    StoreID                   `db:"store_id"`
+}
 
+func mkJobFromRow(row jobRow) (*wantjob.Job, error) {
 	createdAt, err := tai64.ParseN(row.CreatedAt)
 	if err != nil {
 		return nil, err
@@ -138,15 +132,26 @@ func InspectJob(tx *sqlx.Tx, jobid wantjob.JobID) (*wantjob.Job, error) {
 		}
 		endAt = &ea
 	}
-	job := wantjob.Job{
+	return &wantjob.Job{
 		// TODO: GetTask
 		State:     row.State,
 		CreatedAt: createdAt,
 
 		Result: result,
 		EndAt:  endAt,
+	}, nil
+}
+
+func InspectJob(tx *sqlx.Tx, jobid wantjob.JobID) (*wantjob.Job, error) {
+	rowid, err := lookupJobRowID(tx, jobid)
+	if err != nil {
+		return nil, err
 	}
-	return &job, nil
+	var row jobRow
+	if err := tx.Get(&row, `SELECT task, state, created_at, errcode, res_data, end_at FROM jobs WHERE rowid = ?`, rowid); err != nil {
+		return nil, err
+	}
+	return mkJobFromRow(row)
 }
 
 func ViewResult(tx *sqlx.Tx, jobid wantjob.JobID) (*wantjob.Result, StoreID, error) {
@@ -154,12 +159,7 @@ func ViewResult(tx *sqlx.Tx, jobid wantjob.JobID) (*wantjob.Result, StoreID, err
 	if err != nil {
 		return nil, 0, err
 	}
-	var row struct {
-		State      wantjob.JobState          `db:"state"`
-		ErrCode    sql.Null[wantjob.ErrCode] `db:"errcode"`
-		ResultData []byte                    `db:"res_data"`
-		StoreID    StoreID                   `db:"store_id"`
-	}
+	var row jobRow
 	if err := tx.Get(&row, `SELECT state, errcode, res_data, store_id FROM jobs WHERE rowid = ?`, rowid); err != nil {
 		return nil, 0, err
 	}
@@ -167,6 +167,46 @@ func ViewResult(tx *sqlx.Tx, jobid wantjob.JobID) (*wantjob.Result, StoreID, err
 		return nil, 0, fmt.Errorf("ViewResult called on job in state %v", row.State)
 	}
 	return &wantjob.Result{Data: row.ResultData, ErrCode: row.ErrCode.V}, row.StoreID, nil
+}
+
+func ListJobInfos(tx *sqlx.Tx, parent wantjob.JobID) ([]*wantjob.JobInfo, error) {
+	var rows []jobRow
+	if len(parent) == 0 {
+		if err := tx.Select(&rows, `SELECT idx, task, state, created_at, errcode, res_data, end_at
+			FROM job_roots
+			JOIN jobs ON jobs.rowid = job_roots.job_row
+		`); err != nil {
+			return nil, err
+		}
+	} else {
+		parentRowid, err := lookupJobRowID(tx, parent)
+		if err != nil {
+			return nil, err
+		}
+		if err := tx.Select(&rows, `SELECT idx, task, state, created_at, errcode, res_data, end_at
+			FROM job_children
+			JOIN jobs ON jobs.rowid = job_children.child
+			WHERE parent = ?
+		`, parentRowid); err != nil {
+			return nil, err
+		}
+	}
+	var ret []*wantjob.JobInfo
+	for _, row := range rows {
+		j, err := mkJobFromRow(row)
+		if err != nil {
+			return nil, err
+		}
+		j.Task, err = getTask(tx, row.TaskID)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, &wantjob.JobInfo{
+			ID:  wantjob.JobID{row.Idx},
+			Job: *j,
+		})
+	}
+	return ret, nil
 }
 
 func cacheRead(tx *sqlx.Tx, taskID cadata.ID) ([]byte, StoreID, error) {
@@ -201,14 +241,31 @@ func ensureTask(tx *sqlx.Tx, task wantjob.Task) (cadata.ID, error) {
 	if err != nil {
 		return cadata.ID{}, err
 	}
-	inputData, err := json.Marshal(task.Input)
-	if err != nil {
-		return cadata.ID{}, err
+	if task.Input == nil {
+		task.Input = []byte{}
 	}
-	if _, err := tx.Exec(`INSERT INTO tasks (id, op, input) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`, taskID, opid, inputData); err != nil {
+	if _, err := tx.Exec(`INSERT INTO tasks (id, op, input) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`, taskID, opid, task.Input); err != nil {
 		return cadata.ID{}, err
 	}
 	return taskID, nil
+}
+
+func getTask(tx *sqlx.Tx, id wantjob.TaskID) (wantjob.Task, error) {
+	var row struct {
+		Op    string `db:"op"`
+		Input []byte `db:"input"`
+	}
+	if err := tx.Get(&row, `SELECT ops.name as op, tasks.input as input
+		FROM tasks
+		JOIN ops ON tasks.op = ops.id
+		WHERE tasks.id = ?
+	`, id); err != nil {
+		return wantjob.Task{}, err
+	}
+	return wantjob.Task{
+		Op:    wantjob.OpName(row.Op),
+		Input: row.Input,
+	}, nil
 }
 
 func lookupJobRowID(tx *sqlx.Tx, jobid wantjob.JobID) (int64, error) {
@@ -218,7 +275,6 @@ func lookupJobRowID(tx *sqlx.Tx, jobid wantjob.JobID) (int64, error) {
 	rowid, err := dbutil.GetTx[int64](tx, `SELECT job_row FROM job_roots WHERE idx = ?`, jobid[0])
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			panic(jobid)
 			return 0, wantjob.ErrJobNotFound{ID: jobid}
 		}
 		return 0, err

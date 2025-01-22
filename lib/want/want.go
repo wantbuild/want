@@ -2,6 +2,7 @@ package want
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -48,6 +49,10 @@ func (s *System) qemuPath() string {
 	return filepath.Join(s.stateDir, "qemu")
 }
 
+func (s *System) logDir() string {
+	return filepath.Join(s.stateDir, "log")
+}
+
 // Init initializes the system
 func (s *System) Init(ctx context.Context) error {
 	if err := s.db.PingContext(ctx); err != nil {
@@ -57,7 +62,7 @@ func (s *System) Init(ctx context.Context) error {
 		return err
 	}
 	numWorkers := runtime.GOMAXPROCS(0)
-	earlyJobs := newJobSystem(s.db, wantsetup.NewExecutor(), numWorkers)
+	earlyJobs := newJobSystem(s.db, s.logDir(), wantsetup.NewExecutor(), numWorkers)
 	defer earlyJobs.Shutdown()
 	for p, snippet := range map[string]string{
 		s.qemuPath(): qemuops.InstallSnippet(),
@@ -70,8 +75,12 @@ func (s *System) Init(ctx context.Context) error {
 		}
 	}
 
-	s.jobs = newJobSystem(s.db, newExecutor(s.qemuPath(), 4e9), numWorkers)
+	s.jobs = newJobSystem(s.db, s.logDir(), newExecutor(s.qemuPath(), 4e9), numWorkers)
 	return nil
+}
+
+func (s *System) LogFS() fs.FS {
+	return os.DirFS(s.logDir())
 }
 
 func (s *System) Close() error {
@@ -84,6 +93,10 @@ func (s *System) Close() error {
 	}
 	s.db = nil
 	return nil
+}
+
+func (sys *System) ListJobInfos(ctx context.Context) ([]*wantjob.JobInfo, error) {
+	return sys.jobs.ListInfos(ctx)
 }
 
 func (sys *System) Eval(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, calledFrom string, expr []byte) (*glfs.Ref, cadata.Getter, error) {

@@ -3,8 +3,11 @@ package wantjob
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"sync"
 
+	"github.com/kr/text"
 	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/internal/stores"
 )
@@ -47,6 +50,10 @@ func (j *memJob) Spawn(ctx context.Context, src cadata.Getter, task Task) (Idx, 
 			Context: j.ctx,
 			Dst:     child.dst,
 			System:  child,
+			Writer: func(topic string) io.Writer {
+				prefix := fmt.Sprintf("%s|", topic)
+				return text.NewIndentWriter(os.Stderr, []byte(prefix))
+			},
 		}
 		out, err := j.exec.Execute(jc, src, task)
 		if err != nil {
