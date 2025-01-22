@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/jmoiron/sqlx"
+	"go.brendoncarroll.net/exp/singleflight"
 	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/stdctx/logctx"
 	"go.brendoncarroll.net/tai64"
@@ -22,7 +23,6 @@ import (
 	"wantbuild.io/want/internal/op/importops"
 	"wantbuild.io/want/internal/op/qemuops"
 	"wantbuild.io/want/internal/op/wantops"
-	"wantbuild.io/want/internal/singleflight"
 	"wantbuild.io/want/internal/wantdb"
 	"wantbuild.io/want/lib/wantjob"
 )
