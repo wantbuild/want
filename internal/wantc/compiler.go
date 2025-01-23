@@ -23,20 +23,14 @@ const (
 	WantFilename       = "WANT"
 	ExprPathSuffix     = ".want"
 	StmtPathSuffix     = ".wants"
-	MaxJsonnetFileSize = 1e6
+	MaxJsonnetFileSize = 1 << 20
 )
 
-// IsModule returns true if x is valid Want Module.
-func IsModule(ctx context.Context, src cadata.Getter, x glfs.Ref) (bool, error) {
-	t, err := glfs.GetTree(ctx, src, x)
-	if err != nil {
-		return false, err
-	}
-	ent := t.Lookup(WantFilename)
-	if ent == nil {
-		return false, nil
-	}
-	return true, nil
+type Metadata = map[string]any
+
+func WithGitMetadata(buildCtx map[string]any, commitHash string, tags []string) {
+	buildCtx["gitCommitHash"] = commitHash
+	buildCtx["gitTags"] = tags
 }
 
 type Compiler struct {
@@ -49,7 +43,16 @@ func NewCompiler() *Compiler {
 	}
 }
 
-type Metadata = map[string]any
+func (c *Compiler) Compile(ctx context.Context, dst cadata.Store, src cadata.Getter, metadata Metadata, ground glfs.Ref) (*Plan, error) {
+	isMod, err := IsModule(ctx, src, ground)
+	if err != nil {
+		return nil, err
+	}
+	if !isMod {
+		return nil, fmt.Errorf("not a want module")
+	}
+	return c.compileModule(ctx, dst, src, metadata, ground)
+}
 
 // compileState holds the state for a single run of the compiler
 type compileState struct {
@@ -125,20 +128,7 @@ func (cs *compileState) acquireVFS() (*VFS, func()) {
 	return cs.vfs, cs.vfsMu.Unlock
 }
 
-func WithGitMetadata(buildCtx map[string]any, commitHash string, tags []string) {
-	buildCtx["gitCommitHash"] = commitHash
-	buildCtx["gitTags"] = tags
-}
-
-func (c *Compiler) Compile(ctx context.Context, dst cadata.Store, src cadata.Getter, metadata Metadata, ground glfs.Ref) (*Plan, error) {
-	isMod, err := IsModule(ctx, src, ground)
-	if err != nil {
-		return nil, err
-	}
-	if !isMod {
-		return nil, fmt.Errorf("not a want module")
-	}
-
+func (c *Compiler) compileModule(ctx context.Context, dst cadata.Store, src cadata.Getter, metadata Metadata, ground glfs.Ref) (*Plan, error) {
 	cs := &compileState{
 		src:          src,
 		dst:          dst,
@@ -193,6 +183,14 @@ func (c *Compiler) addSourceFile(ctx context.Context, cs *compileState, eg *errg
 		if err != nil {
 			return err
 		}
+		if p != "" {
+			if isMod, err := IsModule(ctx, cs.src, ref); err != nil {
+				return err
+			} else if isMod {
+				return fmt.Errorf("submodules not yet supported.  Found submodule at path %s", p)
+			}
+		}
+
 		for _, ent := range tree.Entries {
 			ent := ent
 			p2 := path.Join(p, ent.Name)

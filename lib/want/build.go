@@ -7,13 +7,16 @@ import (
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/internal/glfstasks"
-	"wantbuild.io/want/internal/op/dagops"
 	"wantbuild.io/want/internal/op/wantops"
 	"wantbuild.io/want/internal/stores"
 	"wantbuild.io/want/internal/wantc"
-	"wantbuild.io/want/internal/wantdag"
 	"wantbuild.io/want/lib/wantjob"
 	"wantbuild.io/want/lib/wantrepo"
+)
+
+type (
+	BuildTask = wantops.BuildTask
+	Target    = wantc.Target
 )
 
 // BuildResult is the output of a build
@@ -27,33 +30,30 @@ type BuildResult struct {
 	Store cadata.Getter
 }
 
-type Target = wantc.Target
-
 type TargetResult struct {
 	ErrCode wantjob.ErrCode
 	Data    []byte
 	Ref     *glfs.Ref
 }
 
-func Build(ctx context.Context, jobs wantjob.System, buildCtx wantc.Metadata, src cadata.Getter, root glfs.Ref, prefix string) (*BuildResult, error) {
-	// compile
-	plan, planStore, err := doCompile(ctx, jobs, buildCtx, src, root)
+func Build(ctx context.Context, jobs wantjob.System, src cadata.Getter, bt BuildTask) (*BuildResult, error) {
+	scratch := stores.NewMem()
+
+	btRef, err := wantops.PostBuildTask(ctx, scratch, bt)
 	if err != nil {
 		return nil, err
 	}
-	// execute build DAG
-	dagRes, outStore, err := doGLFS(ctx, jobs,
-		stores.Union{src, planStore},
-		joinOpName("dag",
-			dagops.OpExecAll), plan.DAG)
+	outRef, outStore, err := glfstasks.Do(ctx, jobs, stores.Union{src, scratch}, joinOpName("want", wantops.OpBuild), *btRef)
 	if err != nil {
 		return nil, err
 	}
-	// process results
-	nrs, err := wantdag.GetNodeResults(ctx, outStore, *dagRes)
+	br, err := wantops.GetBuildResult(ctx, outStore, *outRef)
 	if err != nil {
 		return nil, err
 	}
+
+	nrs := br.NodeResults
+	plan := br.Plan
 	rootRes := nrs[plan.LastNode]
 	outRoot, err := glfstasks.ParseGLFSRef(rootRes.Data)
 	if err != nil {
@@ -70,36 +70,13 @@ func Build(ctx context.Context, jobs wantjob.System, buildCtx wantc.Metadata, sr
 		}
 	}
 	return &BuildResult{
-		Source:        root,
+		Source:        bt.Main,
 		OutputRoot:    outRoot,
 		Targets:       plan.Targets,
 		TargetResults: targetResults,
 
 		Store: outStore,
 	}, nil
-}
-
-func doCompile(ctx context.Context, jobs wantjob.System, buildCtx wantc.Metadata, srcStore cadata.Getter, srcRoot glfs.Ref) (*wantc.Plan, cadata.Getter, error) {
-	scratch := stores.NewMem()
-	ctRef, err := wantops.PostCompileTask(ctx, scratch, wantops.CompileTask{
-		Ground:   srcRoot,
-		Metadata: buildCtx,
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	planRef, planStore, err := doGLFS(ctx, jobs,
-		stores.Union{srcStore, scratch},
-		joinOpName("want", wantops.OpCompile),
-		*ctRef)
-	if err != nil {
-		return nil, nil, err
-	}
-	plan, err := wantc.GetPlan(ctx, planStore, *planRef)
-	if err != nil {
-		return nil, nil, err
-	}
-	return plan, planStore, nil
 }
 
 func (sys *System) Build(ctx context.Context, repo *wantrepo.Repo, prefix string) (*BuildResult, error) {
@@ -111,7 +88,11 @@ func (sys *System) Build(ctx context.Context, repo *wantrepo.Repo, prefix string
 	if err != nil {
 		return nil, err
 	}
-	return Build(ctx, sys.jobs, repo.Metadata(), srcStore, *srcRoot, prefix)
+	return Build(ctx, sys.jobs, srcStore, BuildTask{
+		Main:     *srcRoot,
+		Metadata: repo.Metadata(),
+		Prefix:   prefix,
+	})
 }
 
 // Blame lists the build targets
@@ -124,7 +105,10 @@ func (sys *System) Blame(ctx context.Context, repo *wantrepo.Repo) ([]Target, er
 	if err != nil {
 		return nil, err
 	}
-	plan, _, err := doCompile(ctx, sys.jobs, repo.Metadata(), srcStore, *srcRoot)
+	plan, _, err := wantops.DoCompile(ctx, sys.jobs, joinOpName("want", wantops.OpCompile), srcStore, wantops.CompileTask{
+		Module:   *srcRoot,
+		Metadata: repo.Metadata(),
+	})
 	if err != nil {
 		return nil, err
 	}

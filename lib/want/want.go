@@ -114,6 +114,12 @@ func (sys *System) Eval(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, c
 	return doGLFS(ctx, sys.jobs, s, joinOpName("dag", dagops.OpExecLast), *dagRef)
 }
 
+// IsModule returns true if the tree at x is a valid want module.
+// All non-tree refs return (false, nil)
+func IsModule(ctx context.Context, src cadata.Getter, x glfs.Ref) (bool, error) {
+	return wantc.IsModule(ctx, src, x)
+}
+
 func doGLFS(ctx context.Context, jobs wantjob.System, src cadata.Getter, op wantjob.OpName, input glfs.Ref) (*glfs.Ref, cadata.Getter, error) {
 	res, s, err := wantjob.Do(ctx, jobs, src, wantjob.Task{
 		Op:    op,

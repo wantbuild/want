@@ -2,16 +2,15 @@
 package wantops
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/internal/glfstasks"
+	"wantbuild.io/want/internal/stores"
 	"wantbuild.io/want/internal/stringsets"
 	"wantbuild.io/want/internal/wantc"
 	"wantbuild.io/want/internal/wantdag"
@@ -20,6 +19,7 @@ import (
 )
 
 const (
+	OpBuild          = wantjob.OpName("build")
 	OpCompile        = wantjob.OpName("compile")
 	OpCompileSnippet = wantjob.OpName("compileSnippet")
 	OpPathSetRegexp  = wantjob.OpName("pathSetRegexp")
@@ -29,11 +29,18 @@ const MaxSnippetSize = 1e7
 
 var _ wantjob.Executor = &Executor{}
 
-type Executor struct{}
+type Executor struct {
+	CompileOp wantjob.OpName
+	DAGExecOp wantjob.OpName
+}
 
 func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]byte, error) {
 	ctx := jc.Context
 	switch x.Op {
+	case OpBuild:
+		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
+			return e.Build(jc, src, x)
+		})
 	case OpCompile:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
 			return e.Compile(ctx, jc.Dst, src, x)
@@ -51,13 +58,41 @@ func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]
 	}
 }
 
+func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Ref, error) {
+	ctx := jc.Context
+	buildTask, err := GetBuildTask(ctx, src, x)
+	if err != nil {
+		return nil, err
+	}
+	plan, planStore, err := DoCompile(ctx, jc.System, e.CompileOp, src, CompileTask{
+		Module:   buildTask.Main,
+		Metadata: buildTask.Metadata,
+	})
+	if err != nil {
+		return nil, err
+	}
+	s := stores.Union{src, planStore}
+	dagOut, dagStore, err := glfstasks.Do(jc.Context, jc.System, s, e.DAGExecOp, plan.DAG)
+	if err != nil {
+		return nil, err
+	}
+	nrs, err := wantdag.GetNodeResults(ctx, dagStore, *dagOut)
+	if err != nil {
+		return nil, err
+	}
+	return PostBuildResult(ctx, jc.Dst, BuildResult{
+		Plan:        *plan,
+		NodeResults: nrs,
+	})
+}
+
 func (e Executor) Compile(ctx context.Context, dst cadata.Store, s cadata.Getter, x glfs.Ref) (*glfs.Ref, error) {
 	ct, err := GetCompileTask(ctx, s, x)
 	if err != nil {
 		return nil, err
 	}
 	c := wantc.NewCompiler()
-	plan, err := c.Compile(ctx, dst, s, ct.Metadata, ct.Ground)
+	plan, err := c.Compile(ctx, dst, s, ct.Metadata, ct.Module)
 	if err != nil {
 		return nil, err
 	}
@@ -95,50 +130,19 @@ func (e Executor) PathSetRegexp(jc wantjob.Ctx, dst cadata.Store, s cadata.Gette
 	return glfs.PostBlob(ctx, dst, strings.NewReader(re.String()))
 }
 
-const MaxMetadataSize = 1 << 17
-
-type CompileTask struct {
-	Ground   glfs.Ref
-	Metadata wantc.Metadata
-}
-
-func PostCompileTask(ctx context.Context, s cadata.Poster, x CompileTask) (*glfs.Ref, error) {
-	mdJson, err := json.Marshal(x.Metadata)
+func DoCompile(ctx context.Context, sys wantjob.System, compileOp wantjob.OpName, src cadata.Getter, ct CompileTask) (*wantc.Plan, cadata.Getter, error) {
+	scratch := stores.NewMem()
+	ctRef, err := PostCompileTask(ctx, scratch, ct)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	mdRef, err := glfs.PostBlob(ctx, s, bytes.NewReader(mdJson))
+	planRef, planStore, err := glfstasks.Do(ctx, sys, stores.Union{src, scratch}, compileOp, *ctRef)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return glfs.PostTreeMap(ctx, s, map[string]glfs.Ref{
-		"ground":    x.Ground,
-		"meta.json": *mdRef,
-	})
-}
-
-func GetCompileTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*CompileTask, error) {
-	if _, err := glfs.GetTree(ctx, s, x); err != nil {
-		return nil, err
-	}
-	groundRef, err := glfs.GetAtPath(ctx, s, x, "ground")
+	plan, err := wantc.GetPlan(ctx, planStore, *planRef)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	metaRef, err := glfs.GetAtPath(ctx, s, x, "meta.json")
-	if err != nil {
-		return nil, err
-	}
-	data, err := glfs.GetBlobBytes(ctx, s, *metaRef, MaxMetadataSize)
-	if err != nil {
-		return nil, err
-	}
-	var md wantc.Metadata
-	if err := json.Unmarshal(data, &md); err != nil {
-		return nil, fmt.Errorf("meta.json did not contain valid json: %q, %w", data, err)
-	}
-	return &CompileTask{
-		Ground:   *groundRef,
-		Metadata: md,
-	}, nil
+	return plan, planStore, nil
 }

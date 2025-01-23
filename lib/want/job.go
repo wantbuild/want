@@ -425,7 +425,10 @@ type executor struct {
 // qemuDir is the qemu install dir
 func newExecutor(qemuDir string, qemuMemLimit uint64) *executor {
 	glfsExec := glfsops.Executor{}
-	wantExec := wantops.Executor{}
+	wantExec := wantops.Executor{
+		CompileOp: "want." + wantops.OpCompile,
+		DAGExecOp: "dag." + dagops.OpExecAll,
+	}
 	dagExec := dagops.Executor{}
 	impExec := importops.NewExecutor()
 	qemuExec := qemuops.NewExecutor(qemuDir, qemuMemLimit)
