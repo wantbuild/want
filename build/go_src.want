@@ -1,0 +1,17 @@
+local want = import "want";
+local golang = import "recipes/golang.libsonnet";
+
+local goFiles = want.select(want.FACT, golang.pathSet);
+
+want.merge([
+    goFiles,
+    want.select(
+        want.DERIVED,
+        want.union([
+            want.single("lib/wantcfg/want.libsonnet"),
+            want.prefix("internal/wantdb/dbmig/"),  
+            want.prefix("internal/op/goops/setup.jsonnet"),
+            want.prefix("internal/op/qemuops/setup.jsonnet"),
+        ]),
+    ),
+])

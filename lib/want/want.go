@@ -13,6 +13,7 @@ import (
 
 	"wantbuild.io/want/internal/glfstasks"
 	"wantbuild.io/want/internal/op/dagops"
+	"wantbuild.io/want/internal/op/goops"
 	"wantbuild.io/want/internal/op/qemuops"
 	"wantbuild.io/want/internal/stores"
 	"wantbuild.io/want/internal/wantc"
@@ -45,12 +46,16 @@ func New(stateDir string, numWorkers int) *System {
 	}
 }
 
-func (s *System) qemuPath() string {
+func (s *System) qemuDir() string {
 	return filepath.Join(s.stateDir, "qemu")
 }
 
 func (s *System) logDir() string {
 	return filepath.Join(s.stateDir, "log")
+}
+
+func (s *System) goDir() string {
+	return filepath.Join(s.stateDir, "go")
 }
 
 // Init initializes the system
@@ -65,7 +70,8 @@ func (s *System) Init(ctx context.Context) error {
 	earlyJobs := newJobSystem(s.db, s.logDir(), wantsetup.NewExecutor(), numWorkers)
 	defer earlyJobs.Shutdown()
 	for p, snippet := range map[string]string{
-		s.qemuPath(): qemuops.InstallSnippet(),
+		s.qemuDir(): qemuops.InstallSnippet(),
+		s.goDir():   goops.InstallSnippet(),
 	} {
 		if _, err := os.Stat(p); err == nil {
 			continue // TODO: better way to verify the integrity of the install.
@@ -75,7 +81,12 @@ func (s *System) Init(ctx context.Context) error {
 		}
 	}
 
-	s.jobs = newJobSystem(s.db, s.logDir(), newExecutor(s.qemuPath(), 4e9), numWorkers)
+	exec := newExecutor(executorConfig{
+		QEMUDir:    s.qemuDir(),
+		QEMUMemory: 4e9,
+		GoDir:      s.goDir(),
+	})
+	s.jobs = newJobSystem(s.db, s.logDir(), exec, numWorkers)
 	return nil
 }
 

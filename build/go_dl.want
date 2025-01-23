@@ -1,0 +1,4 @@
+local want = import "want";
+local golang = import "recipes/golang.libsonnet";
+
+golang.modDownload(want.select(want.FACT, want.prefix("")))

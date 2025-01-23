@@ -71,14 +71,26 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 	if err != nil {
 		return nil, err
 	}
+	if err := glfs.Sync(ctx, jc.Dst, planStore, plan.DAG); err != nil {
+		return nil, err
+	}
 	s := stores.Union{src, planStore}
-	dagOut, dagStore, err := glfstasks.Do(jc.Context, jc.System, s, e.DAGExecOp, plan.DAG)
+	dagResRef, dagStore, err := glfstasks.Do(jc.Context, jc.System, s, e.DAGExecOp, plan.DAG)
 	if err != nil {
 		return nil, err
 	}
-	nrs, err := wantdag.GetNodeResults(ctx, dagStore, *dagOut)
+	nrs, err := wantdag.GetNodeResults(ctx, dagStore, *dagResRef)
 	if err != nil {
 		return nil, err
+	}
+	for _, nr := range nrs {
+		if nr.ErrCode == 0 {
+			if ref, err := glfstasks.ParseGLFSRef(nr.Data); err == nil {
+				if err := glfs.Sync(ctx, jc.Dst, dagStore, *ref); err != nil {
+					return nil, err
+				}
+			}
+		}
 	}
 	return PostBuildResult(ctx, jc.Dst, BuildResult{
 		Plan:        *plan,

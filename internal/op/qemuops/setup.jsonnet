@@ -40,3 +40,9 @@ local qemuSystem_X86_64s = {
 local qemuSystem_X86_64(arch, os) =
     local key = arch + "-" + os;
     qemuSystem_X86_64s[key];
+
+want.pass([
+   	want.input("share/qboot.rom", qbootRom),
+   	want.input("qemu-system-x86_64", qemuSystem_X86_64(arch, os)),
+   	want.input("virtiofsd", virtiofsd(arch, os)),
+])

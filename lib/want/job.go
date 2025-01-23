@@ -20,6 +20,7 @@ import (
 	"wantbuild.io/want/internal/dbutil"
 	"wantbuild.io/want/internal/op/dagops"
 	"wantbuild.io/want/internal/op/glfsops"
+	"wantbuild.io/want/internal/op/goops"
 	"wantbuild.io/want/internal/op/importops"
 	"wantbuild.io/want/internal/op/qemuops"
 	"wantbuild.io/want/internal/op/wantops"
@@ -130,7 +131,7 @@ func (j *job) Writer(topic string) io.Writer {
 		lw = f
 		j.logWriters[topic] = lw
 	}
-	return lw
+	return io.MultiWriter(lw, os.Stderr)
 }
 
 func (j *job) getChild(idx wantjob.Idx) (*job, error) {
@@ -421,9 +422,16 @@ type executor struct {
 	sf    singleflight.Group[wantjob.TaskID, []byte]
 }
 
+type executorConfig struct {
+	QEMUDir    string
+	QEMUMemory uint64
+
+	GoDir string
+}
+
 // newExecutor
 // qemuDir is the qemu install dir
-func newExecutor(qemuDir string, qemuMemLimit uint64) *executor {
+func newExecutor(cfg executorConfig) *executor {
 	glfsExec := glfsops.Executor{}
 	wantExec := wantops.Executor{
 		CompileOp: "want." + wantops.OpCompile,
@@ -431,7 +439,8 @@ func newExecutor(qemuDir string, qemuMemLimit uint64) *executor {
 	}
 	dagExec := dagops.Executor{}
 	impExec := importops.NewExecutor()
-	qemuExec := qemuops.NewExecutor(qemuDir, qemuMemLimit)
+	qemuExec := qemuops.NewExecutor(cfg.QEMUDir, cfg.QEMUMemory)
+	golangExec := goops.NewExecutor(cfg.GoDir)
 
 	return &executor{
 		execs: map[wantjob.OpName]wantjob.Executor{
@@ -441,7 +450,8 @@ func newExecutor(qemuDir string, qemuMemLimit uint64) *executor {
 			"dag":  dagExec,
 			"want": wantExec,
 
-			"qemu": qemuExec,
+			"qemu":   qemuExec,
+			"golang": golangExec,
 		},
 	}
 }
