@@ -13,7 +13,7 @@ func TestInitOpen(t *testing.T) {
 	if isRepo {
 		t.Error("should not already be a repo")
 	}
-	require.NoError(t, Init(dir, "TestProject"))
+	require.NoError(t, Init(dir))
 	isRepo, err = IsRepo(dir)
 	require.NoError(t, err)
 	if !isRepo {

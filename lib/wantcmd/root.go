@@ -35,13 +35,13 @@ var rootCmd = star.NewDir(star.Metadata{Short: "want build system"},
 
 var initCmd = star.Command{
 	Metadata: star.Metadata{Short: "initialize want in the current directory"},
-	Pos:      []star.IParam{projNameParam},
+	Pos:      []star.IParam{},
 	F: func(c star.Context) error {
 		wd, err := os.Getwd()
 		if err != nil {
 			return err
 		}
-		return wantrepo.Init(wd, projNameParam.Load(c))
+		return wantrepo.Init(wd)
 	},
 }
 
@@ -81,11 +81,6 @@ func newSys(c *star.Context) (*want.System, error) {
 		return nil, err
 	}
 	return s, nil
-}
-
-var projNameParam = star.Param[string]{
-	Name:  "name",
-	Parse: star.ParseString,
 }
 
 func openRepo() (*wantrepo.Repo, error) {

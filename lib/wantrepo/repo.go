@@ -31,14 +31,14 @@ func Open(p string) (*Repo, error) {
 	}, nil
 }
 
-func Init(workDir string, projectName string) error {
+func Init(workDir string) error {
 	cfgPath := filepath.Join(workDir, "WANT")
 	cfgFile, err := os.OpenFile(cfgPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
 	defer cfgFile.Close()
-	cfg := wantcfg.DefaultProjectConfig(projectName)
+	cfg := wantcfg.DefaultProjectConfig()
 	data := jsonMarshalPretty(cfg)
 	if _, err := cfgFile.Write(data); err != nil {
 		return err
