@@ -8,7 +8,6 @@ import (
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
-	"wantbuild.io/want/internal/op/glfsops"
 	"wantbuild.io/want/lib/wantjob"
 )
 
@@ -33,8 +32,6 @@ type MicroVMTask struct {
 
 	// Output is the subpath within the root to use as the result of the Task.
 	Output string
-	// Assert is used to make assertions about the output and fail the Task if they are not met.
-	Assert *glfsops.Assertions
 }
 
 // MicroVMConfig is the config file for a MicroVMTask
@@ -66,17 +63,6 @@ func PostMicroVMTask(ctx context.Context, s cadata.Store, x MicroVMTask) (*glfs.
 		{Name: "kernel", FileMode: 0o644, Ref: x.Kernel},
 		{Name: "root", FileMode: 0o644, Ref: x.Root},
 	}
-	if x.Assert != nil {
-		aRef, err := glfsops.PostAssertions(ctx, s, *x.Assert)
-		if err != nil {
-			return nil, err
-		}
-		ents = append(ents, glfs.TreeEntry{
-			Name:     "assert",
-			FileMode: 0o777,
-			Ref:      *aRef,
-		})
-	}
 	return ag.PostTreeEntries(ctx, s, ents)
 }
 
@@ -102,16 +88,6 @@ func GetMicroVMTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*MicroVMT
 	if err != nil {
 		return nil, err
 	}
-	var assertions *glfsops.Assertions
-	assertRef, err := ag.GetAtPath(ctx, s, x, "assert")
-	if err != nil && !glfs.IsErrNoEnt(err) {
-		return nil, err
-	} else if err == nil {
-		assertions, err = glfsops.GetAssertions(ctx, s, *assertRef)
-		if err != nil {
-			return nil, err
-		}
-	}
 	return &MicroVMTask{
 		Cores:  cf.Cores,
 		Memory: cf.Memory,
@@ -121,7 +97,5 @@ func GetMicroVMTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*MicroVMT
 
 		Kernel: *kRef,
 		Root:   *rRef,
-
-		Assert: assertions,
 	}, nil
 }

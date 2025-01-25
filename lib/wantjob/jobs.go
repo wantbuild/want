@@ -102,7 +102,7 @@ func (r *Result) Err() error {
 	if r.ErrCode == 0 {
 		return nil
 	}
-	return fmt.Errorf("job failed errcode=%v data=%q", r.ErrCode, r.Data)
+	return fmt.Errorf("job failed errcode=%v data=%s", r.ErrCode, r.Data)
 }
 
 type JobInfo struct {

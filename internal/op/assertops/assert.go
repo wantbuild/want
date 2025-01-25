@@ -1,4 +1,4 @@
-package glfsops
+package assertops
 
 import (
 	"bufio"
@@ -6,32 +6,36 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/exp/streams"
 	"go.brendoncarroll.net/state/cadata"
 )
 
+const MaxPathLen = 4096
+
+type AssertTask struct {
+	X glfs.Ref
+
+	Msg string
+	Assertions
+}
+
 // Assertions is a set of assertions, it is the input to assert not including
 // the object to check.
 type Assertions struct {
-	SubsetOf *glfs.Ref
+	SubsetOf   *glfs.Ref
+	PathExists *string
 }
 
-func GetAssertions(ctx context.Context, s cadata.Getter, ref glfs.Ref) (*Assertions, error) {
-	tree, err := glfs.GetTree(ctx, s, ref)
-	if err != nil {
-		return nil, err
-	}
-	var ret Assertions
-	if ent := tree.Lookup("subsetOf"); ent != nil {
-		ret.SubsetOf = &ent.Ref
-	}
-	return &ret, nil
-}
-
-func PostAssertions(ctx context.Context, s cadata.Poster, x Assertions) (*glfs.Ref, error) {
+func PostAssertTask(ctx context.Context, s cadata.Poster, x AssertTask) (*glfs.Ref, error) {
 	var ents []glfs.TreeEntry
+	ents = append(ents, glfs.TreeEntry{
+		Name:     "x",
+		FileMode: 0o777,
+		Ref:      x.X,
+	})
 	if x.SubsetOf != nil {
 		ents = append(ents, glfs.TreeEntry{
 			Name:     "subsetOf",
@@ -39,46 +43,70 @@ func PostAssertions(ctx context.Context, s cadata.Poster, x Assertions) (*glfs.R
 			Ref:      *x.SubsetOf,
 		})
 	}
-	return glfs.PostTreeEntries(ctx, s, ents)
-}
-
-func Assert(ctx context.Context, s cadata.GetPoster, input glfs.Ref) (*glfs.Ref, error) {
-	ag := glfs.NewAgent()
-	xRef, err := glfs.GetAtPath(ctx, s, input, "x")
-	if err != nil {
-		return nil, err
-	}
-	tree, err := glfs.GetTree(ctx, s, input)
-	if err != nil {
-		return nil, err
-	}
-	var msg string
-	if ent := tree.Lookup("message"); ent != nil {
-		data, err := ag.GetBlobBytes(ctx, s, ent.Ref, 1e6)
+	if x.PathExists != nil {
+		ref, err := glfs.PostBlob(ctx, s, strings.NewReader(*x.PathExists))
 		if err != nil {
 			return nil, err
 		}
-		msg = string(data)
+		ents = append(ents, glfs.TreeEntry{
+			Name:     "pathExists",
+			FileMode: 0o777,
+			Ref:      *ref,
+		})
 	}
+	return glfs.PostTreeEntries(ctx, s, ents)
+}
 
-	// assert checks
-	as, err := GetAssertions(ctx, s, input)
+func GetAssertTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*AssertTask, error) {
+	tree, err := glfs.GetTree(ctx, s, x)
 	if err != nil {
 		return nil, err
 	}
-	err = CheckAssertions(ctx, s, *xRef, *as)
-	// add error message if it exists
-	if err != nil && msg != "" {
-		err = fmt.Errorf("assert failed: msg=%v, cause=%w", msg, err)
+	var ret AssertTask
+	if ent := tree.Lookup("x"); ent != nil {
+		ret.X = ent.Ref
+	} else {
+		return nil, fmt.Errorf("assert task missing x")
 	}
-	return &input, err
+	if ent := tree.Lookup("message"); ent != nil {
+		data, err := glfs.GetBlobBytes(ctx, s, ent.Ref, 1e6)
+		if err != nil {
+			return nil, err
+		}
+		ret.Msg = string(data)
+	}
+
+	if ent := tree.Lookup("subsetOf"); ent != nil {
+		ret.SubsetOf = &ent.Ref
+	}
+	if ent := tree.Lookup("pathExists"); ent != nil {
+		data, err := glfs.GetBlobBytes(ctx, s, ent.Ref, MaxPathLen)
+		if err != nil {
+			return nil, err
+		}
+		p := string(data)
+		ret.PathExists = &p
+	}
+	return &ret, nil
 }
 
-// CheckAssertions
-func CheckAssertions(ctx context.Context, s cadata.Getter, x glfs.Ref, as Assertions) (err error) {
+func AssertAll(ctx context.Context, dst cadata.Poster, src cadata.Getter, task AssertTask) (*glfs.Ref, error) {
+	// assert checks
+	err := checkAssertions(ctx, src, task.X, task.Assertions)
+	// add error message if it exists
+	if err != nil && task.Msg != "" {
+		err = fmt.Errorf("assert failed: msg=%v, cause=%w", task.Msg, err)
+	}
+	return &task.X, err
+}
+
+func checkAssertions(ctx context.Context, s cadata.Getter, x glfs.Ref, as Assertions) (err error) {
 	ag := glfs.NewAgent()
 	if as.SubsetOf != nil {
 		err = errors.Join(err, assertSubsetOf(ctx, ag, s, x, *as.SubsetOf))
+	}
+	if as.PathExists != nil {
+		err = errors.Join(err, assertPathExists(ctx, ag, s, x, *as.PathExists))
 	}
 	return err
 }
@@ -109,6 +137,11 @@ func assertSubsetOf(ctx context.Context, ag *glfs.Agent, s cadata.Getter, x, sub
 		return err
 	}
 	return assertStreamsEqual(rx, rso)
+}
+
+func assertPathExists(ctx context.Context, ag *glfs.Agent, s cadata.Getter, x glfs.Ref, p string) error {
+	_, err := ag.GetAtPath(ctx, s, x, p)
+	return err
 }
 
 func assertStreamsEqual(a, b io.Reader) error {

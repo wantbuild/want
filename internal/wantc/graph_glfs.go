@@ -72,20 +72,6 @@ func DeriveDiff(g *wantdag.Builder, left, right NodeID) NodeID {
 	})
 }
 
-func DeriveAssert(ctx context.Context, s cadata.GetPoster, gb *wantdag.Builder, x wantdag.NodeID, ac glfsops.AssertChecks) wantdag.NodeID {
-	inputs := []NodeInput{
-		{Name: "x", Node: x},
-	}
-	if ac.SubsetOf != nil {
-		inputs = append(inputs, NodeInput{Name: "subsetOf", Node: *ac.SubsetOf})
-	}
-	if ac.Message != "" {
-		nid := FactString(ctx, gb, s, ac.Message)
-		inputs = append(inputs, NodeInput{Name: "message", Node: nid})
-	}
-	return mustDerived(gb, "glfs", glfsops.OpAssert, inputs)
-}
-
 func FactString(ctx context.Context, gb *wantdag.Builder, s cadata.GetPoster, p string) wantdag.NodeID {
 	ref, err := glfs.PostBlob(ctx, s, strings.NewReader(p))
 	if err != nil {

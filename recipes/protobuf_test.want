@@ -1,0 +1,20 @@
+local want = import "want";
+local wassert = import "./assert.libsonnet";
+local protobuf = import "./protobuf.libsonnet";
+
+local exampleProto = |||
+    syntax = "proto3";
+    option go_package = "mypackage.com/example";
+
+    message Hello {
+        uint32 a = 1;
+    };
+|||;
+
+local example = want.pass([
+    want.input("example.proto", want.blob(exampleProto)),
+]);
+
+local out = protobuf.compileGo(example);
+
+wassert.pathExists(out, "example.pb.go")

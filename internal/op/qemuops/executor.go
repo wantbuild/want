@@ -12,7 +12,6 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"wantbuild.io/want/internal/glfstasks"
-	"wantbuild.io/want/internal/op/glfsops"
 	"wantbuild.io/want/lib/wantjob"
 )
 
@@ -86,11 +85,6 @@ func (e *Executor) RunMicroVM(jc wantjob.Ctx, s cadata.Getter, t MicroVMTask) (*
 	jc.Infof("import from vm fs: end")
 	if err := vm.Close(); err != nil {
 		return nil, err
-	}
-	if t.Assert != nil {
-		if err := glfsops.CheckAssertions(jc.Context, s, *output, *t.Assert); err != nil {
-			return nil, err
-		}
 	}
 	return output, nil
 }

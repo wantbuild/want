@@ -30,7 +30,6 @@ const (
 	OpFilter      = OpName("filter")
 	OpChmod       = OpName("chmod")
 	OpDiff        = OpName("diff")
-	OpAssert      = OpName("assert")
 )
 
 const MaxPathLen = 4096
@@ -43,7 +42,6 @@ var ops = map[OpName]Operator{
 	OpFilter:      Filter,
 	OpChmod:       Chmod,
 	OpDiff:        Diff,
-	OpAssert:      Assert,
 }
 
 type Operator func(ctx context.Context, s cadata.GetPoster, x glfs.Ref) (*glfs.Ref, error)

@@ -138,7 +138,6 @@ func (c *Compiler) compileModule(ctx context.Context, dst cadata.Store, src cada
 		vfs:          &VFS{},
 		visitedPaths: make(map[string]chan struct{}),
 	}
-
 	for _, f := range []func(context.Context, *compileState) error{
 		c.addSourceFiles,
 		c.detectCycles,
@@ -158,7 +157,7 @@ func (c *Compiler) compileModule(ctx context.Context, dst cadata.Store, src cada
 
 func (c *Compiler) addSourceFiles(ctx context.Context, cs *compileState) error {
 	defer logStep(ctx, "adding source files")()
-	eg, ctx := errgroup.WithContext(ctx)
+	eg, _ := errgroup.WithContext(ctx)
 	cs.jsImporter = newVFSImporter(func(p string) ([]byte, error) {
 		ref, err := c.glfs.GetAtPath(ctx, cs.src, cs.ground, p)
 		if err != nil {
