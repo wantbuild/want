@@ -26,9 +26,10 @@ type kernelArgs struct {
 	InitArgs []string
 }
 
-func (ka *kernelArgs) VirtioFSRoot(tag string) {
+func (ka kernelArgs) VirtioFSRoot(tag string) kernelArgs {
 	ka.RootFSType = "virtiofs"
 	ka.Root = tag + " rw"
+	return ka
 }
 
 func (ka kernelArgs) String() string {

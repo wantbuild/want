@@ -4,6 +4,7 @@ package qemuops
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 
@@ -48,7 +49,7 @@ func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task)
 				return nil, err
 			}
 			defer e.memSem.Release(int64(t.Memory))
-			return e.RunMicroVM(jc, src, *t)
+			return e.amd64MicroVMVirtiofs(jc, src, *t)
 		})
 
 	default:
@@ -56,13 +57,31 @@ func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task)
 	}
 }
 
-func (e *Executor) RunMicroVM(jc wantjob.Ctx, s cadata.Getter, t MicroVMTask) (*glfs.Ref, error) {
-	vm, err := e.newVM(jc, s, vmConfig{
-		NumCPUs: t.Cores,
-		Memory:  t.Memory,
-	}, kernelConfig{
-		Init:     t.Init,
-		InitArgs: t.Args,
+func (e *Executor) amd64MicroVMVirtiofs(jc wantjob.Ctx, s cadata.Getter, t MicroVMTask) (*glfs.Ref, error) {
+	dir, err := os.MkdirTemp("", "microvm-")
+	if err != nil {
+		return nil, err
+	}
+
+	kargs := kernelArgs{
+		Console:        "hvc0",
+		ClockSource:    "jiffies",
+		IgnoreLogLevel: true,
+		Reboot:         "t",
+		Panic:          -1,
+		Init:           t.Init,
+		InitArgs:       t.Args,
+		RandomTrustCpu: "on",
+	}.VirtioFSRoot("myfs")
+
+	vm, err := e.newVM_VirtioFS(jc, s, dir, vmConfig{
+		NumCPUs:          t.Cores,
+		Memory:           t.Memory,
+		AppendKernelArgs: kargs.String(),
+
+		CharDevs: make(map[string]chardevConfig),
+		NetDevs:  make(map[string]netdevConfig),
+		Objects:  make(map[string]objectConfig),
 	})
 	if err != nil {
 		return nil, err
@@ -89,7 +108,7 @@ func (e *Executor) RunMicroVM(jc wantjob.Ctx, s cadata.Getter, t MicroVMTask) (*
 	return output, nil
 }
 
-func (e *Executor) systemx86Cmd(args ...string) *exec.Cmd {
+func (e *Executor) system_x86_64(args ...string) *exec.Cmd {
 	cmdPath := filepath.Join(e.installDir, "qemu-system-x86_64")
 	cmd := exec.Command(cmdPath, args...)
 	cmd.Dir = e.installDir
