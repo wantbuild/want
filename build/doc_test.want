@@ -1,0 +1,7 @@
+local want = import "want";
+local wassert = import "recipes/assert.libsonnet";
+
+wassert.pathExists(
+    want.selectDir(want.DERIVED, "./doc.want"),
+    "index.html"
+)
