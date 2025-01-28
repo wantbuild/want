@@ -3,10 +3,14 @@ package wantcmd
 import (
 	"fmt"
 	"io"
+	"net/http"
+	"path"
 
 	"github.com/blobcache/glfs"
 	"github.com/pkg/errors"
 	"go.brendoncarroll.net/star"
+
+	"wantbuild.io/want/internal/glfsiofs"
 )
 
 var buildCmd = star.Command{
@@ -14,7 +18,6 @@ var buildCmd = star.Command{
 	Flags:    []star.IParam{},
 	Pos:      []star.IParam{pathsParam},
 	F: func(c star.Context) error {
-		ctx := c.Context
 		wbs, err := newSys(&c)
 		if err != nil {
 			return err
@@ -24,7 +27,7 @@ var buildCmd = star.Command{
 		if err != nil {
 			return err
 		}
-		res, err := wbs.Build(ctx, repo, "")
+		res, err := wbs.Build(c.Context, repo, "")
 		if err != nil {
 			return err
 		}
@@ -40,7 +43,6 @@ var buildCmd = star.Command{
 			}
 			c.Printf("  %v %v\n", tres.ErrCode, tres.Ref)
 		}
-
 		return c.StdOut.Flush()
 	},
 }
@@ -61,20 +63,13 @@ var lsCmd = star.Command{
 			return err
 		}
 		p := pathParam.Load(c)
-
-		// do the build
-		res, err := wbs.Build(ctx, repo, "")
+		res, err := wbs.Build(c.Context, repo, p)
 		if err != nil {
 			return err
 		}
 		src := res.Store
 		ref := res.OutputRoot
 
-		// process the output
-		ref, err = glfs.GetAtPath(ctx, src, *ref, p)
-		if err != nil {
-			return err
-		}
 		if ref.Type != glfs.TypeTree {
 			return errors.Errorf("cannot ls non-tree: %v", ref)
 		}
@@ -106,12 +101,13 @@ var catCmd = star.Command{
 			return err
 		}
 		ps := pathsParam.LoadAll(c)
-
-		// do the build
-		res, err := wbs.Build(ctx, repo, "")
+		// TODO: only build longest common prefix
+		commonPrefix := ""
+		res, err := wbs.Build(c.Context, repo, commonPrefix)
 		if err != nil {
 			return err
 		}
+
 		src := res.Store
 		ref := res.OutputRoot
 
@@ -134,6 +130,45 @@ var catCmd = star.Command{
 			}
 		}
 		return w.Flush()
+	},
+}
+
+var serveHttpCmd = star.Command{
+	Metadata: star.Metadata{Short: "serve the build output over http"},
+	Pos:      []star.IParam{pathParam},
+	F: func(c star.Context) error {
+		ctx := c.Context
+		wbs, err := newSys(&c)
+		if err != nil {
+			return err
+		}
+		defer wbs.Close()
+		repo, err := openRepo()
+		if err != nil {
+			return err
+		}
+		p := pathParam.Load(c)
+		res, err := wbs.Build(ctx, repo, p)
+		if err != nil {
+			return err
+		}
+		src := res.Store
+		ref := res.OutputRoot
+		fsys := glfsiofs.New(src, *ref)
+		laddr := "127.0.0.1:8000"
+		c.Printf("http://%s\n", laddr)
+		c.StdOut.Flush()
+
+		h := http.FileServerFS(fsys)
+		return http.ListenAndServe(laddr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch path.Ext(r.URL.Path) {
+			case ".css":
+				w.Header().Set("Content-Type", "text/css")
+			case ".js":
+				w.Header().Set("Content-Type", "text/javascript")
+			}
+			h.ServeHTTP(w, r)
+		}))
 	},
 }
 

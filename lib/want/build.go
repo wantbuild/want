@@ -24,6 +24,7 @@ type BuildResult struct {
 	Source        glfs.Ref
 	Targets       []Target
 	TargetResults []TargetResult
+	OutputPrefix  string
 	OutputRoot    *glfs.Ref
 
 	// TODO: remove
@@ -38,7 +39,6 @@ type TargetResult struct {
 
 func Build(ctx context.Context, jobs wantjob.System, src cadata.Getter, bt BuildTask) (*BuildResult, error) {
 	scratch := stores.NewMem()
-
 	btRef, err := wantops.PostBuildTask(ctx, scratch, bt)
 	if err != nil {
 		return nil, err
@@ -69,9 +69,11 @@ func Build(ctx context.Context, jobs wantjob.System, src cadata.Getter, bt Build
 			Ref:     ref,
 		}
 	}
+
 	return &BuildResult{
 		Source:        bt.Main,
 		OutputRoot:    outRoot,
+		OutputPrefix:  bt.Prefix,
 		Targets:       plan.Targets,
 		TargetResults: targetResults,
 

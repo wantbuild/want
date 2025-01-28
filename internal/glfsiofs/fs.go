@@ -79,6 +79,10 @@ func (f *GLFSFile) Read(buf []byte) (int, error) {
 	return n, err
 }
 
+func (f *GLFSFile) Seek(offset int64, whence int) (int64, error) {
+	return f.r.Seek(offset, whence)
+}
+
 func (f *GLFSFile) Stat() (fs.FileInfo, error) {
 	if f.ref.Type == glfs.TypeTree {
 		return &fileInfo{name: f.name, mode: fs.ModeDir}, nil

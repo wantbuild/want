@@ -93,6 +93,18 @@ func PostDAG(ctx context.Context, s cadata.Poster, x DAG) (*glfs.Ref, error) {
 	})
 }
 
+func EditDAG(ctx context.Context, dst cadata.Store, src cadata.Getter, x glfs.Ref, fn func(DAG) (*DAG, error)) (*glfs.Ref, error) {
+	dagX, err := GetDAG(ctx, src, x)
+	if err != nil {
+		return nil, err
+	}
+	dagY, err := fn(*dagX)
+	if err != nil {
+		return nil, err
+	}
+	return PostDAG(ctx, dst, *dagY)
+}
+
 func nodeName(x NodeID) string {
 	return fmt.Sprintf("%016x", x)
 }

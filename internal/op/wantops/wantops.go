@@ -64,6 +64,7 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 	if err != nil {
 		return nil, err
 	}
+	// plan
 	plan, planStore, err := DoCompile(ctx, jc.System, e.CompileOp, src, CompileTask{
 		Module:   buildTask.Main,
 		Metadata: buildTask.Metadata,
@@ -71,10 +72,38 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 	if err != nil {
 		return nil, err
 	}
+	if buildTask.Prefix != "" {
+		dagRef, err := wantdag.EditDAG(ctx, jc.Dst, planStore, plan.DAG, func(x wantdag.DAG) (*wantdag.DAG, error) {
+			last := wantdag.NodeID(len(x.Nodes) - 1)
+			// path
+			pathRef, err := glfs.PostBlob(ctx, jc.Dst, strings.NewReader(buildTask.Prefix))
+			if err != nil {
+				return nil, err
+			}
+			x.Nodes = append(x.Nodes, wantdag.Node{
+				Value: pathRef,
+			})
+			// derive pick
+			x.Nodes = append(x.Nodes, wantdag.Node{
+				Op: "glfs.pick",
+				Inputs: []wantdag.NodeInput{
+					{Name: "x", Node: last},
+					{Name: "path", Node: last + 1},
+				},
+			})
+			return &x, nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		plan.LastNode += 2 // Change this if you add more nodes above
+		plan.DAG = *dagRef
+	}
 	if err := glfs.Sync(ctx, jc.Dst, planStore, plan.DAG); err != nil {
 		return nil, err
 	}
-	s := stores.Union{src, planStore}
+	// execute
+	s := stores.Union{src, planStore, jc.Dst}
 	dagResRef, dagStore, err := glfstasks.Do(jc.Context, jc.System, s, e.DAGExecOp, plan.DAG)
 	if err != nil {
 		return nil, err

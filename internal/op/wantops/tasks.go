@@ -70,6 +70,7 @@ func GetBuildTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*BuildTask,
 	}
 	return &BuildTask{
 		Main:     *mainRef,
+		Prefix:   cfg.Prefix,
 		Metadata: cfg.Metadata,
 	}, nil
 }
