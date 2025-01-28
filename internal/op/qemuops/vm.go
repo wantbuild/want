@@ -166,7 +166,7 @@ func (e *Executor) newVM(jc wantjob.Ctx, src cadata.Getter, dir string, vmcfg vm
 			"-M", "microvm,x-option-roms=off,rtc=off,acpi=off",
 			"-m", strconv.FormatUint(vmcfg.Memory/1e6, 10) + "M",
 			"-smp", strconv.FormatUint(uint64(vmcfg.NumCPUs), 10),
-			"-L", filepath.Join(e.installDir, "share"),
+			"-L", filepath.Join(e.cfg.InstallDir, "share"),
 
 			"-kernel", filepath.Join(dir, kernelFilename),
 			"-append", vmcfg.AppendKernelArgs,
@@ -182,7 +182,7 @@ func (e *Executor) newVM(jc wantjob.Ctx, src cadata.Getter, dir string, vmcfg vm
 		}
 		args = vmcfg.DeviceArgs(args)
 
-		cmd := e.system_x86_64(args...)
+		cmd := e.systemx86Cmd(args...)
 		cmd.Stdout = jc.Writer("qemu/stdout")
 		cmd.Stderr = jc.Writer("qemu/stderr")
 		return cmd

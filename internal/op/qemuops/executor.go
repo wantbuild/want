@@ -19,17 +19,21 @@ import (
 var _ wantjob.Executor = &Executor{}
 
 type Executor struct {
-	// installDir contains the binaries needed to execute the VM operations
-	installDir string
-	memLimit   uint64
-	memSem     *semaphore.Weighted
+	cfg    Config
+	memSem *semaphore.Weighted
 }
 
-func NewExecutor(installDir string, memLimit uint64) *Executor {
+// Config has configuration for the executor
+type Config struct {
+	// InstallDir contains the binaries needed to execute the VM operations
+	InstallDir string
+	MemLimit   int64
+}
+
+func NewExecutor(cfg Config) *Executor {
 	return &Executor{
-		installDir: installDir,
-		memLimit:   memLimit,
-		memSem:     semaphore.NewWeighted(int64(memLimit)),
+		cfg:    cfg,
+		memSem: semaphore.NewWeighted(cfg.MemLimit),
 	}
 }
 
@@ -42,8 +46,8 @@ func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task)
 			if err != nil {
 				return nil, err
 			}
-			if t.Memory > e.memLimit {
-				return nil, fmt.Errorf("task exceeds executor's memory limit %d > %d", t.Memory, e.memLimit)
+			if t.Memory > uint64(e.cfg.MemLimit) {
+				return nil, fmt.Errorf("task exceeds executor's memory limit %d > %d", t.Memory, e.cfg.MemLimit)
 			}
 			if err := e.memSem.Acquire(ctx, int64(t.Memory)); err != nil {
 				return nil, err
@@ -108,16 +112,16 @@ func (e *Executor) amd64MicroVMVirtiofs(jc wantjob.Ctx, s cadata.Getter, t Micro
 	return output, nil
 }
 
-func (e *Executor) system_x86_64(args ...string) *exec.Cmd {
-	cmdPath := filepath.Join(e.installDir, "qemu-system-x86_64")
+func (e *Executor) systemx86Cmd(args ...string) *exec.Cmd {
+	cmdPath := filepath.Join(e.cfg.InstallDir, "qemu-system-x86_64")
 	cmd := exec.Command(cmdPath, args...)
-	cmd.Dir = e.installDir
+	cmd.Dir = e.cfg.InstallDir
 	return cmd
 }
 
 func (e *Executor) virtiofsdCmd(args ...string) *exec.Cmd {
-	cmdPath := filepath.Join(e.installDir, "virtiofsd")
+	cmdPath := filepath.Join(e.cfg.InstallDir, "virtiofsd")
 	cmd := exec.Command(cmdPath, args...)
-	cmd.Dir = e.installDir
+	cmd.Dir = e.cfg.InstallDir
 	return cmd
 }

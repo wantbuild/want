@@ -13,6 +13,7 @@ import (
 	"wantbuild.io/want/internal/op/importops"
 	"wantbuild.io/want/internal/op/qemuops"
 	"wantbuild.io/want/internal/op/wantops"
+	"wantbuild.io/want/internal/op/wasmops"
 	"wantbuild.io/want/lib/wantjob"
 )
 
@@ -22,8 +23,7 @@ type executor struct {
 }
 
 type executorConfig struct {
-	QEMUDir    string
-	QEMUMemory uint64
+	QEMU qemuops.Config
 
 	GoDir string
 }
@@ -32,7 +32,7 @@ type executorConfig struct {
 // qemuDir is the qemu install dir
 func newExecutor(cfg executorConfig) *executor {
 
-	qemuExec := qemuops.NewExecutor(cfg.QEMUDir, cfg.QEMUMemory)
+	qemuExec := qemuops.NewExecutor(cfg.QEMU)
 	golangExec := goops.NewExecutor(cfg.GoDir)
 
 	return &executor{
@@ -49,6 +49,7 @@ func newExecutor(cfg executorConfig) *executor {
 
 			"qemu":   qemuExec,
 			"golang": golangExec,
+			"wasm":   wasmops.NewExecutor(),
 		},
 	}
 }

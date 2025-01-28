@@ -138,7 +138,7 @@ func setupTest(t testing.TB) (wantjob.Ctx, cadata.Store, *Executor) {
 	err := wantsetup.Install(ctx, jsys, installDir, InstallSnippet())
 	require.NoError(t, err)
 
-	e := NewExecutor(installDir, 4*1e9)
+	e := NewExecutor(Config{InstallDir: installDir, MemLimit: 4 * 1e9})
 	newWriter := func(_ string) io.Writer {
 		return os.Stderr
 	}

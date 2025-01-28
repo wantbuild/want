@@ -13,6 +13,7 @@ require (
 	github.com/kr/text v0.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.10.0
+	github.com/tetratelabs/wazero v1.8.2
 	github.com/ulikunitz/xz v0.5.12
 	go.brendoncarroll.net/exp v0.0.0-20250112210235-9d4b62bdbd02
 	go.brendoncarroll.net/star v0.0.0-20250117202537-11ada0ca27bd

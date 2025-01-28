@@ -89,9 +89,11 @@ func (s *System) init(ctx context.Context, install bool) error {
 	}
 
 	exec := newExecutor(executorConfig{
-		QEMUDir:    s.qemuDir(),
-		QEMUMemory: 4e9,
-		GoDir:      s.goDir(),
+		QEMU: qemuops.Config{
+			InstallDir: s.qemuDir(),
+			MemLimit:   4e9,
+		},
+		GoDir: s.goDir(),
 	})
 	s.jobs = newJobSystem(s.db, s.logDir(), exec, numWorkers)
 	return nil
