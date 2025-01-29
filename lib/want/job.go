@@ -68,6 +68,8 @@ func newJob(sys *jobSystem, parent *job, idx wantjob.Idx, dst cadata.Store, src 
 }
 
 func (j *job) Spawn(ctx context.Context, src cadata.Getter, task wantjob.Task) (wantjob.Idx, error) {
+	j.childMu.Lock()
+	defer j.childMu.Unlock()
 	idx, child, err := j.sys.spawn(ctx, j, src, task)
 	if err != nil {
 		return 0, err
@@ -136,8 +138,6 @@ func (j *job) getChild(idx wantjob.Idx) (*job, error) {
 }
 
 func (j *job) addChild(idx wantjob.Idx, child *job) {
-	j.childMu.Lock()
-	defer j.childMu.Unlock()
 	idx2 := wantjob.Idx(len(j.children))
 	if idx2 != idx {
 		panic(idx2)

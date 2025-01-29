@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
@@ -37,7 +38,7 @@ type Executor struct {
 func NewExecutor(installDir string) *Executor {
 	return &Executor{
 		installDir: installDir,
-		buildSem:   semaphore.NewWeighted(1),
+		buildSem:   semaphore.NewWeighted(int64(runtime.GOMAXPROCS(0))),
 	}
 }
 
@@ -90,7 +91,7 @@ func (e *Executor) newCommand(ctx context.Context, cfg goConfig, args ...string)
 
 		"GOROOT=" + goRoot,
 		"GOPATH=" + filepath.Join(e.installDir, "gopath"),
-		"GOCACHE=" + filepath.Join(e.installDir, "gocache"),
+		//"GOCACHE=" + filepath.Join(e.installDir, "gocache"),
 
 		"GOARCH=" + cfg.GOARCH,
 		"GOOS=" + cfg.GOOS,

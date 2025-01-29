@@ -34,12 +34,13 @@ func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]
 }
 
 func (e Executor) ExecAll(jc wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+	defer jc.InfoSpan("dag.execAll")()
 	ctx := jc.Context
 	dag, err := wantdag.GetDAG(ctx, s, ref)
 	if err != nil {
 		return nil, err
 	}
-	nrs, err := wantdag.ExecAll(jc, s, *dag)
+	nrs, err := wantdag.ParallelExecAll(jc, s, *dag)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +53,7 @@ func (e Executor) ExecLast(jc wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs
 	if err != nil {
 		return nil, err
 	}
-	res, err := wantdag.ExecLast(jc, s, *dag)
+	res, err := wantdag.ParallelExecLast(jc, s, *dag)
 	if err != nil {
 		return nil, err
 	}

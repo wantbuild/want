@@ -43,7 +43,7 @@ func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]
 		})
 	case OpCompile:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
-			return e.Compile(ctx, jc.Dst, src, x)
+			return e.Compile(jc, src, x)
 		})
 	case OpCompileSnippet:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
@@ -59,6 +59,7 @@ func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]
 }
 
 func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Ref, error) {
+	defer jc.InfoSpan("build")()
 	ctx := jc.Context
 	buildTask, err := GetBuildTask(ctx, src, x)
 	if err != nil {
@@ -93,14 +94,12 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 			})
 			return &x, nil
 		})
+
 		if err != nil {
 			return nil, err
 		}
 		plan.LastNode += 2 // Change this if you add more nodes above
 		plan.DAG = *dagRef
-	}
-	if err := glfs.Sync(ctx, jc.Dst, planStore, plan.DAG); err != nil {
-		return nil, err
 	}
 	// execute
 	s := stores.Union{src, planStore, jc.Dst}
@@ -108,18 +107,14 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 	if err != nil {
 		return nil, err
 	}
+	df := jc.InfoSpan("syncing results")
+	if err := glfstasks.FastSync(ctx, jc.Dst, dagStore, *dagResRef); err != nil {
+		return nil, err
+	}
+	df()
 	nrs, err := wantdag.GetNodeResults(ctx, dagStore, *dagResRef)
 	if err != nil {
 		return nil, err
-	}
-	for _, nr := range nrs {
-		if nr.ErrCode == 0 {
-			if ref, err := glfstasks.ParseGLFSRef(nr.Data); err == nil {
-				if err := glfs.Sync(ctx, jc.Dst, dagStore, *ref); err != nil {
-					return nil, err
-				}
-			}
-		}
 	}
 	return PostBuildResult(ctx, jc.Dst, BuildResult{
 		Plan:        *plan,
@@ -127,7 +122,10 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 	})
 }
 
-func (e Executor) Compile(ctx context.Context, dst cadata.Store, s cadata.Getter, x glfs.Ref) (*glfs.Ref, error) {
+func (e Executor) Compile(jc wantjob.Ctx, s cadata.Getter, x glfs.Ref) (*glfs.Ref, error) {
+	defer jc.InfoSpan("compile")()
+	ctx := jc.Context
+	dst := jc.Dst
 	ct, err := GetCompileTask(ctx, s, x)
 	if err != nil {
 		return nil, err

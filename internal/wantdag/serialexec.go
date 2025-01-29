@@ -9,9 +9,9 @@ import (
 	"wantbuild.io/want/lib/wantjob"
 )
 
-func ExecLast(jc wantjob.Ctx, s cadata.Getter, x DAG) (wantjob.Result, error) {
+func SerialExecLast(jc wantjob.Ctx, s cadata.Getter, x DAG) (wantjob.Result, error) {
 	// TODO: lazy execution
-	nrs, err := ExecAll(jc, s, x)
+	nrs, err := SerialExecAll(jc, s, x)
 	if err != nil {
 		return wantjob.Result{}, err
 	}
@@ -19,7 +19,7 @@ func ExecLast(jc wantjob.Ctx, s cadata.Getter, x DAG) (wantjob.Result, error) {
 }
 
 // ExecAll executes all nodes in the DAG, and returns the result of returning each.
-func ExecAll(jc wantjob.Ctx, s cadata.Getter, x DAG) ([]wantjob.Result, error) {
+func SerialExecAll(jc wantjob.Ctx, s cadata.Getter, x DAG) ([]wantjob.Result, error) {
 	ctx := jc.Context
 	nodeStores := make([]cadata.Getter, len(x.Nodes))
 	nodeResults := make([]wantjob.Result, len(x.Nodes))
@@ -36,7 +36,7 @@ func ExecAll(jc wantjob.Ctx, s cadata.Getter, x DAG) ([]wantjob.Result, error) {
 			nodeStores[i] = s
 			outRef = n.Value
 		case n.IsDerived():
-			input, err := PrepareInput(ctx, s, scratch, n, resolve)
+			input, err := PrepareInput(ctx, s, scratch, n.Inputs, resolve)
 			if err != nil {
 				return nil, err
 			}
@@ -59,7 +59,7 @@ func ExecAll(jc wantjob.Ctx, s cadata.Getter, x DAG) ([]wantjob.Result, error) {
 			outRef, _ = glfstasks.ParseGLFSRef(out.Data)
 		}
 		if outRef != nil {
-			if err := glfs.Sync(ctx, jc.Dst, union, *outRef); err != nil {
+			if err := glfstasks.FastSync(ctx, jc.Dst, union, *outRef); err != nil {
 				return nil, err
 			}
 		}

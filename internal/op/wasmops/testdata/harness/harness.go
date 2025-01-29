@@ -8,11 +8,12 @@ import (
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
-	"wantbuild.io/want/internal/op/wasmops"
+
+	"wantbuild.io/want/lib/wantwasm"
 )
 
 func main() {
-	wasmops.Main(func(ctx context.Context, s cadata.GetPoster, x glfs.Ref) (*glfs.Ref, error) {
+	wantwasm.Main(func(ctx context.Context, s cadata.GetPoster, x glfs.Ref) (*glfs.Ref, error) {
 		id, err := s.Post(ctx, []byte("hello world"))
 		if err != nil {
 			return nil, err

@@ -65,3 +65,4 @@ CREATE TABLE job_children (
 );
 
 CREATE INDEX idx_job_cache ON jobs (task) WHERE "state" = 3 AND errcode = 0;
+CREATE INDEX idx_job_res ON jobs(res_data) WHERE "state" = 3 AND errcode = 0;

@@ -17,9 +17,9 @@ import (
 type Resolver = func(NodeID) wantjob.Result
 
 // PrepareInput prepares the input for a node.
-func PrepareInput(ctx context.Context, s cadata.Getter, dst cadata.Poster, n Node, getResult Resolver) (*glfs.Ref, error) {
+func PrepareInput(ctx context.Context, s cadata.Getter, dst cadata.Poster, ins []NodeInput, getResult Resolver) (*glfs.Ref, error) {
 	ents := []glfs.TreeEntry{}
-	for _, in := range n.Inputs {
+	for _, in := range ins {
 		res := getResult(in.Node)
 		if err := res.Err(); err != nil {
 			return nil, fmt.Errorf("upstream node %d errored: %v", in.Node, err)

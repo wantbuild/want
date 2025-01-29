@@ -159,6 +159,12 @@ func (jc *Ctx) Debugf(msg string, args ...any) {
 	fmt.Fprintf(os.Stderr, msg+"\n", args...)
 }
 
+func (jc *Ctx) InfoSpan(msg string) func() {
+	jc.Infof("%s: begin", msg)
+	startTime := time.Now()
+	return func() { jc.Infof("%s: end %v", msg, time.Since(startTime)) }
+}
+
 // Do spawns a child job to compute the Task, then awaits it and returns the result
 func Do(ctx context.Context, sys System, src cadata.Getter, task Task) (*Result, cadata.Getter, error) {
 	idx, err := sys.Spawn(ctx, src, task)

@@ -8,6 +8,7 @@ import (
 	"go.brendoncarroll.net/exp/streams"
 	"go.brendoncarroll.net/state/cadata"
 
+	"wantbuild.io/want/internal/glfstasks"
 	"wantbuild.io/want/lib/wantjob"
 )
 
@@ -120,7 +121,7 @@ func NewBuilder(dst cadata.Store) Builder {
 }
 
 func (b *Builder) Fact(ctx context.Context, src cadata.Getter, x glfs.Ref) (NodeID, error) {
-	if err := glfs.Sync(ctx, b.dst, src, x); err != nil {
+	if err := glfstasks.FastSync(ctx, b.dst, src, x); err != nil {
 		return 0, err
 	}
 	nid := len(b.nodes)

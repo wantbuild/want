@@ -141,9 +141,11 @@ func (e *Executor) MakeExec(jc wantjob.Ctx, src cadata.Getter, task MakeExecTask
 	cmd.Stderr = jc.Writer("stderr")
 	jc.Infof("GOARCH=%s GOOS=%s", task.GOARCH, task.GOOS)
 
+	df := jc.InfoSpan("go build")
 	if err := cmd.Run(); err != nil {
 		return nil, err
 	}
+	df()
 
 	imp := glfsport.Importer{
 		Store: jc.Dst,

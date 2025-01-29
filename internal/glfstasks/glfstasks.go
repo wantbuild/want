@@ -3,10 +3,12 @@ package glfstasks
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
+	"wantbuild.io/want/internal/wantdb"
 	"wantbuild.io/want/lib/wantjob"
 )
 
@@ -58,4 +60,21 @@ func MarshalGLFSRef(x glfs.Ref) []byte {
 
 func Success(x glfs.Ref) *wantjob.Result {
 	return &wantjob.Result{Data: MarshalGLFSRef(x)}
+}
+
+func FastSync(ctx context.Context, dst cadata.Store, src cadata.Getter, root glfs.Ref) error {
+	rootData := MarshalGLFSRef(root)
+	var err error
+	switch dst := dst.(type) {
+	case *wantdb.DBStore:
+		err = dst.Pull(ctx, rootData)
+	case *wantdb.TxStore:
+		err = dst.Pull(ctx, rootData)
+	default:
+		return glfs.Sync(ctx, dst, src, root)
+	}
+	if errors.Is(err, wantdb.ErrPullNoMatch) {
+		return glfs.Sync(ctx, dst, src, root)
+	}
+	return err
 }

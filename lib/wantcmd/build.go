@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"time"
 
 	"github.com/blobcache/glfs"
 	"github.com/pkg/errors"
@@ -18,6 +19,7 @@ var buildCmd = star.Command{
 	Flags:    []star.IParam{},
 	Pos:      []star.IParam{pathsParam},
 	F: func(c star.Context) error {
+		startTime := time.Now()
 		wbs, err := newSys(&c)
 		if err != nil {
 			return err
@@ -31,6 +33,7 @@ var buildCmd = star.Command{
 		if err != nil {
 			return err
 		}
+		dur := time.Since(startTime)
 		if res.OutputRoot != nil {
 			c.Printf("%v\n", res.OutputRoot.CID)
 		}
@@ -43,6 +46,7 @@ var buildCmd = star.Command{
 			}
 			c.Printf("  %v %v\n", tres.ErrCode, tres.Ref)
 		}
+		c.Printf("%v\n", dur)
 		return c.StdOut.Flush()
 	},
 }

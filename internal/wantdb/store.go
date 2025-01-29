@@ -78,6 +78,12 @@ func (s *DBStore) StoreID() StoreID {
 	return s.id
 }
 
+func (s *DBStore) Pull(ctx context.Context, root []byte) error {
+	return dbutil.DoTx(ctx, s.db, func(tx *sqlx.Tx) error {
+		return Pull(tx, s.id, root)
+	})
+}
+
 type TxStore struct {
 	id StoreID
 	tx *sqlx.Tx
@@ -137,6 +143,10 @@ func (s *TxStore) List(ctx context.Context, span cadata.Span, ids []cadata.ID) (
 
 func (s *TxStore) StoreID() StoreID {
 	return s.id
+}
+
+func (s *TxStore) Pull(ctx context.Context, root []byte) error {
+	return Pull(s.tx, s.id, root)
 }
 
 func CreateStore(tx *sqlx.Tx) (StoreID, error) {
@@ -226,7 +236,7 @@ func ListBlobs(tx *sqlx.Tx, sid StoreID, span cadata.Span, ids []cadata.ID) (int
 }
 
 func CopyAll(tx *sqlx.Tx, src, dst StoreID) error {
-	_, err := tx.Exec(`INSERT INTO store_blobs (store_id, blob_id)
+	_, err := tx.Exec(`INSERT OR IGNORE INTO store_blobs (store_id, blob_id)
 		SELECT ? as store_id, blob_id
 		FROM store_blobs
 		WHERE store_id = ?

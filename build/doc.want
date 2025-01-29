@@ -24,6 +24,7 @@ local bookToml = want.blob(|||
     title = "Want Build System"
 |||);
 
+// https://rust-lang.github.io/mdBook/format/summary.html
 local summaryMd = want.blob(|||
     # Summary
 
