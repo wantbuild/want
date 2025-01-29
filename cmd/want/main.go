@@ -3,7 +3,7 @@ package main
 import (
 	"go.brendoncarroll.net/star"
 
-	"wantbuild.io/want/lib/wantcmd"
+	"wantbuild.io/want/src/wantcmd"
 )
 
 func main() {

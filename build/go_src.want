@@ -8,10 +8,10 @@ want.merge([
     want.select(
         want.DERIVED,
         want.union([
-            want.single("lib/wantcfg/want.libsonnet"),
-            want.prefix("internal/wantdb/dbmig/"),  
-            want.prefix("internal/op/goops/setup.jsonnet"),
-            want.prefix("internal/op/qemuops/setup.jsonnet"),
+            want.single("src/wantcfg/want.libsonnet"),
+            want.prefix("src/internal/wantdb/dbmig/"),  
+            want.prefix("src/internal/op/goops/setup.jsonnet"),
+            want.prefix("src/internal/op/qemuops/setup.jsonnet"),
         ]),
     ),
 ])
