@@ -73,6 +73,11 @@ func (e *Executor) amd64MicroVMVirtiofs(jc wantjob.Ctx, s cadata.Getter, t Micro
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err := os.RemoveAll(dir); err != nil {
+			jc.Errorf("cleaning up vm dir %v: %w", dir, err)
+		}
+	}()
 
 	kargs := kernelArgs{
 		Console:        "hvc0",

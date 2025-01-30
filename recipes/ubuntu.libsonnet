@@ -6,12 +6,12 @@ local hashes = {
 
 local ARCH_AMD64 = "amd64";
 
-local baseRootFS(arch) =
+local rootfs(arch=ARCH_AMD64) =
     local key = "ubuntu-base-22.04-base-" + arch;
     local url = "https://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/" + key + ".tar.gz";
     want.importURL(url, "SHA256", hashes[key], ["ungzip", "untar"]);
 
 {
     ARCH_AMD64 :: ARCH_AMD64,
-    baseRootFS :: baseRootFS,
+    rootfs :: rootfs,
 }

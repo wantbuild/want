@@ -41,15 +41,15 @@ func ParallelExecAll(jc wantjob.Ctx, src cadata.Getter, x DAG) ([]wantjob.Result
 	worker = func(id NodeID) error {
 		node := x.Nodes[id]
 		var outRef *glfs.Ref
-		union := stores.Union{src}
+		union := stores.Union{src, jc.Dst}
 		switch {
 		case node.IsFact():
 			outRef = node.Value
 			results[id] = *glfstasks.Success(*node.Value)
 		case node.IsDerived():
 			scratch := stores.NewMem()
-			union = append(union, jc.Dst, scratch)
-			inputRef, err := PrepareInput(jc.Context, union, scratch, node.Inputs, resolve)
+			union = append(union, scratch)
+			inputRef, err := PrepareInput(jc.Context, scratch, union, node.Inputs, resolve)
 			if err != nil {
 				return err
 			}
@@ -59,6 +59,9 @@ func ParallelExecAll(jc wantjob.Ctx, src cadata.Getter, x DAG) ([]wantjob.Result
 			})
 			if err != nil {
 				return err
+			}
+			if err := res.Err(); err != nil {
+				jc.Errorf("node %v %v", id, node.Op)
 			}
 			if ref, err := glfstasks.ParseGLFSRef(res.Data); err == nil {
 				outRef = ref

@@ -36,7 +36,7 @@ func SerialExecAll(jc wantjob.Ctx, s cadata.Getter, x DAG) ([]wantjob.Result, er
 			nodeStores[i] = s
 			outRef = n.Value
 		case n.IsDerived():
-			input, err := PrepareInput(ctx, s, scratch, n.Inputs, resolve)
+			input, err := PrepareInput(ctx, scratch, union, n.Inputs, resolve)
 			if err != nil {
 				return nil, err
 			}

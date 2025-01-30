@@ -2,6 +2,7 @@
 package testwant
 
 import (
+	"os"
 	"runtime"
 	"testing"
 
@@ -15,6 +16,7 @@ const stateDir = "/tmp/want"
 
 func NewSystem(t testing.TB) *want.System {
 	ctx := testutil.Context(t)
+	require.NoError(t, os.MkdirAll(stateDir, 0o755))
 	sys := want.New(stateDir, runtime.GOMAXPROCS(0))
 	require.NoError(t, sys.Init(ctx))
 	return sys

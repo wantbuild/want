@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
+	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/wantdb"
 	"wantbuild.io/want/src/wantjob"
 )
@@ -77,4 +79,24 @@ func FastSync(ctx context.Context, dst cadata.Store, src cadata.Getter, root glf
 		return glfs.Sync(ctx, dst, src, root)
 	}
 	return err
+}
+
+func Check(ctx context.Context, src cadata.Getter, root glfs.Ref) error {
+	if yes, err := stores.ExistsOnGet(ctx, src, root.CID); err != nil {
+		return err
+	} else if !yes {
+		return fmt.Errorf("integrity check failed, store is missing %v", root.CID)
+	}
+	if root.Type == glfs.TypeTree {
+		tree, err := glfs.GetTree(ctx, src, root)
+		if err != nil {
+			return err
+		}
+		for _, ent := range tree.Entries {
+			if err := Check(ctx, src, ent.Ref); err != nil {
+				return fmt.Errorf("check entry at %s: %w", ent.Name, err)
+			}
+		}
+	}
+	return nil
 }

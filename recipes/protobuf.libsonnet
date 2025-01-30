@@ -37,23 +37,23 @@ local kernel = linux.bzImage;
 local compileGo(src) =
     local initScript = want.blob(|||
         #!/bin/sh
-        set -ve;
+        set -ve; 
         cd /root/
 
         export PATH=$PATH:/root/bin/
-        protoc -I/input/ --go_out=/output --go_opt=paths=source_relative --go-grpc_out=/output --go-grpc_opt=paths=source_relative /input/*.proto
-        exit;
+        protoc -I/input/ --go_out=/output --go_opt=paths=source_relative --go-grpc_out=/output --go-grpc_opt=paths=source_relative /input/*.proto 
     |||);
     local root = want.pass([
         want.input("", alpine.rootfs(alpine.ARCH_AMD64)),
-        want.input("/sbin/init", initScript),
+        want.input("/sbin/init", linux.dumbInit),
+        want.input("/initscript", initScript),
         want.input("/root", dist(arch="amd64", os="linux")),
         want.input("/root/bin/protoc-gen-go", protocGenGo, mode="777"),
         want.input("/root/bin/protoc-gen-go-grpc", protocGenGoGrpc, mode="777"),
         want.input("/input", src),
         want.input("/output", want.tree({})),
     ]);
-    want.qemu.amd64_microvm_virtiofs(1, 1e9, kernel, root, init=null, args=[], output="/output");
+    want.qemu.amd64_microvm_virtiofs(1, 1e9, kernel, root, init=null, args=["/initscript"], output="/output");
 
 {
     dist: dist,

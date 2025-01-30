@@ -1,12 +1,21 @@
 local want = import "want";
+local wassert = import "./assert.libsonnet";
+local linux = import "./linux.libsonnet";
 local alpine = import "./alpine.libsonnet";
 
-local kernel = want.selectFile(want.FACT, "recipes/linux/bzImage");
-local alpineRoot = want.selectDir(want.DERIVED, "recipes/alpine.want");
+local kernel = linux.bzImage;
+local alpineRoot = alpine.rootfs(alpine.ARCH_AMD64);
 
 local rootfs = want.pass([
     want.input("", alpineRoot),
-    want.input("/initscript", want.blob("reboot -f"))
+    want.input("/initscript", want.blob(|||
+        ls -l /
+        touch success.txt
+        reboot -f
+    |||))
 ]);
 
-want.qemu.amd64_microvm_virtiofs(1, 1e9, kernel, rootfs, init="/bin/sh", args=["initscript", ""])
+wassert.pathExists(
+    want.qemu.amd64_microvm_virtiofs(1, 1e9, kernel, rootfs, init="/bin/sh", args=["initscript", ""], output=""),
+    "success.txt"
+)

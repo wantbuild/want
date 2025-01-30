@@ -33,12 +33,22 @@ func (e *Executor) newVM_VirtioFS(jc wantjob.Ctx, src cadata.Getter, dir string,
 	vhostPath := filepath.Join(dir, "vhost.sock")
 	rootFSPath := filepath.Join(dir, rootFSName)
 
+	uid := os.Getuid()
+	gid := os.Getgid()
+	const maxIdRange = 1 << 16
 	// viriofsd
 	viofsCmd := func() *exec.Cmd {
 		args := []string{
 			fmt.Sprintf("--socket-path=%s", vhostPath),
 			fmt.Sprintf("--shared-dir=%s", rootFSPath),
-			// "--log-level=debug",
+			"--cache=always",
+			"--sandbox=namespace",
+
+			fmt.Sprintf("--translate-uid=squash-host:0:0:%d", maxIdRange),
+			fmt.Sprintf("--translate-gid=squash-host:0:0:%d", maxIdRange),
+			fmt.Sprintf("--translate-uid=squash-guest:0:%d:%d", uid, maxIdRange),
+			fmt.Sprintf("--translate-gid=squash-guest:0:%d:%d", gid, maxIdRange),
+			//"--log-level=debug",
 		}
 		cmd := e.virtiofsdCmd(args...)
 		cmd.Stdout = jc.Writer("virtiofsd/stdout")
