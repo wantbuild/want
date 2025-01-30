@@ -1,6 +1,7 @@
 package qemuops
 
 import (
+	_ "embed"
 	"fmt"
 	"io"
 	"os"
@@ -10,14 +11,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.brendoncarroll.net/state/cadata"
 
-	"wantbuild.io/want/recipes/linux"
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/testutil"
 	"wantbuild.io/want/src/internal/wantsetup"
 	"wantbuild.io/want/src/wantjob"
 )
 
-var bzImage = linux.BzImage
+//go:embed bzImage
+var bzImage []byte
 
 func TestKArgBuilder(t *testing.T) {
 	tcs := []struct {
@@ -77,29 +78,6 @@ func TestConfigArgs(t *testing.T) {
 			require.Equal(t, tc.O, args)
 		})
 	}
-}
-
-func TestPostGetTask(t *testing.T) {
-	ctx := testutil.Context(t)
-	s := stores.NewMem()
-
-	x := MicroVMTask{
-		Cores:  1,
-		Memory: 1024 * 1e6,
-		Kernel: testutil.PostBlob(t, s, bzImage),
-		Root: testutil.PostFS(t, s, map[string][]byte{
-			"a": []byte("1"),
-			"b": []byte("2"),
-			"c": []byte("3"),
-		}),
-	}
-
-	ref, err := PostMicroVMTask(ctx, s, x)
-	require.NoError(t, err)
-	y, err := GetMicroVMTask(ctx, s, *ref)
-	require.NoError(t, err)
-	require.NotNil(t, y)
-	require.Equal(t, x, *y)
 }
 
 func TestInstall(t *testing.T) {

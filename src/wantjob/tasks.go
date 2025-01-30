@@ -9,9 +9,13 @@ import (
 	"wantbuild.io/want/src/internal/stores"
 )
 
+// MaxInputSize is the maximum size of a Task.Input
+const MaxInputSize = 1 << 16
+
 // OpName refers to a Operation in Want.
 type OpName string
 
+// TaskID uniquely identifies Tasks
 type TaskID = cadata.ID
 
 // Task is a well defined unit of work.
@@ -20,7 +24,7 @@ type Task struct {
 	Input []byte
 }
 
-func (t Task) ID() cadata.ID {
+func (t Task) ID() TaskID {
 	return productHash(stores.Hash, []byte(t.Op), t.Input)
 }
 

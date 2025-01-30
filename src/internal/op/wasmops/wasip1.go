@@ -1,9 +1,6 @@
 package wasmops
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,87 +15,7 @@ import (
 	"wantbuild.io/want/src/wantjob"
 )
 
-const (
-	MaxProgramSize = 1e8
-	MaxConfigSize  = 1e6
-)
-
-// WASIp1Task
-type WASIp1Task struct {
-	Memory  uint64
-	Program []byte
-	Input   glfs.Ref
-	Args    []string
-	Env     map[string]string
-}
-
-type configFile struct {
-	Args   []string          `json:"args"`
-	Env    map[string]string `json:"env"`
-	Memory uint64            `json:"memory"`
-}
-
-// PostTask converts a Task to a glfs Tree stored in s.
-func PostWASIp1Task(ctx context.Context, ag *glfs.Agent, s cadata.Poster, task WASIp1Task) (*glfs.Ref, error) {
-	fRef, err := ag.PostBlob(ctx, s, bytes.NewReader(task.Program))
-	if err != nil {
-		return nil, err
-	}
-	data, err := json.Marshal(configFile{
-		Args:   task.Args,
-		Env:    task.Env,
-		Memory: task.Memory,
-	})
-	if err != nil {
-		return nil, err
-	}
-	configRef, err := ag.PostBlob(ctx, s, bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	return ag.PostTreeMap(ctx, s, map[string]glfs.Ref{
-		"program":     *fRef,
-		"input":       task.Input,
-		"config.json": *configRef,
-	})
-}
-
-// GetTask parses a task from a glfs Tree.
-func GetWASIp1Task(ctx context.Context, ag *glfs.Agent, s cadata.Getter, ref glfs.Ref) (*WASIp1Task, error) {
-	fRef, err := ag.GetAtPath(ctx, s, ref, "program")
-	if err != nil {
-		return nil, err
-	}
-	progData, err := ag.GetBlobBytes(ctx, s, *fRef, MaxProgramSize)
-	if err != nil {
-		return nil, fmt.Errorf("getting wasm function: %w", err)
-	}
-	inputRef, err := ag.GetAtPath(ctx, s, ref, "input")
-	if err != nil {
-		return nil, err
-	}
-	configRef, err := ag.GetAtPath(ctx, s, ref, "config.json")
-	if err != nil {
-		return nil, err
-	}
-	data, err := ag.GetBlobBytes(ctx, s, *configRef, MaxConfigSize)
-	if err != nil {
-		return nil, err
-	}
-	var config configFile
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, err
-	}
-	return &WASIp1Task{
-		Program: progData,
-		Memory:  config.Memory,
-		Input:   *inputRef,
-		Args:    config.Args,
-		Env:     config.Env,
-	}, nil
-}
-
-func ComputeWASIp1(jc wantjob.Ctx, src cadata.Getter, task WASIp1Task) (*glfs.Ref, error) {
+func ExecWASIp1(jc wantjob.Ctx, src cadata.Getter, task WASIp1Task) (*glfs.Ref, error) {
 	ctx := jc.Context
 	if task.Memory == 0 {
 		task.Memory = 4 * 1e9

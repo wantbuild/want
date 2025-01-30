@@ -22,15 +22,21 @@ type executor struct {
 	sf    singleflight.Group[wantjob.TaskID, []byte]
 }
 
-type executorConfig struct {
-	QEMU qemuops.Config
+type QEMUConfig = qemuops.Config
+
+type ExecutorConfig struct {
+	QEMU QEMUConfig
 
 	GoDir string
 }
 
+func NewExecutor(cfg ExecutorConfig) wantjob.Executor {
+	return newExecutor(cfg)
+}
+
 // newExecutor
 // qemuDir is the qemu install dir
-func newExecutor(cfg executorConfig) *executor {
+func newExecutor(cfg ExecutorConfig) *executor {
 
 	qemuExec := qemuops.NewExecutor(cfg.QEMU)
 	golangExec := goops.NewExecutor(cfg.GoDir)

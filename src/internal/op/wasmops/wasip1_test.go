@@ -19,26 +19,6 @@ import (
 	"wantbuild.io/want/src/wantjob"
 )
 
-func TestTaskPostGet(t *testing.T) {
-	ctx := testutil.Context(t)
-	glfsAg := glfs.NewAgent()
-	s := stores.NewMem()
-	wasmBytes := buildWASMBin(t, "testdata/hello/hello.go")
-	inputRef, err := glfsAg.PostTreeEntries(ctx, s, nil)
-	require.NoError(t, err)
-	task := WASIp1Task{
-		Program: wasmBytes,
-		Input:   *inputRef,
-	}
-	tref, err := PostWASIp1Task(ctx, glfsAg, s, task)
-	require.NoError(t, err)
-	t.Log(tref)
-
-	task2, err := GetWASIp1Task(ctx, glfsAg, s, *tref)
-	require.NoError(t, err)
-	require.Equal(t, task, *task2)
-}
-
 func TestWASIp1(t *testing.T) {
 	ctx := testutil.Context(t)
 	s := stores.NewMem()
@@ -65,7 +45,7 @@ func TestWASIp1(t *testing.T) {
 	}
 	for i, tc := range tcs {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			out, err := ComputeWASIp1(jc, s, tc.Task)
+			out, err := ExecWASIp1(jc, s, tc.Task)
 			if tc.Err == nil {
 				require.NoError(t, err)
 			} else {

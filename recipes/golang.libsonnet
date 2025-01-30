@@ -1,4 +1,5 @@
 local want = import "want";
+local linux = import "./linux.libsonnet";
 
 local currentVersion = "1.23.4";
 
@@ -23,10 +24,36 @@ local makeExec(modSrc, main, goarch, goos) = want.golang.makeExec(modSrc, modDow
 
 local makeTestExec(modSrc, main, goarch, goos) = want.golang.makeTestExec(modSrc, modDownload(modSrc), main, goarch, goos);
 
+local wantGoExec = makeExec(
+    want.selectDir(want.FACT, ""),
+    "recipes/golang/wantgo_main",
+    goarch="wasm", goos="wasip1",
+);
+
+local defaultBaseFS = want.tree({
+    "tmp": want.treeEntry("777", want.tree({})),
+});
+
+local runTests(modSrc, basefs=defaultBaseFS, ignore=[]) =
+    local task = want.pass([
+        want.input("module", modSrc),
+        want.input("modcache", modDownload(modSrc)), 
+        want.input("run_tests.json", want.blob(std.manifestJsonEx({
+            GOOS : "linux",
+            GOARCH : "amd64",
+            Ignore: ignore,
+        },""))),
+        want.input("basefs", basefs),
+        want.input("kernel", linux.bzImage),
+    ]);
+    want.wasm.nativeGLFS(1e9, wantGoExec, task, ["", "runTests"]);
+
+
 {
     dist :: dist,
     pathSet :: pathSet,
     modDownload :: modDownload,    
     makeExec :: makeExec,
     makeTestExec :: makeTestExec,
+    runTests :: runTests,
 }

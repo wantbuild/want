@@ -1,7 +1,6 @@
 package wasmops
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,52 +12,10 @@ import (
 
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/wantjob"
+	"wantbuild.io/want/src/wantwasm"
 )
 
-// GLFSTask is a Git-Like Filesystem Task
-type GLFSTask struct {
-	Program []byte
-	Input   glfs.Ref
-	Memory  uint64
-	Args    []string
-	Env     map[string]string
-}
-
-func GetGLFSTask(ctx context.Context, ag *glfs.Agent, store cadata.Getter, ref glfs.Ref) (*GLFSTask, error) {
-	fRef, err := ag.GetAtPath(ctx, store, ref, "program")
-	if err != nil {
-		return nil, err
-	}
-	progData, err := ag.GetBlobBytes(ctx, store, *fRef, MaxProgramSize)
-	if err != nil {
-		return nil, fmt.Errorf("getting wasm function: %w", err)
-	}
-	inputRef, err := ag.GetAtPath(ctx, store, ref, "input")
-	if err != nil {
-		return nil, err
-	}
-	configRef, err := ag.GetAtPath(ctx, store, ref, "config.json")
-	if err != nil {
-		return nil, err
-	}
-	data, err := ag.GetBlobBytes(ctx, store, *configRef, MaxConfigSize)
-	if err != nil {
-		return nil, err
-	}
-	var config configFile
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, err
-	}
-	return &GLFSTask{
-		Program: progData,
-		Memory:  config.Memory,
-		Input:   *inputRef,
-		Args:    config.Args,
-		Env:     config.Env,
-	}, nil
-}
-
-func (e *Executor) ComputeNative(jc wantjob.Ctx, s cadata.Getter, task GLFSTask) (*glfs.Ref, error) {
+func (e *Executor) ExecNativeGLFS(jc wantjob.Ctx, s cadata.Getter, task wantwasm.NativeGLFSTask) (*glfs.Ref, error) {
 	ctx := jc.Context
 	if task.Memory == 0 {
 		task.Memory = 1e9

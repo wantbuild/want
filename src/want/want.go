@@ -88,8 +88,8 @@ func (s *System) init(ctx context.Context, install bool) error {
 		}
 	}
 
-	exec := newExecutor(executorConfig{
-		QEMU: qemuops.Config{
+	exec := newExecutor(ExecutorConfig{
+		QEMU: QEMUConfig{
 			InstallDir: s.qemuDir(),
 			MemLimit:   4e9,
 		},
@@ -117,6 +117,10 @@ func (s *System) Close() error {
 
 func (sys *System) ListJobInfos(ctx context.Context) ([]*wantjob.JobInfo, error) {
 	return sys.jobs.ListInfos(ctx)
+}
+
+func (sys *System) JobSystem() wantjob.System {
+	return sys.jobs
 }
 
 func (sys *System) Eval(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, calledFrom string, expr []byte) (*glfs.Ref, cadata.Getter, error) {

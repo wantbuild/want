@@ -5,7 +5,6 @@ package wantwasm
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io/fs"
 	"log"
@@ -18,6 +17,7 @@ import (
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/stores"
+	"wantbuild.io/want/src/wantjob"
 )
 
 //go:wasmimport want input
@@ -79,6 +79,18 @@ func (s nativeStore) Get(ctx context.Context, id cadata.ID, buf []byte) (int, er
 	return int(n), nil
 }
 
+func (s nativeStore) Exists(ctx context.Context, id cadata.ID) (bool, error) {
+	return stores.ExistsUsingGet(ctx, s, id)
+}
+
+func (s nativeStore) Delete(ctx context.Context, id cadata.ID) error {
+	return errors.New("Delete not supported")
+}
+
+func (s nativeStore) List(ctx context.Context, span cadata.Span, ids []cadata.ID) (int, error) {
+	return 0, errors.New("List not supported")
+}
+
 func (s nativeStore) Hash(x []byte) cadata.ID {
 	return stores.Hash(x)
 }
@@ -87,24 +99,26 @@ func (s nativeStore) MaxSize() int {
 	return stores.MaxBlobSize
 }
 
-func Main(fn func(ctx context.Context, s cadata.GetPoster, x glfs.Ref) (*glfs.Ref, error)) {
+// Main should be called immediately, it will manage:
+// - getting the intput
+// - setting up the job context
+// - running fn with those things
+// - setting the output and cleaning up
+func Main(fn func(jc wantjob.Ctx, src cadata.Getter, x []byte) ([]byte, error)) {
 	inputData, err := getInput()
 	if err != nil {
 		log.Fatal(err)
 	}
-	var x glfs.Ref
-	if err := json.Unmarshal(inputData, &x); err != nil {
-		log.Fatal(err)
+	s := nativeStore{}
+	jc := wantjob.Ctx{
+		Context: context.Background(),
+		Dst:     s,
 	}
-	y, err := fn(context.TODO(), nativeStore{}, x)
+	y, err := fn(jc, s, inputData)
 	if err != nil {
 		log.Fatal(err)
 	}
-	outputData, err := json.Marshal(y)
-	if err != nil {
-		log.Fatal(err)
-	}
-	setOutput(outputData)
+	setOutput(y)
 }
 
 func importPath(ctx context.Context, s cadata.Store, p string, finfo os.FileInfo) (*glfs.Ref, error) {

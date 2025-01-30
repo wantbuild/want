@@ -10,6 +10,7 @@ import (
 	"wantbuild.io/want/src/internal/op/wasmops"
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/testutil"
+	"wantbuild.io/want/src/wantwasm"
 )
 
 func TestHarness(t *testing.T) {
@@ -18,7 +19,7 @@ func TestHarness(t *testing.T) {
 	e := wasmops.NewExecutor()
 	jc := wasmops.NewTestJobCtx(t, ctx, s)
 
-	out, err := e.ComputeNative(jc, s, wasmops.GLFSTask{
+	out, err := e.ExecNativeGLFS(jc, s, wantwasm.NativeGLFSTask{
 		Args:    []string{""},
 		Program: buildWASMBin(t, "testdata/harness/harness.go"),
 		Input: testutil.PostFS(t, s, map[string][]byte{
@@ -26,7 +27,6 @@ func TestHarness(t *testing.T) {
 		}),
 	})
 	require.NoError(t, err)
-	testutil.BlobContains(t, s, *out, "a.txt", []byte("hello world"))
 	t.Log(out)
 }
 

@@ -25,6 +25,10 @@ func ExistsOnGet(ctx context.Context, src cadata.Getter, id cadata.ID) (bool, er
 	if e, ok := src.(cadata.Exister); ok {
 		return e.Exists(ctx, id)
 	}
+	return ExistsUsingGet(ctx, src, id)
+}
+
+func ExistsUsingGet(ctx context.Context, src cadata.Getter, id cadata.ID) (bool, error) {
 	_, err := src.Get(ctx, id, make([]byte, src.MaxSize()))
 	if err != nil {
 		if cadata.IsNotFound(err) {

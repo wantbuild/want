@@ -1,18 +1,13 @@
-package qemuops
+package wantqemu
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
-
-	"wantbuild.io/want/src/wantjob"
-)
-
-const (
-	OpAmd64MicroVMVirtioFS = wantjob.OpName("amd64_microvm_virtiofs")
 )
 
 // MicroVMTask is an Amd64 Linux MicroVM Task
@@ -43,13 +38,14 @@ type MicroVMConfig struct {
 	Output string   `json:"output,omitempty"`
 }
 
-func PostMicroVMTask(ctx context.Context, s cadata.Store, x MicroVMTask) (*glfs.Ref, error) {
+func PostMicroVMTask(ctx context.Context, s cadata.Poster, x MicroVMTask) (*glfs.Ref, error) {
 	ag := glfs.NewAgent()
 	configData, err := json.Marshal(MicroVMConfig{
 		Cores:  x.Cores,
 		Memory: x.Memory,
 		Args:   x.Args,
-		Output: x.Output,
+		Init:   x.Init,
+		Output: strings.Trim(x.Output, "/"),
 	})
 	if err != nil {
 		return nil, err

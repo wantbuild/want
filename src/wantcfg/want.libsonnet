@@ -244,6 +244,31 @@ local golang = {
     ),
 };
 
+local wasm = {
+    wasip1 :: function(memory, wasm, inp, args=[], env={})
+        local config = blob(std.manifestJsonEx({
+            args: args,
+            env: env,
+            memory: memory,
+        }, ""));
+        compute("wasm.wasip1", [
+            input("program", wasm),
+            input("input", inp),
+            input("config.json", config)
+        ]),
+    nativeGLFS :: function(memory, wasm, inp, args=[], env={})
+        local config = blob(std.manifestJsonEx({
+            args: args,
+            env: env,
+            memory: memory,
+        }, ""));
+        compute("wasm.nativeFunction", [
+            input("program", wasm),
+            input("input", inp),
+            input("config.json", config)
+        ]),
+};
+
 {
     // Literal
 
@@ -306,4 +331,7 @@ local golang = {
 
     // Golang
     golang :: golang,
+
+    // WASM
+    wasm :: wasm,
 }

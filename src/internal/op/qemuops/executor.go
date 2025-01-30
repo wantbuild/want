@@ -14,7 +14,14 @@ import (
 
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/wantjob"
+	"wantbuild.io/want/src/wantqemu"
 )
+
+const (
+	OpAmd64MicroVMVirtioFS = wantjob.OpName("amd64_microvm_virtiofs")
+)
+
+type MicroVMTask = wantqemu.MicroVMTask
 
 var _ wantjob.Executor = &Executor{}
 
@@ -42,7 +49,7 @@ func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task)
 	switch task.Op {
 	case OpAmd64MicroVMVirtioFS:
 		return glfstasks.Exec(task.Input, func(x glfs.Ref) (*glfs.Ref, error) {
-			t, err := GetMicroVMTask(ctx, src, x)
+			t, err := wantqemu.GetMicroVMTask(ctx, src, x)
 			if err != nil {
 				return nil, err
 			}

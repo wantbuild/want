@@ -14,14 +14,13 @@ import (
 	"wantbuild.io/want/src/wantjob"
 )
 
+const MakeTestExecConfigFilename = "makeTestExec.json"
+
 type MakeTestExecTask struct {
 	Module   glfs.Ref
 	ModCache *glfs.Ref
-	MakeTestExecConfig
-}
 
-func (t MakeTestExecTask) Validate() error {
-	return nil
+	MakeTestExecConfig
 }
 
 type MakeTestExecConfig struct {
@@ -39,7 +38,7 @@ func GetMakeTestExecTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*Mak
 	if err != nil && !glfs.IsErrNoEnt(err) {
 		return nil, err
 	}
-	configRef, err := glfs.GetAtPath(ctx, s, x, "config.json")
+	configRef, err := glfs.GetAtPath(ctx, s, x, MakeTestExecConfigFilename)
 	if err != nil {
 		return nil, err
 	}
@@ -68,8 +67,8 @@ func PostMakeTestExecTask(ctx context.Context, s cadata.Poster, x MakeTestExecTa
 		return nil, err
 	}
 	m := map[string]glfs.Ref{
-		"module":      x.Module,
-		"config.json": *configRef,
+		"module":                   x.Module,
+		MakeTestExecConfigFilename: *configRef,
 	}
 	if x.ModCache != nil {
 		m["modcache"] = *x.ModCache
@@ -79,9 +78,6 @@ func PostMakeTestExecTask(ctx context.Context, s cadata.Poster, x MakeTestExecTa
 
 func (e *Executor) MakeTestExec(jc wantjob.Ctx, src cadata.Getter, task MakeTestExecTask) (*glfs.Ref, error) {
 	ctx := jc.Context
-	if err := task.Validate(); err != nil {
-		return nil, err
-	}
 	dir, cleanup, err := e.mkdirTemp(ctx, "makeTestExec-")
 	if err != nil {
 		return nil, err
