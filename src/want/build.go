@@ -55,6 +55,9 @@ func Build(ctx context.Context, jobs wantjob.System, src cadata.Getter, bt Build
 	nrs := br.NodeResults
 	plan := br.Plan
 	rootRes := nrs[plan.LastNode]
+	if err := rootRes.Err(); err != nil {
+		return nil, err
+	}
 	outRoot, err := glfstasks.ParseGLFSRef(rootRes.Data)
 	if err != nil {
 		return nil, err

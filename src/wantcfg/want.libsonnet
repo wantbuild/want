@@ -262,7 +262,7 @@ local wasm = {
             env: env,
             memory: memory,
         }, ""));
-        compute("wasm.nativeFunction", [
+        compute("wasm.nativeGLFS", [
             input("program", wasm),
             input("input", inp),
             input("config.json", config)
