@@ -8,6 +8,7 @@ import (
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
+	"golang.org/x/sync/errgroup"
 
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/stores"
@@ -73,52 +74,63 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 	if err != nil {
 		return nil, err
 	}
-	if buildTask.Prefix != "" {
-		dagRef, err := wantdag.EditDAG(ctx, jc.Dst, planStore, plan.DAG, func(x wantdag.DAG) (*wantdag.DAG, error) {
-			last := wantdag.NodeID(len(x.Nodes) - 1)
-			// path
-			pathRef, err := glfs.PostBlob(ctx, jc.Dst, strings.NewReader(buildTask.Prefix))
-			if err != nil {
-				return nil, err
-			}
-			x.Nodes = append(x.Nodes, wantdag.Node{
-				Value: pathRef,
-			})
-			// derive pick
-			x.Nodes = append(x.Nodes, wantdag.Node{
-				Op: "glfs.pick",
-				Inputs: []wantdag.NodeInput{
-					{Name: "x", Node: last},
-					{Name: "path", Node: last + 1},
-				},
-			})
-			return &x, nil
-		})
-
-		if err != nil {
-			return nil, err
+	// filter targets
+	var targets []wantc.Target
+	var dags []glfs.Ref
+	for _, target := range plan.Targets {
+		if wantc.Intersects(target.To, buildTask.Query) {
+			targets = append(targets, target)
+			dags = append(dags, target.DAG)
 		}
-		plan.LastNode += 2 // Change this if you add more nodes above
-		plan.DAG = *dagRef
 	}
 	// execute
-	s := stores.Union{src, planStore, jc.Dst}
-	dagResRef, dagStore, err := glfstasks.Do(jc.Context, jc.System, s, e.DAGExecOp, plan.DAG)
+	results := make([]wantjob.Result, len(dags))
+	src2 := stores.Union{src, planStore}
+	eg := errgroup.Group{}
+	for i := range dags {
+		i := i
+		eg.Go(func() error {
+			defer jc.InfoSpan("build " + targets[i].DefinedIn)()
+			res, dagStore, err := wantjob.Do(ctx, jc.System, src2, wantjob.Task{
+				Op:    e.DAGExecOp,
+				Input: glfstasks.MarshalGLFSRef(dags[i]),
+			})
+			if err != nil {
+				return err
+			}
+			if ref, err := glfstasks.ParseGLFSRef(res.Data); err == nil {
+				if err := glfstasks.FastSync(ctx, jc.Dst, dagStore, *ref); err != nil {
+					return err
+				}
+			}
+			results[i] = *res
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	groundRef, err := wantc.Select(ctx, jc.Dst, src2, plan.Known, buildTask.Query)
 	if err != nil {
 		return nil, err
 	}
-	df := jc.InfoSpan("syncing results")
-	if err := glfstasks.FastSync(ctx, jc.Dst, dagStore, *dagResRef); err != nil {
-		return nil, err
+	layers := []glfs.Ref{*groundRef}
+	for i := range targets {
+		if ref, err := glfstasks.ParseGLFSRef(results[i].Data); err == nil {
+			layers = append(layers, *ref)
+		}
 	}
-	df()
-	nrs, err := wantdag.GetNodeResults(ctx, dagStore, *dagResRef)
+	outRef, err := glfs.Merge(ctx, stores.Fork{W: jc.Dst, R: src2}, layers...)
 	if err != nil {
 		return nil, err
 	}
 	return PostBuildResult(ctx, jc.Dst, BuildResult{
-		Plan:        *plan,
-		NodeResults: nrs,
+		Query:         buildTask.Query,
+		Plan:          *plan,
+		Targets:       targets,
+		TargetResults: results,
+		Output:        outRef,
 	})
 }
 
@@ -148,7 +160,7 @@ func (e Executor) CompileSnippet(ctx context.Context, dst cadata.Store, s cadata
 	if err != nil {
 		return nil, err
 	}
-	return wantdag.PostDAG(ctx, dst, *dag)
+	return wantdag.PostDAG(ctx, dst, dag)
 }
 
 func (e Executor) PathSetRegexp(jc wantjob.Ctx, dst cadata.Store, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {

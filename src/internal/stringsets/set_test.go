@@ -12,9 +12,9 @@ func TestComplement(t *testing.T) {
 	xs := []Set{
 		Prefix("abc"),
 		Suffix("abc"),
-		Single("key"),
-		Or{Single("key1"), Single("key2")},
-		And{Not{Single("key")}, Not{Single("key2")}},
+		Unit("key"),
+		Or{Unit("key1"), Unit("key2")},
+		And{Not{Unit("key")}, Not{Unit("key2")}},
 	}
 	for i, x := range xs {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
@@ -33,24 +33,24 @@ func TestIntersects(t *testing.T) {
 	}
 
 	tcs := []testCase{
-		{Single("key1"), Empty{}, false},
+		{Unit("key1"), Empty{}, false},
 		{Prefix("key1"), Empty{}, false},
 		{Suffix("key1"), Empty{}, false},
-		{Not{Single("key1")}, Empty{}, false},
+		{Not{Unit("key1")}, Empty{}, false},
 
-		{Single("key1"), Single("key1"), true},
-		{Single("key1"), Single("key2"), false},
+		{Unit("key1"), Unit("key1"), true},
+		{Unit("key1"), Unit("key2"), false},
 
-		{Prefix("a"), Single("abc"), true},
-		{Prefix("aa"), Single("b"), false},
+		{Prefix("a"), Unit("abc"), true},
+		{Prefix("aa"), Unit("b"), false},
 
-		{Suffix("z"), Single("xyz"), true},
-		{Suffix("zz"), Single("b"), false},
+		{Suffix("z"), Unit("xyz"), true},
+		{Suffix("zz"), Unit("b"), false},
 
-		{Not{Single("key1")}, Single("key1"), false},
-		{Not{Single("key1")}, Not{Single("key2")}, true},
-		{Not{Single("key1")}, Empty{}, false},
-		{Not{Single("key1")}, Top{}, true},
+		{Not{Unit("key1")}, Unit("key1"), false},
+		{Not{Unit("key1")}, Not{Unit("key2")}, true},
+		{Not{Unit("key1")}, Empty{}, false},
+		{Not{Unit("key1")}, Top{}, true},
 		{
 			And{Prefix("mydir/"), Not{Prefix("mydir/not-this")}},
 			Prefix("mydir/not-this"),
@@ -62,8 +62,8 @@ func TestIntersects(t *testing.T) {
 			true,
 		},
 		{
-			Or{Prefix(".git/"), Single(".git")},
-			Single(".git/objects/f2"),
+			Or{Prefix(".git/"), Unit(".git")},
+			Unit(".git/objects/f2"),
 			true,
 		},
 	}
@@ -86,16 +86,16 @@ func TestEquals(t *testing.T) {
 	}
 
 	tcs := []testCase{
-		{Single("key1"), Single("key1"), true},
-		{Single("key1"), Single("key2"), false},
+		{Unit("key1"), Unit("key1"), true},
+		{Unit("key1"), Unit("key2"), false},
 
-		{Not{Single("key1")}, Not{Single("key1")}, true},
-		{Not{Single("key1")}, Not{Single("key2")}, false},
-		{Not{Single("key1")}, Empty{}, false},
-		{Not{Single("key1")}, Top{}, false},
+		{Not{Unit("key1")}, Not{Unit("key1")}, true},
+		{Not{Unit("key1")}, Not{Unit("key2")}, false},
+		{Not{Unit("key1")}, Empty{}, false},
+		{Not{Unit("key1")}, Top{}, false},
 
-		{And{Single("key1"), And{Not{Single("key1")}, Not{Single("key2")}}}, Empty{}, true},
-		{And{Not{Single("key2")}, Or{Single("key1"), Single("key2")}}, Single("key1"), true},
+		{And{Unit("key1"), And{Not{Unit("key1")}, Not{Unit("key2")}}}, Empty{}, true},
+		{And{Not{Unit("key2")}, Or{Unit("key1"), Unit("key2")}}, Unit("key1"), true},
 		{And{Suffix("zzz"), Not{Suffix("zz")}}, Empty{}, true},
 
 		{Not{Or{Prefix("abc"), Suffix("xyz")}}, And{Not{Prefix("abc")}, Not{Suffix("xyz")}}, true},
@@ -121,7 +121,7 @@ func TestSuperset(t *testing.T) {
 			And{Prefix("aa"), Suffix("zz")},
 			And{Prefix("aaa"), Suffix("zzz")},
 		},
-		{Single("key1"), Empty{}},
+		{Unit("key1"), Empty{}},
 		{Prefix("aa"), Prefix("aaa")},
 		{Suffix("zz"), Suffix("zzz")},
 	}
@@ -169,16 +169,16 @@ func TestSimplify(t *testing.T) {
 			Out: Prefix("a"),
 		},
 		{
-			In:  Not{Not{Single("a")}},
-			Out: Single("a"),
+			In:  Not{Not{Unit("a")}},
+			Out: Unit("a"),
 		},
 		{
-			In:  And{Single("key1"), Single("key2")},
+			In:  And{Unit("key1"), Unit("key2")},
 			Out: Empty{},
 		},
 		{
-			In:  And{Not{Single("key1")}, Single("key2")},
-			Out: Single("key2"),
+			In:  And{Not{Unit("key1")}, Unit("key2")},
+			Out: Unit("key2"),
 		},
 	}
 	for i, tc := range tcs {

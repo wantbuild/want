@@ -26,7 +26,7 @@ func Install(ctx context.Context, jsys wantjob.System, outDir string, snippet st
 		return err
 	}
 	jc := wantjob.Ctx{Context: ctx, Dst: s, System: jsys}
-	res, err := wantdag.SerialExecLast(jc, s, *dag)
+	res, err := wantdag.SerialExecLast(jc, s, dag)
 	if err != nil {
 		return err
 	}

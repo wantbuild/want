@@ -131,35 +131,17 @@ func (sys *System) Eval(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, c
 	if err != nil {
 		return nil, nil, err
 	}
-	dagRef, err := wantdag.PostDAG(ctx, s, *dag)
+	dagRef, err := wantdag.PostDAG(ctx, s, dag)
 	if err != nil {
 		return nil, nil, err
 	}
-	return doGLFS(ctx, sys.jobs, s, joinOpName("dag", dagops.OpExecLast), *dagRef)
+	return glfstasks.Do(ctx, sys.jobs, s, joinOpName("dag", dagops.OpExecLast), *dagRef)
 }
 
 // IsModule returns true if the tree at x is a valid want module.
 // All non-tree refs return (false, nil)
 func IsModule(ctx context.Context, src cadata.Getter, x glfs.Ref) (bool, error) {
 	return wantc.IsModule(ctx, src, x)
-}
-
-func doGLFS(ctx context.Context, jobs wantjob.System, src cadata.Getter, op wantjob.OpName, input glfs.Ref) (*glfs.Ref, cadata.Getter, error) {
-	res, s, err := wantjob.Do(ctx, jobs, src, wantjob.Task{
-		Op:    op,
-		Input: glfstasks.MarshalGLFSRef(input),
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := res.Err(); err != nil {
-		return nil, nil, err
-	}
-	ref, err := glfstasks.ParseGLFSRef(res.Data)
-	if err != nil {
-		return nil, nil, err
-	}
-	return ref, s, nil
 }
 
 func joinOpName(xs ...wantjob.OpName) (ret wantjob.OpName) {

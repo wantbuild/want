@@ -206,7 +206,7 @@ func (c *Compiler) compileSelection(ctx context.Context, cs *compileState, exprP
 	switch x.Source {
 	case wantcfg.Derived:
 		ks := SetFromQuery(x.CallerPath, x.Query)
-		ks = stringsets.Subtract(ks, stringsets.Single(x.CallerPath))
+		ks = stringsets.Subtract(ks, stringsets.Unit(x.CallerPath))
 		ks = stringsets.Simplify(ks)
 		return &selection{
 			set:        ks,

@@ -5,33 +5,35 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/blobcache/glfs"
+	"go.brendoncarroll.net/exp/streams"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/stringsets"
-	"wantbuild.io/want/src/internal/wantdag"
 	"wantbuild.io/want/src/wantcfg"
 )
 
 // Target is a (Set[string], Expr) pair.
 type Target struct {
+	// To is where the Target outptus To.
+	// The DAG will evaluate to a filesystem which only contains paths in this set.
 	To wantcfg.PathSet `json:"to"`
-	// Node is the node in the graph which can be evaluated to produce this target
-	Node wantdag.NodeID `json:"node"`
+	// DAG contains a compiled program to build the target
+	DAG glfs.Ref `json:"dag"`
 	// Expr is an expression which is equivalent to this target
 	Expr wantcfg.Expr `json:"expr"`
 
-	// IsDerived is true when this target is computed
-	IsDerived bool `json:"is_derived"`
-	// IsStatement is true when the target is from a statement file
-	IsStatement bool `json:"is_statement"`
-	// IsExport is true when the file should be exported.
-	IsExport bool `json:"is_export"`
 	// DefinedIn is the path of the file that defines the Target
 	DefinedIn string `json:"defined_in"`
+
+	// IsStatement is true when the target is from a statement file
+	IsStatement bool `json:"is_statement"`
 	// If the Target is defined in a statement file, this will be the statement number
 	DefinedNum int `json:"defined_num"`
+	// IsExport is true when the file should be exported.
+	IsExport bool `json:"is_export"`
 }
 
 func (t Target) BoundingPrefix() string {
@@ -40,14 +42,9 @@ func (t Target) BoundingPrefix() string {
 
 // Plan is the result of compilation.
 type Plan struct {
-	// DAG is the graph which can be executed to derive all targets
-	DAG      glfs.Ref       `json:"graph"`
-	LastNode wantdag.NodeID `json:"last_node"`
-	Targets  []Target       `json:"targets"`
-}
-
-func (p *Plan) GetDAG(ctx context.Context, s cadata.Getter) (*wantdag.DAG, error) {
-	return wantdag.GetDAG(ctx, s, p.DAG)
+	Source  glfs.Ref `json:"source"`
+	Known   glfs.Ref `json:"known"`
+	Targets []Target `json:"targets"`
 }
 
 func PostPlan(ctx context.Context, s cadata.Poster, x Plan) (*glfs.Ref, error) {
@@ -59,31 +56,68 @@ func PostPlan(ctx context.Context, s cadata.Poster, x Plan) (*glfs.Ref, error) {
 	if err != nil {
 		return nil, err
 	}
-	return glfs.PostTreeMap(ctx, s, map[string]glfs.Ref{
-		"dag":       x.DAG,
-		"plan.json": *planRef,
-	})
+	ents := []glfs.TreeEntry{
+		{Name: "plan.json", FileMode: 0o777, Ref: *planRef},
+		{Name: "known", FileMode: 0o777, Ref: x.Known},
+	}
+	for i, target := range x.Targets {
+		ents = append(ents, glfs.TreeEntry{
+			Name:     fmt.Sprintf("dag_%08d", i),
+			FileMode: 0o777,
+			Ref:      target.DAG,
+		})
+	}
+	return glfs.PostTreeEntries(ctx, s, ents)
 }
 
+const MaxPlanSize = 1e6
+
 func GetPlan(ctx context.Context, s cadata.Getter, x glfs.Ref) (*Plan, error) {
-	dagRef, err := glfs.GetAtPath(ctx, s, x, "dag")
-	if err != nil {
-		return nil, err
-	}
-	planRef, err := glfs.GetAtPath(ctx, s, x, "plan.json")
-	if err != nil {
-		return nil, err
-	}
-	planData, err := glfs.GetBlobBytes(ctx, s, *planRef, 1<<20)
+	ag := glfs.NewAgent()
+	tr, err := ag.NewTreeReader(s, x)
 	if err != nil {
 		return nil, err
 	}
 	var plan Plan
-	if err := json.Unmarshal(planData, &plan); err != nil {
-		return nil, err
+	var dags []glfs.Ref
+	for {
+		ent, err := streams.Next(ctx, tr)
+		if err != nil {
+			if streams.IsEOS(err) {
+				break
+			}
+			return nil, err
+		}
+		switch {
+		case ent.Name == "plan.json":
+			data, err := ag.GetBlobBytes(ctx, s, ent.Ref, MaxPlanSize)
+			if err != nil {
+				return nil, err
+			}
+			if err := json.Unmarshal(data, &plan); err != nil {
+				return nil, err
+			}
+		case ent.Name == "known":
+			plan.Known = ent.Ref
+		case strings.HasPrefix(ent.Name, "dag_"):
+			dags = append(dags, ent.Ref)
+		default:
+			return nil, fmt.Errorf("plan tree has unknown entry %s", ent.Name)
+		}
 	}
-	if !dagRef.Equals(plan.DAG) {
-		return nil, fmt.Errorf("DAG Ref in plan.json does not match actual")
+	if plan.Source == (glfs.Ref{}) {
+		return nil, fmt.Errorf("plan is missing valid plan.json")
+	}
+	if plan.Known == (glfs.Ref{}) {
+		return nil, fmt.Errorf("plan is missing known tree")
+	}
+	if len(plan.Targets) != len(dags) {
+		return nil, fmt.Errorf("plan has the wrong number of DAGs")
+	}
+	for i := range dags {
+		if !dags[i].Equals(plan.Targets[i].DAG) {
+			return nil, fmt.Errorf("mismatched DAG refs at %d", i)
+		}
 	}
 	return &plan, nil
 }

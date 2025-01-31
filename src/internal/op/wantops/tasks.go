@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/src/internal/wantc"
 	"wantbuild.io/want/src/internal/wantdag"
+	"wantbuild.io/want/src/wantcfg"
 	"wantbuild.io/want/src/wantjob"
 )
 
@@ -17,21 +19,21 @@ const MaxMetadataSize = 1 << 17
 
 // BuildConfig is the contents of build.json
 type BuildConfig struct {
-	Prefix   string         `json:"prefix"`
-	Metadata wantc.Metadata `json:"metadata"`
+	Query    wantcfg.PathSet `json:"query"`
+	Metadata wantc.Metadata  `json:"metadata"`
 }
 
 // BuildTask can be encoded as a GLFS Tree.
 type BuildTask struct {
 	Main glfs.Ref
 
-	Prefix   string
+	Query    wantcfg.PathSet
 	Metadata wantc.Metadata
 }
 
 func PostBuildTask(ctx context.Context, s cadata.Poster, x BuildTask) (*glfs.Ref, error) {
 	cfgJson, err := json.Marshal(BuildConfig{
-		Prefix:   x.Prefix,
+		Query:    x.Query,
 		Metadata: x.Metadata,
 	})
 	if err != nil {
@@ -70,14 +72,19 @@ func GetBuildTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*BuildTask,
 	}
 	return &BuildTask{
 		Main:     *mainRef,
-		Prefix:   cfg.Prefix,
+		Query:    cfg.Query,
 		Metadata: cfg.Metadata,
 	}, nil
 }
 
 type BuildResult struct {
-	Plan        wantc.Plan
-	NodeResults []wantjob.Result
+	// Query is the PathSet to build targets from
+	Query wantcfg.PathSet `json:"query"`
+	Plan  wantc.Plan      `json:"plan"`
+	// Targets is the subset of targets that were run
+	Targets       []wantc.Target   `json:"targets"`
+	TargetResults []wantjob.Result `json:"target_results"`
+	Output        *glfs.Ref        `json:"output"`
 }
 
 func PostBuildResult(ctx context.Context, s cadata.Poster, x BuildResult) (*glfs.Ref, error) {
@@ -85,20 +92,44 @@ func PostBuildResult(ctx context.Context, s cadata.Poster, x BuildResult) (*glfs
 	if err != nil {
 		return nil, err
 	}
-	nrRef, err := wantdag.PostNodeResults(ctx, s, x.NodeResults)
+	nrRef, err := wantdag.PostNodeResults(ctx, s, x.TargetResults)
 	if err != nil {
 		return nil, err
 	}
-	return glfs.PostTreeMap(ctx, s, map[string]glfs.Ref{
-		"plan":        *planRef,
-		"dag_results": *nrRef,
-	})
+	cfgJson, err := json.Marshal(x)
+	if err != nil {
+		return nil, err
+	}
+	cfgRef, err := glfs.PostBlob(ctx, s, bytes.NewReader(cfgJson))
+	if err != nil {
+		return nil, err
+	}
+	ents := map[string]glfs.Ref{
+		"plan":               *planRef,
+		"target_results":     *nrRef,
+		"build_results.json": *cfgRef,
+	}
+	if x.Output != nil {
+		ents["output"] = *x.Output
+	}
+	return glfs.PostTreeMap(ctx, s, ents)
 }
 
 func GetBuildResult(ctx context.Context, s cadata.Getter, x glfs.Ref) (*BuildResult, error) {
-	if _, err := glfs.GetTree(ctx, s, x); err != nil {
+	// config
+	cfgRef, err := glfs.GetAtPath(ctx, s, x, "build_results.json")
+	if err != nil {
 		return nil, err
 	}
+	cfgJson, err := glfs.GetBlobBytes(ctx, s, *cfgRef, 1e6)
+	if err != nil {
+		return nil, err
+	}
+	var ret BuildResult
+	if err := json.Unmarshal(cfgJson, &ret); err != nil {
+		return nil, err
+	}
+	// plan
 	planRef, err := glfs.GetAtPath(ctx, s, x, "plan")
 	if err != nil {
 		return nil, err
@@ -107,18 +138,28 @@ func GetBuildResult(ctx context.Context, s cadata.Getter, x glfs.Ref) (*BuildRes
 	if err != nil {
 		return nil, err
 	}
-	nrRef, err := glfs.GetAtPath(ctx, s, x, "dag_results")
+	if !reflect.DeepEqual(*plan, ret.Plan) {
+		return nil, fmt.Errorf("invalid build result, plan mismatch")
+	}
+	// target results
+	nrRef, err := glfs.GetAtPath(ctx, s, x, "target_results")
 	if err != nil {
 		return nil, err
 	}
-	nrs, err := wantdag.GetNodeResults(ctx, s, *nrRef)
+	results, err := wantdag.GetNodeResults(ctx, s, *nrRef)
 	if err != nil {
 		return nil, err
 	}
-	return &BuildResult{
-		Plan:        *plan,
-		NodeResults: nrs,
-	}, nil
+	if len(results) != len(ret.TargetResults) {
+		return nil, fmt.Errorf("invalid build result, target results mismatch %v %v", len(results), len(ret.TargetResults))
+	}
+	outRef, err := glfs.GetAtPath(ctx, s, x, "output")
+	if err != nil && !glfs.IsErrNoEnt(err) {
+		return nil, err
+	}
+	ret.Output = outRef
+	// TODO: validate
+	return &ret, nil
 }
 
 type CompileTask struct {

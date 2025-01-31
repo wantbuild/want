@@ -14,10 +14,10 @@ local dist(arch, os, version=currentVersion) =
     want.importURL(url, "SHA256", hash, ["ungzip", "untar"]);
 
 // pathSet matches files that end in .go plus go.mod and go.sum
-local pathSet = want.union([want.single("go.mod"), want.single("go.sum"), want.suffix(".go")]);
+local pathSet = want.union([want.unit("go.mod"), want.unit("go.sum"), want.suffix(".go")]);
 
 local modDownload(modSrc) = want.golang.modDownload(
-    want.filter(modSrc, want.union([want.single("go.mod"), want.single("go.sum")]))
+    want.filter(modSrc, want.union([want.unit("go.mod"), want.unit("go.sum")]))
 );
 
 local makeExec(modSrc, main, goarch, goos) = want.golang.makeExec(modSrc, modDownload(modSrc), main, goarch, goos);

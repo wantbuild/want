@@ -370,7 +370,12 @@ func (s *jobSystem) maybeEnqueue(jstate *job, dbJob *wantjob.Job) {
 
 func (s *jobSystem) process(x *job) error {
 	res := func() wantjob.Result {
-		jc := wantjob.Ctx{Context: x.ctx, Dst: x.dst, System: x, Writer: x.Writer}
+		jc := wantjob.Ctx{
+			Context: x.ctx,
+			Dst:     x.dst,
+			System:  x,
+			Writer:  x.Writer,
+		}
 		out, err := s.exec.Execute(jc, x.src, x.task)
 		if err != nil {
 			return *wantjob.Result_ErrExec(err)

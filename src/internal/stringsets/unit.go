@@ -6,24 +6,24 @@ import (
 	"go.brendoncarroll.net/exp/maybe"
 )
 
-type Single string
+type Unit string
 
-func (k Single) Contains(x string) bool {
+func (k Unit) Contains(x string) bool {
 	return string(k) == x
 }
 
-func (k Single) Regexp() *regexp.Regexp {
+func (k Unit) Regexp() *regexp.Regexp {
 	return regexp.MustCompile("^" + regexp.QuoteMeta(string(k)) + "$")
 }
 
-func (k Single) String() string {
+func (k Unit) String() string {
 	return string(k)
 }
 
-func (k Single) intersects(x Set) maybe.Maybe[bool] {
+func (k Unit) intersects(x Set) maybe.Maybe[bool] {
 	yes := false
 	switch x := x.(type) {
-	case Single:
+	case Unit:
 		yes = k == x
 	default:
 		return maybe.Nothing[bool]()
@@ -31,23 +31,23 @@ func (k Single) intersects(x Set) maybe.Maybe[bool] {
 	return maybe.Just(yes)
 }
 
-func (k Single) superset(x Set) maybe.Maybe[bool] {
+func (k Unit) superset(x Set) maybe.Maybe[bool] {
 	switch x := x.(type) {
 	case Empty:
 		return maybe.Just(true)
 	case Top:
 		return maybe.Just(false)
-	case Single:
+	case Unit:
 		return maybe.Just(k == x)
 	default:
 		return maybe.Nothing[bool]()
 	}
 }
 
-func (k Single) simplify() Set {
+func (k Unit) simplify() Set {
 	return k
 }
 
-func (k Single) isDNF() bool {
+func (k Unit) isDNF() bool {
 	return true
 }

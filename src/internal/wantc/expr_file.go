@@ -46,7 +46,7 @@ func (c *Compiler) parseExprRoot(ctx context.Context, cs *compileState, p string
 }
 
 func (s *ExprRoot) Affects() stringsets.Set {
-	return stringsets.Union(stringsets.Single(s.path), stringsets.Prefix(s.path+"/"))
+	return stringsets.Union(stringsets.Unit(s.path), stringsets.Prefix(s.path+"/"))
 }
 
 func (s *ExprRoot) Needs() stringsets.Set {

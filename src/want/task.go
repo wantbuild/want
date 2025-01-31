@@ -50,7 +50,7 @@ func newExecutor(cfg ExecutorConfig) *executor {
 			"assert": assertops.Executor{},
 			"want": wantops.Executor{
 				CompileOp: "want." + wantops.OpCompile,
-				DAGExecOp: "dag." + dagops.OpExecAll,
+				DAGExecOp: "dag." + dagops.OpExecLast,
 			},
 
 			"qemu":   qemuExec,

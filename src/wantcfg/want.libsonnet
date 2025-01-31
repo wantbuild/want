@@ -50,7 +50,7 @@ local FACT = "fact";
 
 // Path Sets
 
-local single(p) = { __type__: "pathSet", single: p };
+local unit(p) = { __type__: "pathSet", unit: p };
 local prefix(p) = { __type__: "pathSet", prefix: p };
 local suffix(s) = { __type__: "pathSet", suffix: s };
 local union(xs) = { __type__: "pathSet", union: xs};
@@ -58,7 +58,7 @@ local not(x) = { __type__: "pathSet", not: x};
 local intersect(xs) = { __type__: "pathSet", intersect: xs};
 local subtract(l, r) = intersect([l, not(r)]);
 
-local dirPath(p) = if p == "" then prefix("") else union([single(p), prefix(p + "/")]);
+local dirPath(p) = if p == "" then prefix("") else union([unit(p), prefix(p + "/")]);
 
 // Select
 local select(source, query, pick="", allowEmpty=false, assertType="") = {
@@ -80,7 +80,7 @@ local selectDir(source, p) = select(source, dirPath(p), pick=p);
 
 // selectFile evaluates to the file at p in the specified source.
 // selectFile fails if p is a directory.
-local selectFile(source, p) = select(source, single(p), pick=p);
+local selectFile(source, p) = select(source, unit(p), pick=p);
 
 local metadata() = std.extVar("metadata");
 
@@ -282,7 +282,7 @@ local wasm = {
     DERIVED :: DERIVED,
 
 
-    single :: single,
+    unit :: unit,
     prefix :: prefix,
     suffix :: suffix,
     union :: union,

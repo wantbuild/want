@@ -22,13 +22,13 @@ func ParallelExecLast(jc wantjob.Ctx, s cadata.Getter, x DAG) (wantjob.Result, e
 }
 
 func ParallelExecAll(jc wantjob.Ctx, src cadata.Getter, x DAG) ([]wantjob.Result, error) {
-	results := make([]wantjob.Result, len(x.Nodes))
-	unblocks := make([][]NodeID, len(x.Nodes))
-	needCount := make([]int32, len(x.Nodes))
+	results := make([]wantjob.Result, len(x))
+	unblocks := make([][]NodeID, len(x))
+	needCount := make([]int32, len(x))
 	resolve := func(i NodeID) wantjob.Result {
 		return results[i]
 	}
-	for i, n := range x.Nodes {
+	for i, n := range x {
 		for _, in := range n.Inputs {
 			// the input in.Node unblocks the output i
 			unblocks[in.Node] = append(unblocks[in.Node], NodeID(i))
@@ -39,7 +39,7 @@ func ParallelExecAll(jc wantjob.Ctx, src cadata.Getter, x DAG) ([]wantjob.Result
 	eg := errgroup.Group{}
 	var worker func(NodeID) error
 	worker = func(id NodeID) error {
-		node := x.Nodes[id]
+		node := x[id]
 		var outRef *glfs.Ref
 		union := stores.Union{src, jc.Dst}
 		switch {
@@ -61,7 +61,7 @@ func ParallelExecAll(jc wantjob.Ctx, src cadata.Getter, x DAG) ([]wantjob.Result
 				return err
 			}
 			if err := res.Err(); err != nil {
-				jc.Errorf("node %v %v", id, node.Op)
+				jc.Errorf("error in node %v %v %v", id, node.Op, err)
 			}
 			if ref, err := glfstasks.ParseGLFSRef(res.Data); err == nil {
 				outRef = ref

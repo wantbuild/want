@@ -12,11 +12,9 @@ import (
 	"wantbuild.io/want/src/wantjob"
 )
 
-type DAG struct {
-	Nodes []Node
-}
+type DAG []Node
 
-func GetDAG(ctx context.Context, s cadata.Getter, ref glfs.Ref) (*DAG, error) {
+func GetDAG(ctx context.Context, s cadata.Getter, ref glfs.Ref) (DAG, error) {
 	_, err := glfs.GetTree(ctx, s, ref)
 	if err != nil {
 		return nil, err
@@ -58,12 +56,12 @@ func GetDAG(ctx context.Context, s cadata.Getter, ref glfs.Ref) (*DAG, error) {
 	if len(factTree.Entries) != factCount {
 		return nil, fmt.Errorf("too many facts in DAG")
 	}
-	return &DAG{Nodes: nodes}, nil
+	return nodes, nil
 }
 
 func PostDAG(ctx context.Context, s cadata.Poster, x DAG) (*glfs.Ref, error) {
 	var factEnts []glfs.TreeEntry
-	for i, node := range x.Nodes {
+	for i, node := range x {
 		if node.IsFact() {
 			factEnts = append(factEnts, glfs.TreeEntry{
 				Name: nodeName(NodeID(i)),
@@ -77,7 +75,7 @@ func PostDAG(ctx context.Context, s cadata.Poster, x DAG) (*glfs.Ref, error) {
 	}
 
 	nlb := NewNodeListBuilder(s)
-	for _, node := range x.Nodes {
+	for _, node := range x {
 		_, err := nlb.Add(node)
 		if err != nil {
 			return nil, err
@@ -99,7 +97,7 @@ func EditDAG(ctx context.Context, dst cadata.Store, src cadata.Getter, x glfs.Re
 	if err != nil {
 		return nil, err
 	}
-	dagY, err := fn(*dagX)
+	dagY, err := fn(dagX)
 	if err != nil {
 		return nil, err
 	}
@@ -150,5 +148,5 @@ func (b *Builder) Count() uint64 {
 }
 
 func (b *Builder) Finish() DAG {
-	return DAG{Nodes: b.nodes}
+	return b.nodes
 }

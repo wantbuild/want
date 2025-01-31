@@ -5,7 +5,7 @@ import "strings"
 func SetFromGlob(g string) Set {
 	parts := strings.Split(g, "*")
 	if len(parts) == 1 {
-		return Single(g)
+		return Unit(g)
 	}
 	if len(parts) == 2 {
 		return And{
@@ -19,7 +19,7 @@ func SetFromGlob(g string) Set {
 func BoundingPrefix(x Set) string {
 	x = Simplify(x)
 	switch x := x.(type) {
-	case Single:
+	case Unit:
 		return string(x)
 	case Prefix:
 		return string(x)

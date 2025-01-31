@@ -5,6 +5,17 @@ type Statement struct {
 	Export *Export `json:"export,omitempty"`
 }
 
+func (s Statement) Expr() Expr {
+	switch {
+	case s.Put != nil:
+		return s.Put.Src
+	case s.Export != nil:
+		return s.Export.Src
+	default:
+		panic("empty statement")
+	}
+}
+
 type Put struct {
 	Dst PathSet `json:"dst"`
 	Src Expr    `json:"src"`

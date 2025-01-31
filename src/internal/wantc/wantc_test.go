@@ -68,8 +68,8 @@ func TestRef(t *testing.T) {
 	dag, err := c.CompileSnippet(ctx, s, s, data)
 	require.NoError(t, err)
 	require.NoError(t, err)
-	require.Len(t, dag.Nodes, 1)
-	require.Equal(t, *dag.Nodes[0].Value, r1)
+	require.Len(t, dag, 1)
+	require.Equal(t, *dag[0].Value, r1)
 }
 
 func TestSnippets(t *testing.T) {

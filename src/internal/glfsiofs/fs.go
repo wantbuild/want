@@ -36,6 +36,9 @@ func (s *GLFSFS) Open(p string) (fs.File, error) {
 	}
 	ref, err := s.ag.GetAtPath(ctx, s.s, s.root, p)
 	if err != nil {
+		if glfs.IsErrNoEnt(err) {
+			err = fs.ErrNotExist
+		}
 		return nil, err
 	}
 	return newGLFSFile(ctx, s.ag, s.s, p, *ref), nil

@@ -40,7 +40,7 @@ func (e Executor) ExecAll(jc wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.
 	if err != nil {
 		return nil, err
 	}
-	nrs, err := wantdag.ParallelExecAll(jc, s, *dag)
+	nrs, err := wantdag.ParallelExecAll(jc, s, dag)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func (e Executor) ExecLast(jc wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs
 	if err != nil {
 		return nil, err
 	}
-	res, err := wantdag.ParallelExecLast(jc, s, *dag)
+	res, err := wantdag.ParallelExecLast(jc, s, dag)
 	if err != nil {
 		return nil, err
 	}

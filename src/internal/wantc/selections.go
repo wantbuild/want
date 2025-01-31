@@ -6,14 +6,33 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/exp/slices2"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/op/glfsops"
+	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/stringsets"
 	"wantbuild.io/want/src/wantcfg"
 	"wantbuild.io/want/src/wantjob"
 )
+
+func BoundingPrefix(x wantcfg.PathSet) string {
+	ss := SetFromQuery("", x)
+	return stringsets.BoundingPrefix(ss)
+}
+
+func Intersects(a, b wantcfg.PathSet) bool {
+	return stringsets.Intersects(SetFromQuery("", a), SetFromQuery("", b))
+}
+
+// Select performs the selection logic on a known filesystem root.
+func Select(ctx context.Context, dst cadata.Store, src cadata.Getter, root glfs.Ref, q wantcfg.PathSet) (*glfs.Ref, error) {
+	strset := SetFromQuery("", q)
+	return glfs.FilterPaths(ctx, stores.Fork{W: dst, R: src}, root, func(p string) bool {
+		return strset.Contains(p)
+	})
+}
 
 func (c *Compiler) query(ctx context.Context, dst cadata.Store, vfs *VFS, ks stringsets.Set, pick string) (Expr, error) {
 	edges := queryEdges(vfs, ks, pick)
@@ -112,8 +131,8 @@ func queryEdges(vfs *VFS, ks stringsets.Set, pick string) []*edge {
 
 func makePathSet(x stringsets.Set) wantcfg.PathSet {
 	switch x := x.(type) {
-	case stringsets.Single:
-		return wantcfg.Single(string(x))
+	case stringsets.Unit:
+		return wantcfg.Unit(string(x))
 	case stringsets.Prefix:
 		return wantcfg.Prefix(string(x))
 	case stringsets.Suffix:
@@ -134,8 +153,8 @@ func makePathSet(x stringsets.Set) wantcfg.PathSet {
 // SetFromQuery returns a string set for a query asked from from.
 func SetFromQuery(from string, q wantcfg.PathSet) stringsets.Set {
 	switch {
-	case q.Single != nil:
-		return stringsets.Single(PathFrom(from, *q.Single))
+	case q.Unit != nil:
+		return stringsets.Unit(PathFrom(from, *q.Unit))
 	case q.Prefix != nil:
 		return stringsets.Prefix(PathFrom(from, *q.Prefix))
 	case q.Suffix != nil:

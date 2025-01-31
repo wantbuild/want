@@ -21,13 +21,13 @@ func SerialExecLast(jc wantjob.Ctx, s cadata.Getter, x DAG) (wantjob.Result, err
 // ExecAll executes all nodes in the DAG, and returns the result of returning each.
 func SerialExecAll(jc wantjob.Ctx, s cadata.Getter, x DAG) ([]wantjob.Result, error) {
 	ctx := jc.Context
-	nodeStores := make([]cadata.Getter, len(x.Nodes))
-	nodeResults := make([]wantjob.Result, len(x.Nodes))
+	nodeStores := make([]cadata.Getter, len(x))
+	nodeResults := make([]wantjob.Result, len(x))
 	resolve := func(nid NodeID) wantjob.Result {
 		return nodeResults[nid]
 	}
 	scratch := stores.NewMem()
-	for i, n := range x.Nodes {
+	for i, n := range x {
 		var outRef *glfs.Ref
 		union := stores.Union{s, jc.Dst, scratch}
 		switch {

@@ -25,12 +25,12 @@ func TestDAGPostGet(t *testing.T) {
 		require.NoError(t, err)
 	}
 	x := b.Finish()
-	require.Len(t, x.Nodes, 20)
+	require.Len(t, x, 20)
 
 	ref, err := PostDAG(ctx, s, x)
 	require.NoError(t, err)
 
 	y, err := GetDAG(ctx, s, *ref)
 	require.NoError(t, err)
-	require.Equal(t, x, *y)
+	require.Equal(t, x, y)
 }

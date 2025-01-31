@@ -24,7 +24,7 @@ func (p Prefix) String() string {
 func (p Prefix) intersects(x Set) maybe.Maybe[bool] {
 	y := false
 	switch x := x.(type) {
-	case Single:
+	case Unit:
 		y = strings.HasPrefix(string(x), string(p))
 	case Prefix:
 		y = strings.HasPrefix(string(x), string(p)) || strings.HasPrefix(string(p), string(x))
@@ -43,7 +43,7 @@ func (p Prefix) superset(x Set) maybe.Maybe[bool] {
 		y = true
 	case Top:
 		y = p == ""
-	case Single:
+	case Unit:
 		y = strings.HasPrefix(string(x), string(p))
 	case Prefix:
 		y = strings.HasPrefix(string(x), string(p))
@@ -76,7 +76,7 @@ func (s Suffix) Regexp() *regexp.Regexp {
 func (s Suffix) intersects(x Set) maybe.Maybe[bool] {
 	y := false
 	switch x := x.(type) {
-	case Single:
+	case Unit:
 		y = strings.HasSuffix(string(x), string(s))
 	case Prefix:
 		y = true
@@ -95,7 +95,7 @@ func (s Suffix) superset(x Set) maybe.Maybe[bool] {
 		y = true
 	case Top:
 		y = s == ""
-	case Single:
+	case Unit:
 		y = strings.HasSuffix(string(x), string(s))
 	case Prefix:
 		y = s == "" && x == ""

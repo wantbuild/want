@@ -1,17 +1,19 @@
 local want = import "want";
 local golang = import "recipes/golang.libsonnet";
 
-local goFiles = want.select(want.FACT, golang.pathSet);
+local goFiles = want.select(want.FACT, want.intersect([
+    golang.pathSet,
+    want.not(want.prefix("recipes")),
+]));
 
-want.merge([
-    goFiles,
-    want.select(
-        want.DERIVED,
-        want.union([
-            want.single("src/wantcfg/want.libsonnet"),
+local nonGoFiles = want.select(
+    want.DERIVED,
+    want.union([
+            want.unit("src/wantcfg/want.libsonnet"),
             want.prefix("src/internal/wantdb/dbmig/"),  
             want.prefix("src/internal/op/goops/setup.jsonnet"),
             want.prefix("src/internal/op/qemuops/setup.jsonnet"),
         ]),
-    ),
-])
+);
+
+want.merge([goFiles, nonGoFiles])

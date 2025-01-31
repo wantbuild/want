@@ -14,7 +14,7 @@ import (
 // CompileSnippet turns a Jsonnet snippet into a wantdag.Graph.
 // Values are loaded into the compiler's store.
 // Selections are not allowed and will result in a compiler error.
-func (c *Compiler) CompileSnippet(ctx context.Context, dst cadata.Store, src cadata.Getter, x []byte) (*wantdag.DAG, error) {
+func (c *Compiler) CompileSnippet(ctx context.Context, dst cadata.Store, src cadata.Getter, x []byte) (wantdag.DAG, error) {
 	vm := jsonnet.MakeVM()
 	vm.Importer(libOnlyImporter{})
 	jsonData, err := vm.EvaluateSnippet("", string(x))
@@ -34,6 +34,5 @@ func (c *Compiler) CompileSnippet(ctx context.Context, dst cadata.Store, src cad
 	if _, err := gb.Expr(ctx, src, expr); err != nil {
 		return nil, err
 	}
-	dag := gb.Finish()
-	return &dag, nil
+	return gb.Finish(), nil
 }

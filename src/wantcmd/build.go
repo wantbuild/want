@@ -9,9 +9,13 @@ import (
 
 	"github.com/blobcache/glfs"
 	"github.com/pkg/errors"
+	"go.brendoncarroll.net/exp/slices2"
 	"go.brendoncarroll.net/star"
 
 	"wantbuild.io/want/src/internal/glfsiofs"
+	"wantbuild.io/want/src/internal/glfstasks"
+	"wantbuild.io/want/src/internal/wantc"
+	"wantbuild.io/want/src/wantcfg"
 )
 
 var buildCmd = star.Command{
@@ -29,22 +33,29 @@ var buildCmd = star.Command{
 		if err != nil {
 			return err
 		}
-		res, err := wbs.Build(c.Context, repo, "")
+		// query
+		q := mkBuildQuery(pathsParam.LoadAll(c)...)
+		res, err := wbs.Build(c.Context, repo, q)
 		if err != nil {
 			return err
 		}
 		dur := time.Since(startTime)
 		if res.OutputRoot != nil {
-			c.Printf("%v\n", res.OutputRoot.CID)
+			c.Printf("INPUT: %v\n", res.Source)
+			c.Printf("QUERY: %v\n", q)
 		}
 		for i, targ := range res.Targets {
 			tres := res.TargetResults[i]
 			if targ.IsStatement {
-				c.Printf("%s %v:\n", targ.DefinedIn, targ.DefinedNum)
+				c.Printf("%s[%v]:\n", targ.DefinedIn, targ.DefinedNum)
 			} else {
 				c.Printf("%s:\n", targ.DefinedIn)
 			}
-			c.Printf("  %v %v\n", tres.ErrCode, tres.Ref)
+			if ref, err := glfstasks.ParseGLFSRef(tres.Data); err == nil {
+				c.Printf("  %v %v\n", tres.ErrCode, ref)
+			} else {
+				c.Printf("  %v %q\n", tres.ErrCode, tres.Data)
+			}
 		}
 		c.Printf("%v\n", dur)
 		return c.StdOut.Flush()
@@ -67,13 +78,20 @@ var lsCmd = star.Command{
 			return err
 		}
 		p := pathParam.Load(c)
-		res, err := wbs.Build(c.Context, repo, p)
+		q := mkBuildQuery(p)
+		res, err := wbs.Build(c.Context, repo, q)
 		if err != nil {
 			return err
 		}
 		src := res.Store
 		ref := res.OutputRoot
-
+		if ref == nil {
+			return fmt.Errorf("cannot ls, errors occured in build. see want build")
+		}
+		ref, err = glfs.GetAtPath(ctx, src, *ref, p)
+		if err != nil {
+			return err
+		}
 		if ref.Type != glfs.TypeTree {
 			return errors.Errorf("cannot ls non-tree: %v", ref)
 		}
@@ -105,9 +123,8 @@ var catCmd = star.Command{
 			return err
 		}
 		ps := pathsParam.LoadAll(c)
-		// TODO: only build longest common prefix
-		commonPrefix := ""
-		res, err := wbs.Build(c.Context, repo, commonPrefix)
+		q := mkBuildQuery(pathsParam.LoadAll(c)...)
+		res, err := wbs.Build(c.Context, repo, q)
 		if err != nil {
 			return err
 		}
@@ -151,13 +168,20 @@ var serveHttpCmd = star.Command{
 		if err != nil {
 			return err
 		}
-		p := pathParam.Load(c)
-		res, err := wbs.Build(ctx, repo, p)
+		q := mkBuildQuery(pathParam.Load(c))
+		res, err := wbs.Build(ctx, repo, q)
 		if err != nil {
 			return err
 		}
 		src := res.Store
 		ref := res.OutputRoot
+		if ref == nil {
+			return fmt.Errorf("error during build")
+		}
+		ref, err = glfs.GetAtPath(ctx, src, *ref, wantc.BoundingPrefix(q))
+		if err != nil {
+			return err
+		}
 		fsys := glfsiofs.New(src, *ref)
 		laddr := "127.0.0.1:8000"
 		c.Printf("http://%s\n", laddr)
@@ -174,6 +198,19 @@ var serveHttpCmd = star.Command{
 			h.ServeHTTP(w, r)
 		}))
 	},
+}
+
+func mkBuildQuery(prefixes ...string) wantcfg.PathSet {
+	var q wantcfg.PathSet
+	switch len(prefixes) {
+	case 0:
+		q = wantcfg.Prefix("")
+	case 1:
+		q = wantcfg.Prefix(prefixes[0])
+	default:
+		q = wantcfg.Union(slices2.Map(prefixes, wantcfg.Prefix)...)
+	}
+	return q
 }
 
 var pathParam = star.Param[string]{

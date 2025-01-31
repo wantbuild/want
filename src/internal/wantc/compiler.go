@@ -3,6 +3,7 @@ package wantc
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"path"
 	"regexp"
 	"slices"
@@ -28,7 +29,7 @@ const (
 
 type Metadata = map[string]any
 
-func WithGitMetadata(buildCtx map[string]any, commitHash string, tags []string) {
+func AddGitMetadata(buildCtx map[string]any, commitHash string, tags []string) {
 	buildCtx["gitCommitHash"] = commitHash
 	buildCtx["gitTags"] = tags
 }
@@ -72,9 +73,10 @@ type compileState struct {
 	ssMu         sync.Mutex
 	stmtSets     []*StmtSet
 
-	graph    glfs.Ref
+	knownMu  sync.Mutex
+	known    []glfs.TreeEntry
+	knownRef *glfs.Ref
 	targets  []Target
-	rootNode wantdag.NodeID
 }
 
 func (cs *compileState) claimPath(p string) bool {
@@ -142,16 +144,17 @@ func (c *Compiler) compileModule(ctx context.Context, dst cadata.Store, src cada
 		c.addSourceFiles,
 		c.detectCycles,
 		c.lowerSelections,
-		c.makeGraph,
+		c.makeTargets,
+		c.makeKnown,
 	} {
 		if err := f(ctx, cs); err != nil {
 			return nil, err
 		}
 	}
 	return &Plan{
-		DAG:      cs.graph,
-		Targets:  cs.targets,
-		LastNode: cs.rootNode,
+		Source:  ground,
+		Known:   *cs.knownRef,
+		Targets: cs.targets,
 	}, nil
 }
 
@@ -165,13 +168,13 @@ func (c *Compiler) addSourceFiles(ctx context.Context, cs *compileState) error {
 		}
 		return c.glfs.GetBlobBytes(ctx, cs.src, *ref, MaxJsonnetFileSize)
 	})
-	if err := c.addSourceFile(ctx, cs, eg, "", cs.ground); err != nil {
+	if err := c.addSourceFile(ctx, cs, eg, "", 0o777, cs.ground); err != nil {
 		return err
 	}
 	return eg.Wait()
 }
 
-func (c *Compiler) addSourceFile(ctx context.Context, cs *compileState, eg *errgroup.Group, p string, ref glfs.Ref) error {
+func (c *Compiler) addSourceFile(ctx context.Context, cs *compileState, eg *errgroup.Group, p string, mode fs.FileMode, ref glfs.Ref) error {
 	if gotIt := cs.claimPath(p); !gotIt {
 		return cs.awaitPath(ctx, p)
 	}
@@ -189,17 +192,16 @@ func (c *Compiler) addSourceFile(ctx context.Context, cs *compileState, eg *errg
 				return fmt.Errorf("submodules not yet supported.  Found submodule at path %s", p)
 			}
 		}
-
 		for _, ent := range tree.Entries {
 			ent := ent
 			p2 := path.Join(p, ent.Name)
 			eg.Go(func() error {
-				return c.addSourceFile(ctx, cs, eg, p2, ent.Ref)
+				return c.addSourceFile(ctx, cs, eg, p2, ent.FileMode, ent.Ref)
 			})
 		}
 
 	case glfs.TypeBlob:
-		ks := stringsets.Single(p)
+		ks := stringsets.Unit(p)
 		switch {
 		case p == "WANT":
 			// Drop the project configuration file from the build.
@@ -207,6 +209,14 @@ func (c *Compiler) addSourceFile(ctx context.Context, cs *compileState, eg *errg
 			return c.loadExpr(ctx, cs, p, ref)
 		case IsStmtFilePath(p):
 			return c.loadStmt(ctx, cs, p, ref)
+		default:
+			cs.knownMu.Lock()
+			cs.known = append(cs.known, glfs.TreeEntry{
+				Name:     p,
+				FileMode: mode,
+				Ref:      ref,
+			})
+			cs.knownMu.Unlock()
 		}
 		vfs, rel := cs.acquireVFS()
 		defer rel()
@@ -413,61 +423,81 @@ func (c *Compiler) detectCycles(ctx context.Context, cs *compileState) error {
 	return check()
 }
 
-func (c *Compiler) makeGraph(ctx context.Context, cs *compileState) error {
+func (c *Compiler) makeTargets(ctx context.Context, cs *compileState) error {
 	defer logStep(ctx, "making graph")()
-	gb := NewGraphBuilder(cs.dst)
 	var targets []Target
 
 	// ExprRoots
 	for _, er := range cs.exprRoots {
-		nid, err := gb.Expr(ctx, cs.src, er.expr)
+		dag, err := c.makeGraphFromExpr(ctx, cs.dst, cs.src, er.expr, er.path)
 		if err != nil {
 			return err
 		}
 		targets = append(targets, Target{
-			To:        makePathSet(er.Affects()),
-			Node:      nid,
-			Expr:      er.spec,
+			To:   makePathSet(er.Affects()),
+			DAG:  *dag,
+			Expr: er.spec,
+
 			DefinedIn: er.path,
 		})
 	}
 
 	// StmtSets
 	for _, ss := range cs.stmtSets {
-		for _, stmt := range ss.stmts {
-			nid, err := gb.Expr(ctx, cs.src, stmt.expr())
+		for i, stmt := range ss.stmts {
+			aff := stmt.Affects()
+			placeAt := stringsets.BoundingPrefix(aff)
+			dag, err := c.makeGraphFromExpr(ctx, cs.dst, cs.src, stmt.expr(), placeAt)
 			if err != nil {
 				return err
 			}
 			_, isExport := stmt.(*exportStmt)
 			to := makePathSet(stmt.Affects())
 			targets = append(targets, Target{
-				To:        to,
-				Node:      nid,
-				DefinedIn: ss.path,
-				IsExport:  isExport,
+				To:   to,
+				DAG:  *dag,
+				Expr: ss.specs[i].Expr(),
+
+				IsStatement: true,
+				DefinedIn:   ss.path,
+				DefinedNum:  i,
+				IsExport:    isExport,
 			})
 		}
-	}
-
-	root, err := gb.Expr(ctx, cs.src, cs.root)
-	if err != nil {
-		return err
 	}
 	slices.SortFunc(targets, func(a, b Target) int {
 		if a.DefinedIn != b.DefinedIn {
 			return strings.Compare(a.DefinedIn, b.DefinedIn)
 		}
-		return strings.Compare(a.To.String(), b.To.String())
+		return a.DefinedNum - b.DefinedNum
 	})
-	dag := gb.Finish()
-	gref, err := wantdag.PostDAG(ctx, cs.dst, dag)
+	cs.targets = targets
+	return nil
+}
+
+func (c *Compiler) makeGraphFromExpr(ctx context.Context, dst cadata.Store, src cadata.Getter, x Expr, place string) (*glfs.Ref, error) {
+	gb := NewGraphBuilder(dst)
+	nid, err := gb.Expr(ctx, src, x)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := gb.place(ctx, place, nid); err != nil {
+		return nil, err
+	}
+	return wantdag.PostDAG(ctx, dst, gb.Finish())
+}
+
+func (c *Compiler) makeKnown(ctx context.Context, cs *compileState) error {
+	cs.knownMu.Lock()
+	defer cs.knownMu.Unlock()
+	slices.SortFunc(cs.known, func(a, b glfs.TreeEntry) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	ref, err := c.glfs.PostTreeEntries(ctx, cs.dst, cs.known)
 	if err != nil {
 		return err
 	}
-	cs.graph = *gref
-	cs.rootNode = root
-	cs.targets = targets
+	cs.knownRef = ref
 	return nil
 }
 

@@ -10,6 +10,7 @@ import (
 	"wantbuild.io/want/src/internal/op/wantops"
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/wantc"
+	"wantbuild.io/want/src/wantcfg"
 	"wantbuild.io/want/src/wantjob"
 	"wantbuild.io/want/src/wantrepo"
 )
@@ -23,18 +24,11 @@ type (
 type BuildResult struct {
 	Source        glfs.Ref
 	Targets       []Target
-	TargetResults []TargetResult
-	OutputPrefix  string
+	TargetResults []wantjob.Result
 	OutputRoot    *glfs.Ref
 
 	// TODO: remove
 	Store cadata.Getter
-}
-
-type TargetResult struct {
-	ErrCode wantjob.ErrCode
-	Data    []byte
-	Ref     *glfs.Ref
 }
 
 func Build(ctx context.Context, jobs wantjob.System, src cadata.Getter, bt BuildTask) (*BuildResult, error) {
@@ -51,40 +45,17 @@ func Build(ctx context.Context, jobs wantjob.System, src cadata.Getter, bt Build
 	if err != nil {
 		return nil, err
 	}
-
-	nrs := br.NodeResults
-	plan := br.Plan
-	rootRes := nrs[plan.LastNode]
-	if err := rootRes.Err(); err != nil {
-		return nil, err
-	}
-	outRoot, err := glfstasks.ParseGLFSRef(rootRes.Data)
-	if err != nil {
-		return nil, err
-	}
-	targetResults := make([]TargetResult, len(plan.Targets))
-	for i := range targetResults {
-		targ := plan.Targets[i]
-		res := nrs[targ.Node]
-		ref, _ := glfstasks.ParseGLFSRef(res.Data)
-		targetResults[i] = TargetResult{
-			ErrCode: res.ErrCode,
-			Ref:     ref,
-		}
-	}
-
 	return &BuildResult{
-		Source:        bt.Main,
-		OutputRoot:    outRoot,
-		OutputPrefix:  bt.Prefix,
-		Targets:       plan.Targets,
-		TargetResults: targetResults,
+		Source:        br.Plan.Source,
+		Targets:       br.Targets,
+		TargetResults: br.TargetResults,
+		OutputRoot:    br.Output,
 
 		Store: outStore,
 	}, nil
 }
 
-func (sys *System) Build(ctx context.Context, repo *wantrepo.Repo, prefix string) (*BuildResult, error) {
+func (sys *System) Build(ctx context.Context, repo *wantrepo.Repo, query wantcfg.PathSet) (*BuildResult, error) {
 	srcid, err := sys.Import(ctx, repo)
 	if err != nil {
 		return nil, err
@@ -96,7 +67,7 @@ func (sys *System) Build(ctx context.Context, repo *wantrepo.Repo, prefix string
 	return Build(ctx, sys.jobs, srcStore, BuildTask{
 		Main:     *srcRoot,
 		Metadata: repo.Metadata(),
-		Prefix:   prefix,
+		Query:    query,
 	})
 }
 

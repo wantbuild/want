@@ -9,7 +9,7 @@ import (
 
 // PathSet represents a set of paths
 type PathSet struct {
-	Single    *string   `json:"single,omitempty"`
+	Unit      *string   `json:"unit,omitempty"`
 	Prefix    *string   `json:"prefix,omitempty"`
 	Suffix    *string   `json:"suffix,omitempty"`
 	Not       *PathSet  `json:"not,omitempty"`
@@ -20,8 +20,8 @@ type PathSet struct {
 func (ps PathSet) String() string {
 	// TODO: this is duplicated
 	switch {
-	case ps.Single != nil:
-		return fmt.Sprintf("%q", *ps.Single)
+	case ps.Unit != nil:
+		return fmt.Sprintf("%q", *ps.Unit)
 	case ps.Prefix != nil:
 		return fmt.Sprintf("%q*", *ps.Prefix)
 	case ps.Suffix != nil:
@@ -42,9 +42,9 @@ func (ps PathSet) String() string {
 	}
 }
 
-// Single returns a PathSet containing the single path x
-func Single(x string) PathSet {
-	return PathSet{Single: &x}
+// Unit returns a PathSet containing the single path x
+func Unit(x string) PathSet {
+	return PathSet{Unit: &x}
 }
 
 // Prefix returns a PathSet containing all paths with prefix x
@@ -80,7 +80,7 @@ func DirPath(x string) PathSet {
 	} else {
 		children = Prefix(x + "/")
 	}
-	return Union(Single(x), children)
+	return Union(Unit(x), children)
 }
 
 func Subtract(l, r PathSet) PathSet {
