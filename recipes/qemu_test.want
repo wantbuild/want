@@ -16,6 +16,6 @@ local rootfs = want.pass([
 ]);
 
 wassert.pathExists(
-    want.qemu.amd64_microvm_virtiofs(1, 1e9, kernel, rootfs, init="/bin/sh", args=["initscript", ""], output=""),
+    want.qemu.amd64_microvm_virtiofs(1, 1e9, kernel, rootfs, init="/bin/sh", args=["initscript"], output=""),
     "success.txt"
 )

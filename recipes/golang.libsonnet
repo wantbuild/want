@@ -1,17 +1,21 @@
 local want = import "want";
 local linux = import "./linux.libsonnet";
+local alpine = import "./alpine.libsonnet";
 
 local currentVersion = "1.23.4";
 
 local hashes = {
-    "amd64-linux": "6924efde5de86fe277676e929dc9917d466efa02fb934197bc2eba35d5680971",
+    "amd64-linux-1.23.4": "6924efde5de86fe277676e929dc9917d466efa02fb934197bc2eba35d5680971",
 };
 
 // dist evaluates to the golang distribution
 local dist(arch, os, version=currentVersion) =
     local url = if os == "linux" then "https://go.dev/dl/go%s.%s-%s.tar.gz" % [version, os, arch];
     local hash = hashes[arch + "-" + os + "-" + version];
-    want.importURL(url, "SHA256", hash, ["ungzip", "untar"]);
+    want.pick(
+        want.importURL(url, "SHA256", hash, ["ungzip", "untar"]),
+        "go",
+    );
 
 // pathSet matches files that end in .go plus go.mod and go.sum
 local pathSet = want.union([want.unit("go.mod"), want.unit("go.sum"), want.suffix(".go")]);
@@ -30,11 +34,43 @@ local wantGoExec = makeExec(
     goarch="wasm", goos="wasip1",
 );
 
+local defaultKernel = linux.bzImage;
+
+local goCmd(modSrc, cmd, basefs, kernel) = 
+    local initscript = want.blob(|||
+        #!/bin/bash
+        set -ve;
+
+        export PATH=$PATH:/usr/local/go/bin
+        export GOROOT=/usr/local/go;
+        export GOMODCACHE=/gomodcache;
+        export CGO_ENABLED=0;
+
+        cd /input;
+        ls;
+    ||| + "go %s | tee /output/out.txt;" % [cmd] + 
+    ||| 
+        reboot -f;
+    |||);
+    local rootfs = want.pass([
+        want.input("", basefs),
+        want.input("/usr/local/go", dist("amd64", "linux")),
+        want.input("/initscript", initscript),
+        want.input("/gomodcache", modDownload(modSrc)),
+        want.input("/input", modSrc),
+        want.input("/output", want.tree({})),
+    ]);
+    want.qemu.amd64_microvm_virtiofs(1, 4e9, kernel, rootfs, init="/bin/sh", args=["/initscript"], output="/output");
+
+local goTest(modSrc, basefs=alpine.rootfs(alpine.ARCH_AMD64), kernel=defaultKernel) =
+    local cmd = "test -v -coverprofile /output/coverage -ldflags '-s -w -buildid=' -buildvcs=false ./...";
+    goCmd(modSrc, cmd, basefs, kernel);
+
 local defaultBaseFS = want.tree({
     "tmp": want.treeEntry("777", want.tree({})),
 });
 
-local runTests(modSrc, basefs=defaultBaseFS, ignore=[]) =
+local runTests(modSrc, basefs=defaultBaseFS, kernel=defaultKernel, ignore=[]) =
     local task = want.pass([
         want.input("module", modSrc),
         want.input("modcache", modDownload(modSrc)), 
@@ -44,10 +80,9 @@ local runTests(modSrc, basefs=defaultBaseFS, ignore=[]) =
             Ignore: ignore,
         },""))),
         want.input("basefs", basefs),
-        want.input("kernel", linux.bzImage),
+        want.input("kernel", kernel),
     ]);
     want.wasm.nativeGLFS(1e9, wantGoExec, task, ["", "runTests"]);
-
 
 {
     dist :: dist,
@@ -56,4 +91,5 @@ local runTests(modSrc, basefs=defaultBaseFS, ignore=[]) =
     makeExec :: makeExec,
     makeTestExec :: makeTestExec,
     runTests :: runTests,
+    goTest :: goTest,
 }

@@ -1,0 +1,23 @@
+local want = import "want";
+local wassert = import "./assert.libsonnet";
+local golang = import "./golang.libsonnet";
+
+local testOut = golang.goTest(
+    want.pass([
+        want.input("go.mod", want.blob(|||
+            module testmodule
+        |||)),
+        want.input("go.sum", want.blob(" ")),
+        want.input("main_test.go", want.blob(|||
+            package testpackage
+            
+            import "testing"
+
+            func TestA(t *testing.T) {
+                t.Log("success") 
+            }
+        |||)),
+    ])
+);
+
+wassert.pathExists(testOut, "coverage")

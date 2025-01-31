@@ -2,6 +2,7 @@ package goops
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -75,7 +76,11 @@ func (e *Executor) ModDownload(jc wantjob.Ctx, s cadata.Getter, x glfs.Ref) (*gl
 	}
 	out, err := imp.Import(ctx, "modcache")
 	if err != nil {
-		return nil, err
+		if !os.IsNotExist(err) {
+			return nil, err
+		} else {
+			out, err = glfs.PostTreeEntries(ctx, jc.Dst, nil)
+		}
 	}
 	jc.Infof("importing modcache: done")
 	return out, nil
