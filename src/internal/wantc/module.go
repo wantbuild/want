@@ -2,10 +2,13 @@ package wantc
 
 import (
 	"context"
+	"encoding/json"
 	"path"
 
 	"github.com/blobcache/glfs"
+	"github.com/google/go-jsonnet"
 	"go.brendoncarroll.net/state/cadata"
+	"wantbuild.io/want/src/wantcfg"
 )
 
 // IsModule returns true if x is valid Want Module.
@@ -42,4 +45,18 @@ func FindModules(ctx context.Context, src cadata.Getter, root glfs.Ref) (map[str
 		return nil, err
 	}
 	return modules, nil
+}
+
+func ParseModuleConfig(x []byte) (*wantcfg.ModuleConfig, error) {
+	vm := jsonnet.MakeVM()
+	vm.Importer(libOnlyImporter{})
+	jsonData, err := vm.EvaluateAnonymousSnippet("WANT", string(x))
+	if err != nil {
+		return nil, err
+	}
+	var ret wantcfg.ModuleConfig
+	if err := json.Unmarshal([]byte(jsonData), &ret); err != nil {
+		return nil, err
+	}
+	return &ret, nil
 }

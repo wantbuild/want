@@ -5,8 +5,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
+	"wantbuild.io/want/src/internal/stringsets"
+	"wantbuild.io/want/src/internal/wantc"
 	"wantbuild.io/want/src/wantcfg"
 )
 
@@ -25,9 +26,16 @@ func Open(p string) (*Repo, error) {
 	if err != nil {
 		return nil, err
 	}
+	modCfg, err := wantc.ParseModuleConfig(cfgData)
+	if err != nil {
+		return nil, err
+	}
+	ignoreSet := wantc.SetFromQuery("", modCfg.Ignore)
 	return &Repo{
 		dir:       p,
 		rawConfig: string(cfgData),
+		config:    *modCfg,
+		ignoreSet: ignoreSet,
 	}, nil
 }
 
@@ -51,6 +59,7 @@ type Repo struct {
 
 	rawConfig string
 	config    wantcfg.ModuleConfig
+	ignoreSet stringsets.Set
 }
 
 func (r *Repo) RawConfig() string {
@@ -66,7 +75,7 @@ func (r *Repo) RootPath() string {
 }
 
 func (r *Repo) PathFilter(x string) bool {
-	return x != ".git" && !strings.HasPrefix(x, ".git/")
+	return !r.ignoreSet.Contains(x)
 }
 
 func (r *Repo) Metadata() map[string]any {
@@ -90,10 +99,8 @@ func IsRepo(p string) (bool, error) {
 		}
 		return false, err
 	}
-	if err := json.Unmarshal(data, &struct{}{}); err != nil {
-		return false, nil
-	}
-	return true, nil
+	_, err = wantc.ParseModuleConfig(data)
+	return err == nil, nil
 }
 
 func FindRepo(p string) (bool, string, error) {
