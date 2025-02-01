@@ -61,10 +61,10 @@ type Compute struct {
 type Source string
 
 const (
-	// Fact is the Source for selecting fact data from the input tree
-	Fact = Source("fact")
+	// Ground is the Source for selecting data from the original source tree.
+	Ground = Source("GROUND")
 	// Derived is the Source for selecting derived data from the VFS
-	Derived = Source("derived")
+	Derived = Source("DERIVED")
 )
 
 type Selection struct {

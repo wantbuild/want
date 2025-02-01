@@ -214,7 +214,7 @@ func (c *Compiler) compileSelection(ctx context.Context, cs *compileState, exprP
 			assertType: glfs.Type(x.AssertType),
 			allowEmpty: x.AllowEmpty,
 		}, nil
-	case wantcfg.Fact:
+	case wantcfg.Ground:
 		ks := SetFromQuery(x.CallerPath, x.Query)
 		out, err := c.selectFacts(ctx, cs, ks, pick)
 		if err != nil {

@@ -43,10 +43,10 @@ local tree(m) = {
 // Sources
 
 // DERIVED refers to the current build anything generated during it.
-local DERIVED = "derived";
+local DERIVED = "DERIVED";
 
-// FACT refers to the source of the current build without any derived values.
-local FACT = "fact";
+// GROUND refers to the source of the current build without any derived values.
+local GROUND = "GROUND";
 
 // Path Sets
 
@@ -278,7 +278,7 @@ local wasm = {
 
     // Selections
 
-    FACT :: FACT,
+    GROUND :: GROUND,
     DERIVED :: DERIVED,
 
 
