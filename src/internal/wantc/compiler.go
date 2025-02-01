@@ -210,6 +210,9 @@ func (c *Compiler) addSourceFile(ctx context.Context, cs *compileState, eg *errg
 		case IsStmtFilePath(p):
 			return c.loadStmt(ctx, cs, p, ref)
 		default:
+			if err := glfs.Sync(ctx, cs.dst, cs.src, ref); err != nil {
+				return err
+			}
 			cs.knownMu.Lock()
 			cs.known = append(cs.known, glfs.TreeEntry{
 				Name:     p,
@@ -495,6 +498,9 @@ func (c *Compiler) makeKnown(ctx context.Context, cs *compileState) error {
 	})
 	ref, err := c.glfs.PostTreeEntries(ctx, cs.dst, cs.known)
 	if err != nil {
+		return err
+	}
+	if err := glfs.Sync(ctx, cs.dst, cs.src, *ref); err != nil {
 		return err
 	}
 	cs.knownRef = ref

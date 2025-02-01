@@ -75,7 +75,7 @@ func TestRunTests(t *testing.T) {
 		}),
 		VMSpec: VMSpec{
 			BaseFS: mustPostFS(t, s, nil),
-			Kernel: mustPostBlob(t, s, linux.BzImage),
+			Kernel: mustPostBlob(t, s, linux.BzImage()),
 		},
 		RunTestsConfig: RunTestsConfig{
 			GOARCH: "amd64",

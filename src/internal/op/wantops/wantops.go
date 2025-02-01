@@ -4,6 +4,7 @@ package wantops
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/blobcache/glfs"
@@ -74,6 +75,9 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 	if err != nil {
 		return nil, err
 	}
+	if err := glfstasks.FastSync(ctx, jc.Dst, planStore, plan.Known); err != nil {
+		return nil, err
+	}
 	// filter targets
 	var targets []wantc.Target
 	var dags []glfs.Ref
@@ -84,6 +88,7 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 		}
 	}
 	// execute
+	var errorsOccured bool
 	results := make([]wantjob.Result, len(dags))
 	src2 := stores.Union{src, planStore}
 	eg := errgroup.Group{}
@@ -98,6 +103,7 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 			if err != nil {
 				return err
 			}
+			errorsOccured = errorsOccured || res.ErrCode > 0
 			if ref, err := glfstasks.ParseGLFSRef(res.Data); err == nil {
 				if err := glfstasks.FastSync(ctx, jc.Dst, dagStore, *ref); err != nil {
 					return err
@@ -125,13 +131,20 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 	if err != nil {
 		return nil, err
 	}
-	return PostBuildResult(ctx, jc.Dst, BuildResult{
+	br, err := PostBuildResult(ctx, jc.Dst, BuildResult{
 		Query:         buildTask.Query,
 		Plan:          *plan,
 		Targets:       targets,
 		TargetResults: results,
 		Output:        outRef,
 	})
+	if err != nil {
+		return nil, err
+	}
+	if errorsOccured {
+		err = fmt.Errorf("build failed")
+	}
+	return br, err
 }
 
 func (e Executor) Compile(jc wantjob.Ctx, s cadata.Getter, x glfs.Ref) (*glfs.Ref, error) {

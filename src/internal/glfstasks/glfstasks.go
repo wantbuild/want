@@ -38,10 +38,11 @@ func Exec(x []byte, fn func(x glfs.Ref) (*glfs.Ref, error)) ([]byte, error) {
 		return nil, err
 	}
 	out, err := fn(*in)
-	if err != nil {
+	if out != nil {
+		return MarshalGLFSRef(*out), err
+	} else {
 		return nil, err
 	}
-	return MarshalGLFSRef(*out), nil
 }
 
 func ParseGLFSRef(x []byte) (*glfs.Ref, error) {
@@ -82,6 +83,10 @@ func FastSync(ctx context.Context, dst cadata.Store, src cadata.Getter, root glf
 }
 
 func Check(ctx context.Context, src cadata.Getter, root glfs.Ref) error {
+	return check(ctx, src, root, nil)
+}
+
+func check(ctx context.Context, src cadata.Getter, root glfs.Ref, history []string) error {
 	if yes, err := stores.ExistsOnGet(ctx, src, root.CID); err != nil {
 		return err
 	} else if !yes {
@@ -93,8 +98,9 @@ func Check(ctx context.Context, src cadata.Getter, root glfs.Ref) error {
 			return err
 		}
 		for _, ent := range tree.Entries {
-			if err := Check(ctx, src, ent.Ref); err != nil {
-				return fmt.Errorf("check entry at %s: %w", ent.Name, err)
+			history = append(history, ent.Name)
+			if err := check(ctx, src, ent.Ref, history); err != nil {
+				return fmt.Errorf("check entry at %v: %w", history, err)
 			}
 		}
 	}

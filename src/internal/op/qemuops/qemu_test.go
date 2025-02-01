@@ -1,7 +1,6 @@
 package qemuops
 
 import (
-	_ "embed"
 	"fmt"
 	"io"
 	"os"
@@ -16,9 +15,6 @@ import (
 	"wantbuild.io/want/src/internal/wantsetup"
 	"wantbuild.io/want/src/wantjob"
 )
-
-//go:embed bzImage
-var bzImage []byte
 
 func TestKArgBuilder(t *testing.T) {
 	tcs := []struct {
@@ -89,7 +85,7 @@ func TestInstall(t *testing.T) {
 
 func TestMicroVM(t *testing.T) {
 	jc, s, e := setupTest(t)
-	kernelRef := testutil.PostBlob(t, s, bzImage)
+	kernelRef := testutil.PostBlob(t, s, loadKernel(t))
 	helloRef := testutil.PostLinuxAmd64(t, s, "./testdata/helloworld")
 
 	out, err := e.amd64MicroVMVirtiofs(jc, s, MicroVMTask{
@@ -121,4 +117,10 @@ func setupTest(t testing.TB) (wantjob.Ctx, cadata.Store, *Executor) {
 		return os.Stderr
 	}
 	return wantjob.Ctx{Context: ctx, Dst: s, System: jsys, Writer: newWriter}, s, e
+}
+
+func loadKernel(t testing.TB) []byte {
+	data, err := os.ReadFile("./bzImage")
+	require.NoError(t, err)
+	return data
 }
