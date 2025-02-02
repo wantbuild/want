@@ -16,11 +16,11 @@ func IsModule(ctx context.Context, src cadata.Getter, x glfs.Ref) (bool, error) 
 	if x.Type != glfs.TypeTree {
 		return false, nil
 	}
-	t, err := glfs.GetTree(ctx, src, x)
+	t, err := glfs.GetTreeSlice(ctx, src, x, 1e6)
 	if err != nil {
 		return false, err
 	}
-	ent := t.Lookup(WantFilename)
+	ent := glfs.Lookup(t, WantFilename)
 	if ent == nil {
 		return false, nil
 	}

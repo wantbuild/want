@@ -14,7 +14,7 @@ func TestPostGetBuildTask(t *testing.T) {
 	ctx := testutil.Context(t)
 	s := stores.NewMem()
 
-	main, err := glfs.PostTree(ctx, s, glfs.Tree{})
+	main, err := glfs.PostTreeSlice(ctx, s, nil)
 	require.NoError(t, err)
 	x := BuildTask{
 		Main: *main,
@@ -35,7 +35,7 @@ func TestPostGetCompileTask(t *testing.T) {
 	ctx := testutil.Context(t)
 	s := stores.NewMem()
 
-	modRef, err := glfs.PostTree(ctx, s, glfs.Tree{})
+	modRef, err := glfs.PostTreeSlice(ctx, s, nil)
 	require.NoError(t, err)
 	x := CompileTask{
 		Module:   *modRef,

@@ -35,7 +35,7 @@ type RunTestsConfig struct {
 	Ignore []string
 }
 
-func PostRunTestsTask(ctx context.Context, s cadata.Poster, x RunTestsTask) (*glfs.Ref, error) {
+func PostRunTestsTask(ctx context.Context, s cadata.PostExister, x RunTestsTask) (*glfs.Ref, error) {
 	cfgJson, err := json.Marshal(x.RunTestsConfig)
 	if err != nil {
 		return nil, err
@@ -105,21 +105,21 @@ func RunTests(jc wantjob.Ctx, src cadata.Getter, x RunTestsTask) (*glfs.Ref, err
 	if err != nil {
 		return nil, err
 	}
-	emptyTree, err := glfs.PostTreeEntries(jc.Context, jc.Dst, nil)
+	emptyTree, err := glfs.PostTreeSlice(jc.Context, jc.Dst, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	ret := make(map[string]glfs.Ref, len(testExecs))
 	for p, testExec := range testExecs {
-		ioLayers, err := glfs.PostTreeEntries(jc.Context, jc.Dst, []glfs.TreeEntry{
+		ioLayers, err := glfs.PostTreeSlice(jc.Context, jc.Dst, []glfs.TreeEntry{
 			{Name: "output", FileMode: 0o777, Ref: *emptyTree},
 			{Name: "input/testexec", FileMode: 0o777, Ref: testExec},
 		})
 		if err != nil {
 			return nil, err
 		}
-		rootfs, err := glfs.Merge(jc.Context, jc.Dst, x.BaseFS, *ioLayers)
+		rootfs, err := glfs.Merge(jc.Context, jc.Dst, src, x.BaseFS, *ioLayers)
 		if err != nil {
 			return nil, err
 		}

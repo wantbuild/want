@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 
 	"github.com/blobcache/glfs"
+	"github.com/blobcache/glfs/glfsiofs"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 	"go.brendoncarroll.net/state/cadata"
 
-	"wantbuild.io/want/src/internal/glfsiofs"
 	"wantbuild.io/want/src/internal/glfsport"
 	"wantbuild.io/want/src/wantjob"
 )

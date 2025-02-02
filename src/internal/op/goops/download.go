@@ -79,7 +79,7 @@ func (e *Executor) ModDownload(jc wantjob.Ctx, s cadata.Getter, x glfs.Ref) (*gl
 		if !os.IsNotExist(err) {
 			return nil, err
 		} else {
-			out, err = glfs.PostTreeEntries(ctx, jc.Dst, nil)
+			out, err = glfs.PostTreeSlice(ctx, jc.Dst, nil)
 		}
 	}
 	jc.Infof("importing modcache: done")

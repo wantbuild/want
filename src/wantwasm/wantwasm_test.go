@@ -15,7 +15,7 @@ func TestPostGetWASIp1Task(t *testing.T) {
 	s := stores.NewMem()
 	//wasmBytes := buildWASMBin(t, "testdata/hello/hello.go")
 	wasmBytes := []byte("fake data")
-	inputRef, err := glfsAg.PostTreeEntries(ctx, s, nil)
+	inputRef, err := glfsAg.PostTreeSlice(ctx, s, nil)
 	require.NoError(t, err)
 	task := WASIp1Task{
 		Program: wasmBytes,

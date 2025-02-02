@@ -29,7 +29,7 @@ type Assertions struct {
 	PathExists *string
 }
 
-func PostAssertTask(ctx context.Context, s cadata.Poster, x AssertTask) (*glfs.Ref, error) {
+func PostAssertTask(ctx context.Context, s cadata.PostExister, x AssertTask) (*glfs.Ref, error) {
 	var ents []glfs.TreeEntry
 	ents = append(ents, glfs.TreeEntry{
 		Name:     "x",
@@ -54,21 +54,21 @@ func PostAssertTask(ctx context.Context, s cadata.Poster, x AssertTask) (*glfs.R
 			Ref:      *ref,
 		})
 	}
-	return glfs.PostTreeEntries(ctx, s, ents)
+	return glfs.PostTreeSlice(ctx, s, ents)
 }
 
 func GetAssertTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*AssertTask, error) {
-	tree, err := glfs.GetTree(ctx, s, x)
+	tree, err := glfs.GetTreeSlice(ctx, s, x, 1e6)
 	if err != nil {
 		return nil, err
 	}
 	var ret AssertTask
-	if ent := tree.Lookup("x"); ent != nil {
+	if ent := glfs.Lookup(tree, "x"); ent != nil {
 		ret.X = ent.Ref
 	} else {
 		return nil, fmt.Errorf("assert task missing x")
 	}
-	if ent := tree.Lookup("message"); ent != nil {
+	if ent := glfs.Lookup(tree, "message"); ent != nil {
 		data, err := glfs.GetBlobBytes(ctx, s, ent.Ref, 1e6)
 		if err != nil {
 			return nil, err
@@ -76,10 +76,10 @@ func GetAssertTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*AssertTas
 		ret.Msg = string(data)
 	}
 
-	if ent := tree.Lookup("subsetOf"); ent != nil {
+	if ent := glfs.Lookup(tree, "subsetOf"); ent != nil {
 		ret.SubsetOf = &ent.Ref
 	}
-	if ent := tree.Lookup("pathExists"); ent != nil {
+	if ent := glfs.Lookup(tree, "pathExists"); ent != nil {
 		data, err := glfs.GetBlobBytes(ctx, s, ent.Ref, MaxPathLen)
 		if err != nil {
 			return nil, err

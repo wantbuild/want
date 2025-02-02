@@ -15,15 +15,11 @@ import (
 type DAG []Node
 
 func GetDAG(ctx context.Context, s cadata.Getter, ref glfs.Ref) (DAG, error) {
-	_, err := glfs.GetTree(ctx, s, ref)
-	if err != nil {
-		return nil, err
-	}
 	factsRef, err := glfs.GetAtPath(ctx, s, ref, "facts")
 	if err != nil {
 		return nil, err
 	}
-	factTree, err := glfs.GetTree(ctx, s, *factsRef)
+	factTree, err := glfs.GetTreeSlice(ctx, s, *factsRef, 1e6)
 	if err != nil {
 		return nil, err
 	}
@@ -46,20 +42,20 @@ func GetDAG(ctx context.Context, s cadata.Getter, ref glfs.Ref) (DAG, error) {
 	var factCount int
 	for i, node := range nodes {
 		if node.IsFact() {
-			ent := factTree.Lookup(nodeName(NodeID(i)))
+			ent := glfs.Lookup(factTree, nodeName(NodeID(i)))
 			if !ent.Ref.Equals(*node.Value) {
 				return nil, fmt.Errorf("fact ref does not match node %d", i)
 			}
 			factCount++
 		}
 	}
-	if len(factTree.Entries) != factCount {
+	if len(factTree) != factCount {
 		return nil, fmt.Errorf("too many facts in DAG")
 	}
 	return nodes, nil
 }
 
-func PostDAG(ctx context.Context, s cadata.Poster, x DAG) (*glfs.Ref, error) {
+func PostDAG(ctx context.Context, s cadata.PostExister, x DAG) (*glfs.Ref, error) {
 	var factEnts []glfs.TreeEntry
 	for i, node := range x {
 		if node.IsFact() {
@@ -69,7 +65,7 @@ func PostDAG(ctx context.Context, s cadata.Poster, x DAG) (*glfs.Ref, error) {
 			})
 		}
 	}
-	facts, err := glfs.PostTreeEntries(ctx, s, factEnts)
+	facts, err := glfs.PostTreeSlice(ctx, s, factEnts)
 	if err != nil {
 		return nil, err
 	}

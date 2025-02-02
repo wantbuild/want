@@ -31,7 +31,7 @@ type BuildTask struct {
 	Metadata wantc.Metadata
 }
 
-func PostBuildTask(ctx context.Context, s cadata.Poster, x BuildTask) (*glfs.Ref, error) {
+func PostBuildTask(ctx context.Context, s cadata.PostExister, x BuildTask) (*glfs.Ref, error) {
 	cfgJson, err := json.Marshal(BuildConfig{
 		Query:    x.Query,
 		Metadata: x.Metadata,
@@ -50,10 +50,6 @@ func PostBuildTask(ctx context.Context, s cadata.Poster, x BuildTask) (*glfs.Ref
 }
 
 func GetBuildTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*BuildTask, error) {
-	_, err := glfs.GetTree(ctx, s, x)
-	if err != nil {
-		return nil, err
-	}
 	mainRef, err := glfs.GetAtPath(ctx, s, x, "main")
 	if err != nil {
 		return nil, err
@@ -87,7 +83,7 @@ type BuildResult struct {
 	Output        *glfs.Ref        `json:"output"`
 }
 
-func PostBuildResult(ctx context.Context, s cadata.Poster, x BuildResult) (*glfs.Ref, error) {
+func PostBuildResult(ctx context.Context, s cadata.PostExister, x BuildResult) (*glfs.Ref, error) {
 	planRef, err := wantc.PostPlan(ctx, s, x.Plan)
 	if err != nil {
 		return nil, err
@@ -167,7 +163,7 @@ type CompileTask struct {
 	Metadata wantc.Metadata
 }
 
-func PostCompileTask(ctx context.Context, s cadata.Poster, x CompileTask) (*glfs.Ref, error) {
+func PostCompileTask(ctx context.Context, s cadata.PostExister, x CompileTask) (*glfs.Ref, error) {
 	mdJson, err := json.Marshal(x.Metadata)
 	if err != nil {
 		return nil, err
@@ -183,9 +179,6 @@ func PostCompileTask(ctx context.Context, s cadata.Poster, x CompileTask) (*glfs
 }
 
 func GetCompileTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*CompileTask, error) {
-	if _, err := glfs.GetTree(ctx, s, x); err != nil {
-		return nil, err
-	}
 	moduleRef, err := glfs.GetAtPath(ctx, s, x, "module")
 	if err != nil {
 		return nil, err

@@ -65,7 +65,7 @@ func GetMakeExecTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*MakeExe
 	}, nil
 }
 
-func PostMakeExecTask(ctx context.Context, s cadata.Poster, x MakeExecTask) (*glfs.Ref, error) {
+func PostMakeExecTask(ctx context.Context, s cadata.PostExister, x MakeExecTask) (*glfs.Ref, error) {
 	data, err := json.Marshal(x.MakeExecConfig)
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func PostMakeExecTask(ctx context.Context, s cadata.Poster, x MakeExecTask) (*gl
 	if x.ModCache != nil {
 		ents = append(ents, glfs.TreeEntry{Name: "modcache", FileMode: 0o777, Ref: *x.ModCache})
 	}
-	return glfs.PostTreeEntries(ctx, s, ents)
+	return glfs.PostTreeSlice(ctx, s, ents)
 }
 
 func (e *Executor) MakeExec(jc wantjob.Ctx, src cadata.Getter, task MakeExecTask) (*glfs.Ref, error) {

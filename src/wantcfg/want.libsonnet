@@ -177,7 +177,7 @@ local place(x, p) = compute("glfs.place", [
 ]);
 
 local filter(x, pathSet) =
-    local re = compute("want.pathSetRegexp", [
+    local re = compute("want.regexpFromPathSet", [
         input("", blob(std.manifestJsonEx(pathSet, ""))),
     ]);
     compute("glfs.filter", [

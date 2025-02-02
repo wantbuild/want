@@ -31,6 +31,7 @@ func TestPostGetRunTestsTask(t *testing.T) {
 			`),
 		}),
 		VMSpec: VMSpec{
+			Kernel: mustPostBlob(t, s, nil),
 			BaseFS: mustPostFS(t, s, map[string][]byte{}),
 		},
 	}
@@ -106,7 +107,7 @@ func requirePathExists(t testing.TB, s cadata.Getter, x glfs.Ref, k string) glfs
 	return *ref
 }
 
-func mustPostFS(t testing.TB, s cadata.Poster, m map[string][]byte) glfs.Ref {
+func mustPostFS(t testing.TB, s cadata.PostExister, m map[string][]byte) glfs.Ref {
 	ctx := context.TODO()
 	ref, err := postFS(ctx, s, m)
 	require.NoError(t, err)
@@ -137,7 +138,7 @@ func newJobCtx(t testing.TB) wantjob.Ctx {
 	}
 }
 
-func postFS(ctx context.Context, s cadata.Poster, m map[string][]byte) (*glfs.Ref, error) {
+func postFS(ctx context.Context, s cadata.PostExister, m map[string][]byte) (*glfs.Ref, error) {
 	var ents []glfs.TreeEntry
 	for k, v := range m {
 		ref, err := glfs.PostBlob(ctx, s, bytes.NewReader(v))
@@ -150,5 +151,5 @@ func postFS(ctx context.Context, s cadata.Poster, m map[string][]byte) (*glfs.Re
 			Ref:      *ref,
 		})
 	}
-	return glfs.PostTreeEntries(ctx, s, ents)
+	return glfs.PostTreeSlice(ctx, s, ents)
 }

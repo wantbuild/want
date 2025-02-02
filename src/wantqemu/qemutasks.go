@@ -38,7 +38,7 @@ type MicroVMConfig struct {
 	Output string   `json:"output,omitempty"`
 }
 
-func PostMicroVMTask(ctx context.Context, s cadata.Poster, x MicroVMTask) (*glfs.Ref, error) {
+func PostMicroVMTask(ctx context.Context, s cadata.PostExister, x MicroVMTask) (*glfs.Ref, error) {
 	ag := glfs.NewAgent()
 	configData, err := json.Marshal(MicroVMConfig{
 		Cores:  x.Cores,
@@ -59,7 +59,7 @@ func PostMicroVMTask(ctx context.Context, s cadata.Poster, x MicroVMTask) (*glfs
 		{Name: "kernel", FileMode: 0o644, Ref: x.Kernel},
 		{Name: "root", FileMode: 0o644, Ref: x.Root},
 	}
-	return ag.PostTreeEntries(ctx, s, ents)
+	return ag.PostTreeSlice(ctx, s, ents)
 }
 
 func GetMicroVMTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*MicroVMTask, error) {

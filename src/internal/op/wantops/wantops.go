@@ -21,10 +21,10 @@ import (
 )
 
 const (
-	OpBuild          = wantjob.OpName("build")
-	OpCompile        = wantjob.OpName("compile")
-	OpCompileSnippet = wantjob.OpName("compileSnippet")
-	OpPathSetRegexp  = wantjob.OpName("pathSetRegexp")
+	OpBuild             = wantjob.OpName("build")
+	OpCompile           = wantjob.OpName("compile")
+	OpCompileSnippet    = wantjob.OpName("compileSnippet")
+	OpRegexpFromPathSet = wantjob.OpName("regexpFromPathSet")
 )
 
 const MaxSnippetSize = 1e7
@@ -51,7 +51,7 @@ func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
 			return e.CompileSnippet(ctx, jc.Dst, src, x)
 		})
-	case OpPathSetRegexp:
+	case OpRegexpFromPathSet:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
 			return e.PathSetRegexp(jc, jc.Dst, src, x)
 		})
@@ -75,9 +75,6 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 	if err != nil {
 		return nil, err
 	}
-	if err := glfstasks.FastSync(ctx, jc.Dst, planStore, plan.Known); err != nil {
-		return nil, err
-	}
 	// filter targets
 	var targets []wantc.Target
 	var dags []glfs.Ref
@@ -90,7 +87,7 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 	// execute
 	var errorsOccured bool
 	results := make([]wantjob.Result, len(dags))
-	src2 := stores.Union{src, planStore}
+	src2 := stores.Union{src, jc.Dst, planStore}
 	eg := errgroup.Group{}
 	for i := range dags {
 		i := i
@@ -127,8 +124,11 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 			layers = append(layers, *ref)
 		}
 	}
-	outRef, err := glfs.Merge(ctx, stores.Fork{W: jc.Dst, R: src2}, layers...)
+	outRef, err := glfs.Merge(ctx, jc.Dst, src2, layers...)
 	if err != nil {
+		return nil, err
+	}
+	if err := wantc.SyncPlan(ctx, jc.Dst, src2, *plan); err != nil {
 		return nil, err
 	}
 	br, err := PostBuildResult(ctx, jc.Dst, BuildResult{
@@ -196,7 +196,7 @@ func (e Executor) PathSetRegexp(jc wantjob.Ctx, dst cadata.Store, s cadata.Gette
 
 func DoCompile(ctx context.Context, sys wantjob.System, compileOp wantjob.OpName, src cadata.Getter, ct CompileTask) (*wantc.Plan, cadata.Getter, error) {
 	scratch := stores.NewMem()
-	ctRef, err := PostCompileTask(ctx, scratch, ct)
+	ctRef, err := PostCompileTask(ctx, stores.Fork{W: scratch, R: src}, ct)
 	if err != nil {
 		return nil, nil, err
 	}

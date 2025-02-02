@@ -116,7 +116,7 @@ type MergeOCILayersTask struct {
 	Layers []glfs.Ref
 }
 
-func (e *Executor) MergeOCILayers(jc *wantjob.Ctx, dst cadata.GetPoster, s cadata.Getter, task MergeOCILayersTask) (*glfs.Ref, error) {
+func (e *Executor) MergeOCILayers(jc *wantjob.Ctx, dst cadata.PostExister, s cadata.Getter, task MergeOCILayersTask) (*glfs.Ref, error) {
 	ctx := jc.Context
 	ag := glfs.NewAgent()
 	img := empty.Image

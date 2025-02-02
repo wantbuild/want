@@ -181,7 +181,7 @@ func (c *Compiler) addSourceFile(ctx context.Context, cs *compileState, eg *errg
 	defer cs.donePath(p)
 	switch ref.Type {
 	case glfs.TypeTree:
-		tree, err := c.glfs.GetTree(ctx, cs.src, ref)
+		tree, err := c.glfs.GetTreeSlice(ctx, cs.src, ref, 1e6)
 		if err != nil {
 			return err
 		}
@@ -192,7 +192,7 @@ func (c *Compiler) addSourceFile(ctx context.Context, cs *compileState, eg *errg
 				return fmt.Errorf("submodules not yet supported.  Found submodule at path %s", p)
 			}
 		}
-		for _, ent := range tree.Entries {
+		for _, ent := range tree {
 			ent := ent
 			p2 := path.Join(p, ent.Name)
 			eg.Go(func() error {
@@ -496,7 +496,7 @@ func (c *Compiler) makeKnown(ctx context.Context, cs *compileState) error {
 	slices.SortFunc(cs.known, func(a, b glfs.TreeEntry) int {
 		return strings.Compare(a.Name, b.Name)
 	})
-	ref, err := c.glfs.PostTreeEntries(ctx, cs.dst, cs.known)
+	ref, err := c.glfs.PostTreeSlice(ctx, cs.dst, cs.known)
 	if err != nil {
 		return err
 	}

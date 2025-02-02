@@ -31,7 +31,7 @@ type wasip1Config struct {
 }
 
 // PostTask converts a Task to a glfs Tree stored in s.
-func PostWASIp1Task(ctx context.Context, ag *glfs.Agent, s cadata.Poster, task WASIp1Task) (*glfs.Ref, error) {
+func PostWASIp1Task(ctx context.Context, ag *glfs.Agent, s cadata.PostExister, task WASIp1Task) (*glfs.Ref, error) {
 	fRef, err := ag.PostBlob(ctx, s, bytes.NewReader(task.Program))
 	if err != nil {
 		return nil, err
@@ -100,7 +100,7 @@ type NativeGLFSTask struct {
 	Env    map[string]string
 }
 
-func PostNativeGLFSTask(ctx context.Context, s cadata.Poster, x NativeGLFSTask) (*glfs.Ref, error) {
+func PostNativeGLFSTask(ctx context.Context, s cadata.PostExister, x NativeGLFSTask) (*glfs.Ref, error) {
 	progRef, err := glfs.PostBlob(ctx, s, bytes.NewReader(x.Program))
 	if err != nil {
 		return nil, err

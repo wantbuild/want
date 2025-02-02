@@ -17,7 +17,7 @@ import (
 type Resolver = func(NodeID) wantjob.Result
 
 // PrepareInput prepares the input for a node.
-func PrepareInput(ctx context.Context, dst cadata.Poster, src cadata.Getter, ins []NodeInput, getResult Resolver) (*glfs.Ref, error) {
+func PrepareInput(ctx context.Context, dst cadata.PostExister, src cadata.Getter, ins []NodeInput, getResult Resolver) (*glfs.Ref, error) {
 	ents := []glfs.TreeEntry{}
 	for _, in := range ins {
 		res := getResult(in.Node)
@@ -41,10 +41,10 @@ func PrepareInput(ctx context.Context, dst cadata.Poster, src cadata.Getter, ins
 	if len(ents) == 1 && ents[0].Name == "" {
 		return &ents[0].Ref, nil
 	}
-	return glfs.PostTreeEntries(ctx, dst, ents)
+	return glfs.PostTreeSlice(ctx, dst, ents)
 }
 
-func PostNodeResults(ctx context.Context, s cadata.Poster, results []wantjob.Result) (*glfs.Ref, error) {
+func PostNodeResults(ctx context.Context, s cadata.PostExister, results []wantjob.Result) (*glfs.Ref, error) {
 	var ents []glfs.TreeEntry
 	for i, out := range results {
 		data, err := json.Marshal(out)
@@ -60,16 +60,16 @@ func PostNodeResults(ctx context.Context, s cadata.Poster, results []wantjob.Res
 			Ref:  *ref,
 		})
 	}
-	return glfs.PostTreeEntries(ctx, s, ents)
+	return glfs.PostTreeSlice(ctx, s, ents)
 }
 
 func GetNodeResults(ctx context.Context, s cadata.Getter, ref glfs.Ref) ([]wantjob.Result, error) {
-	tree, err := glfs.GetTree(ctx, s, ref)
+	tree, err := glfs.GetTreeSlice(ctx, s, ref, 1e6)
 	if err != nil {
 		return nil, err
 	}
 	var ret []wantjob.Result
-	for i, ent := range tree.Entries {
+	for i, ent := range tree {
 		n, err := strconv.ParseUint(ent.Name, 16, 64)
 		if err != nil {
 			return nil, err

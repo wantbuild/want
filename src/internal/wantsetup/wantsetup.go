@@ -6,6 +6,7 @@ import (
 
 	"wantbuild.io/want/src/internal/glfsport"
 	"wantbuild.io/want/src/internal/glfstasks"
+	"wantbuild.io/want/src/internal/op/dagops"
 	"wantbuild.io/want/src/internal/op/glfsops"
 	"wantbuild.io/want/src/internal/op/importops"
 	"wantbuild.io/want/src/internal/stores"
@@ -25,8 +26,14 @@ func Install(ctx context.Context, jsys wantjob.System, outDir string, snippet st
 	if err != nil {
 		return err
 	}
-	jc := wantjob.Ctx{Context: ctx, Dst: s, System: jsys}
-	res, err := wantdag.SerialExecLast(jc, s, dag)
+	dagRef, err := wantdag.PostDAG(ctx, s, dag)
+	if err != nil {
+		return err
+	}
+	res, outStore, err := wantjob.Do(ctx, jsys, s, wantjob.Task{
+		Op:    "dag.execLast",
+		Input: glfstasks.MarshalGLFSRef(*dagRef),
+	})
 	if err != nil {
 		return err
 	}
@@ -39,7 +46,7 @@ func Install(ctx context.Context, jsys wantjob.System, outDir string, snippet st
 	}
 	exp := glfsport.Exporter{
 		Dir:   outDir,
-		Store: s,
+		Store: outStore,
 		Cache: glfsport.NullCache{},
 	}
 	return exp.Export(ctx, *ref, "")
@@ -47,6 +54,7 @@ func Install(ctx context.Context, jsys wantjob.System, outDir string, snippet st
 
 func NewExecutor() wantjob.MultiExecutor {
 	return wantjob.MultiExecutor{
+		"dag":    dagops.Executor{},
 		"import": importops.NewExecutor(),
 		"glfs":   glfsops.Executor{},
 	}

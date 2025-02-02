@@ -39,7 +39,7 @@ func postFS(ctx context.Context, s cadata.Store, m map[string][]byte) (*glfs.Ref
 			Ref:      *ref,
 		})
 	}
-	return glfs.PostTreeEntries(ctx, s, ents)
+	return glfs.PostTreeSlice(ctx, s, ents)
 }
 
 func PrintFS(t testing.TB, s cadata.Getter, x glfs.Ref) {
@@ -92,7 +92,7 @@ func LoadFile(t testing.TB, s cadata.Poster, p string) glfs.Ref {
 	return *ref
 }
 
-func LoadTarGz(t testing.TB, s cadata.GetPoster, p string, subpath string) glfs.Ref {
+func LoadTarGz(t testing.TB, s cadata.Store, p string, subpath string) glfs.Ref {
 	ctx := Context(t)
 	ag := glfs.NewAgent()
 
@@ -116,7 +116,7 @@ func LoadTarGz(t testing.TB, s cadata.GetPoster, p string, subpath string) glfs.
 func PostTree(t testing.TB, s cadata.Store, ents []glfs.TreeEntry) glfs.Ref {
 	ctx := Context(t)
 	ag := glfs.NewAgent()
-	ref, err := ag.PostTreeEntries(ctx, s, ents)
+	ref, err := ag.PostTreeSlice(ctx, s, ents)
 	require.NoError(t, err)
 	return *ref
 }
@@ -124,7 +124,7 @@ func PostTree(t testing.TB, s cadata.Store, ents []glfs.TreeEntry) glfs.Ref {
 func MergeFS(t testing.TB, s cadata.Store, xs ...glfs.Ref) glfs.Ref {
 	ctx := Context(t)
 	ag := glfs.NewAgent()
-	ref, err := ag.Merge(ctx, s, xs...)
+	ref, err := ag.Merge(ctx, s, s, xs...)
 	require.NoError(t, err)
 	return *ref
 }
@@ -142,7 +142,7 @@ func SymlinkTree(t testing.TB, s cadata.Store, target, newp string) glfs.Ref {
 	ag := glfs.NewAgent()
 	ref, err := ag.PostBlob(ctx, s, strings.NewReader(target))
 	require.NoError(t, err)
-	ref, err = ag.PostTreeEntries(ctx, s, []glfs.TreeEntry{
+	ref, err = ag.PostTreeSlice(ctx, s, []glfs.TreeEntry{
 		{Name: newp, FileMode: fs.ModeSymlink | 0o644, Ref: *ref},
 	})
 	require.NoError(t, err)

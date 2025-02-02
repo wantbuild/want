@@ -11,7 +11,6 @@ import (
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/op/glfsops"
-	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/stringsets"
 	"wantbuild.io/want/src/wantcfg"
 	"wantbuild.io/want/src/wantjob"
@@ -29,7 +28,7 @@ func Intersects(a, b wantcfg.PathSet) bool {
 // Select performs the selection logic on a known filesystem root.
 func Select(ctx context.Context, dst cadata.Store, src cadata.Getter, root glfs.Ref, q wantcfg.PathSet) (*glfs.Ref, error) {
 	strset := SetFromQuery("", q)
-	return glfs.FilterPaths(ctx, stores.Fork{W: dst, R: src}, root, func(p string) bool {
+	return glfs.FilterPaths(ctx, dst, src, root, func(p string) bool {
 		return strset.Contains(p)
 	})
 }

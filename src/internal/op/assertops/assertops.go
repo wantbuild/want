@@ -22,7 +22,14 @@ func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]
 			if err != nil {
 				return nil, err
 			}
-			return AssertAll(ctx, jc.Dst, src, *at)
+			ref, err := AssertAll(ctx, jc.Dst, src, *at)
+			if err != nil {
+				return nil, err
+			}
+			if err := glfstasks.FastSync(ctx, jc.Dst, src, *ref); err != nil {
+				return nil, err
+			}
+			return ref, nil
 		})
 	default:
 		return nil, wantjob.NewErrUnknownOperator(x.Op)

@@ -47,7 +47,7 @@ func (ex Exporter) exportTree(ctx context.Context, sem *semaphore.Weighted, root
 	if err == nil && !finfo.IsDir() {
 		return fmt.Errorf("cannot export tree %v to path %s", root, p)
 	}
-	tree, err := glfs.GetTree(ctx, ex.Store, root)
+	tree, err := glfs.GetTreeSlice(ctx, ex.Store, root, 1e6)
 	if err != nil {
 		return err
 	}
@@ -56,7 +56,7 @@ func (ex Exporter) exportTree(ctx context.Context, sem *semaphore.Weighted, root
 		return err
 	}
 	eg, ctx := errgroup.WithContext(ctx)
-	for _, ent := range tree.Entries {
+	for _, ent := range tree {
 		ent := ent
 		fn := func() error {
 			p2 := path.Join(p, ent.Name)

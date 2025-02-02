@@ -12,16 +12,7 @@ import (
 	"wantbuild.io/want/src/wantjob"
 )
 
-func ParallelExecLast(jc wantjob.Ctx, s cadata.Getter, x DAG) (wantjob.Result, error) {
-	// TODO: lazy execution
-	nrs, err := ParallelExecAll(jc, s, x)
-	if err != nil {
-		return wantjob.Result{}, err
-	}
-	return nrs[len(nrs)-1], nil
-}
-
-func ParallelExecAll(jc wantjob.Ctx, src cadata.Getter, x DAG) ([]wantjob.Result, error) {
+func ParallelExecLast(jc wantjob.Ctx, src cadata.Getter, x DAG) (*wantjob.Result, error) {
 	results := make([]wantjob.Result, len(x))
 	unblocks := make([][]NodeID, len(x))
 	needCount := make([]int32, len(x))
@@ -47,9 +38,7 @@ func ParallelExecAll(jc wantjob.Ctx, src cadata.Getter, x DAG) ([]wantjob.Result
 			outRef = node.Value
 			results[id] = *glfstasks.Success(*node.Value)
 		case node.IsDerived():
-			scratch := stores.NewMem()
-			union = append(union, scratch)
-			inputRef, err := PrepareInput(jc.Context, scratch, union, node.Inputs, resolve)
+			inputRef, err := PrepareInput(jc.Context, jc.Dst, union, node.Inputs, resolve)
 			if err != nil {
 				return err
 			}
@@ -91,5 +80,6 @@ func ParallelExecAll(jc wantjob.Ctx, src cadata.Getter, x DAG) ([]wantjob.Result
 	if err := eg.Wait(); err != nil {
 		return nil, err
 	}
-	return results, nil
+	ret := results[len(results)-1]
+	return &ret, nil
 }

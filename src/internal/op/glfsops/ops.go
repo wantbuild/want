@@ -44,83 +44,89 @@ var ops = map[OpName]Operator{
 	OpDiff:        Diff,
 }
 
-type Operator func(ctx context.Context, s cadata.GetPoster, x glfs.Ref) (*glfs.Ref, error)
+type Operator func(ctx context.Context, dst cadata.PostExister, src cadata.Getter, x glfs.Ref) (*glfs.Ref, error)
 
-func Merge(ctx context.Context, s cadata.GetPoster, inputsRef glfs.Ref) (*glfs.Ref, error) {
-	t, err := glfs.GetTree(ctx, s, inputsRef)
+func Merge(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inputsRef glfs.Ref) (*glfs.Ref, error) {
+	t, err := glfs.GetTreeSlice(ctx, src, inputsRef, 1e6)
 	if err != nil {
 		return nil, err
 	}
 	layers := []glfs.Ref{}
-	for _, ent := range t.Entries {
+	for _, ent := range t {
 		layers = append(layers, ent.Ref)
 	}
 	if len(layers) == 0 {
 		return nil, errors.New("cannot merge 0 layers")
 	}
-	return glfs.Merge(ctx, s, layers...)
+	return glfs.Merge(ctx, dst, src, layers...)
 }
 
-func Pick(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.Ref, error) {
-	inputTree, err := glfs.GetTree(ctx, s, inputRef)
+func Pick(ctx context.Context, _ cadata.PostExister, src cadata.Getter, inputRef glfs.Ref) (*glfs.Ref, error) {
+	inputTree, err := glfs.GetTreeSlice(ctx, src, inputRef, 1e6)
 	if err != nil {
 		return nil, err
 	}
-	xent := inputTree.Lookup("x")
+	xent := glfs.Lookup(inputTree, "x")
 	if xent == nil {
 		return nil, errors.New("no target")
 	}
-	pathEnt := inputTree.Lookup("path")
+	pathEnt := glfs.Lookup(inputTree, "path")
 	if pathEnt == nil {
 		return nil, errors.New("no path")
 	}
-	pathBytes, err := glfs.GetBlobBytes(ctx, s, pathEnt.Ref, MaxPathLen)
+	pathBytes, err := glfs.GetBlobBytes(ctx, src, pathEnt.Ref, MaxPathLen)
 	if err != nil {
 		return nil, fmt.Errorf("pick: while reading path %w", err)
 	}
-	return glfs.GetAtPath(ctx, s, xent.Ref, string(pathBytes))
+	return glfs.GetAtPath(ctx, src, xent.Ref, string(pathBytes))
 }
 
-func Place(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.Ref, error) {
-	inputTree, err := glfs.GetTree(ctx, s, inputRef)
+func Place(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inputRef glfs.Ref) (*glfs.Ref, error) {
+	inputTree, err := glfs.GetTreeSlice(ctx, src, inputRef, 1e6)
 	if err != nil {
 		return nil, err
 	}
-	xent := inputTree.Lookup("x")
+	xent := glfs.Lookup(inputTree, "x")
 	if xent == nil {
 		return nil, errors.New("no target")
 	}
-	pathEnt := inputTree.Lookup("path")
+	pathEnt := glfs.Lookup(inputTree, "path")
 	if pathEnt == nil {
 		return nil, errors.New("no path")
 	}
-	pathBytes, err := glfs.GetBlobBytes(ctx, s, pathEnt.Ref, MaxPathLen)
+	pathBytes, err := glfs.GetBlobBytes(ctx, src, pathEnt.Ref, MaxPathLen)
 	if err != nil {
 		return nil, fmt.Errorf("place: while reading path %w", err)
 	}
-	return glfs.PostTreeEntries(ctx, s, []glfs.TreeEntry{
+	if err := glfs.Sync(ctx, dst, src, xent.Ref); err != nil {
+		return nil, err
+	}
+	return glfs.PostTreeSlice(ctx, dst, []glfs.TreeEntry{
 		{Name: string(pathBytes), FileMode: 0o777, Ref: xent.Ref},
 	})
 }
 
-func Passthrough(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.Ref, error) {
+func Passthrough(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inputRef glfs.Ref) (*glfs.Ref, error) {
+	if err := glfs.Sync(ctx, dst, src, inputRef); err != nil {
+		return nil, err
+	}
 	return &inputRef, nil
 }
 
-func Filter(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.Ref, error) {
-	root, err := glfs.GetTree(ctx, s, inputRef)
+func Filter(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inputRef glfs.Ref) (*glfs.Ref, error) {
+	root, err := glfs.GetTreeSlice(ctx, src, inputRef, 1e6)
 	if err != nil {
 		return nil, err
 	}
-	targetEnt := root.Lookup("x")
+	targetEnt := glfs.Lookup(root, "x")
 	if targetEnt == nil {
 		return nil, errors.New("missing target")
 	}
-	filterEnt := root.Lookup("filter")
+	filterEnt := glfs.Lookup(root, "filter")
 	if filterEnt == nil {
 		return nil, errors.New("missing filter")
 	}
-	data, err := glfs.GetBlobBytes(ctx, s, filterEnt.Ref, 1e6)
+	data, err := glfs.GetBlobBytes(ctx, src, filterEnt.Ref, 1e6)
 	if err != nil {
 		return nil, fmt.Errorf("filter must be blob %w", err)
 	}
@@ -128,47 +134,47 @@ func Filter(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.R
 	if err != nil {
 		return nil, err
 	}
-	return glfs.FilterPaths(ctx, s, targetEnt.Ref, func(x string) bool {
+	return glfs.FilterPaths(ctx, dst, src, targetEnt.Ref, func(x string) bool {
 		return re.MatchString(x)
 	})
 }
 
-func Chmod(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.Ref, error) {
-	inputTree, err := glfs.GetTree(ctx, s, inputRef)
+func Chmod(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inputRef glfs.Ref) (*glfs.Ref, error) {
+	inputTree, err := glfs.GetTreeSlice(ctx, src, inputRef, 1e6)
 	if err != nil {
 		return nil, err
 	}
-	xEnt := inputTree.Lookup("x")
+	xEnt := glfs.Lookup(inputTree, "x")
 	if xEnt == nil {
 		return nil, NewErrInvalidInput(inputRef, "set-permissions requires input 'x'")
 	}
-	pathEnt := inputTree.Lookup("path")
+	pathEnt := glfs.Lookup(inputTree, "path")
 	if pathEnt == nil {
 		return nil, NewErrInvalidInput(inputRef, "set-permissions requires input 'path'")
 	}
-	pathData, err := glfs.GetBlobBytes(ctx, s, pathEnt.Ref, MaxPathLen)
+	pathData, err := glfs.GetBlobBytes(ctx, src, pathEnt.Ref, MaxPathLen)
 	if err != nil {
 		return nil, err
 	}
 	// TODO: support changing permissions to any value.
 	p := string(bytes.Trim(bytes.TrimSpace(pathData), "/"))
-	return glfs.MapEntryAt(ctx, s, xEnt.Ref, p, func(ent glfs.TreeEntry) (*glfs.TreeEntry, error) {
+	return glfs.MapEntryAt(ctx, dst, src, xEnt.Ref, p, func(ent glfs.TreeEntry) (*glfs.TreeEntry, error) {
 		ent.FileMode |= 0o111
 		return &ent, nil
 	})
 }
 
-func Diff(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.Ref, error) {
+func Diff(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inputRef glfs.Ref) (*glfs.Ref, error) {
 	ag := glfs.NewAgent()
-	left, err := ag.GetAtPath(ctx, s, inputRef, "left")
+	left, err := ag.GetAtPath(ctx, src, inputRef, "left")
 	if err != nil {
 		return nil, err
 	}
-	right, err := ag.GetAtPath(ctx, s, inputRef, "right")
+	right, err := ag.GetAtPath(ctx, src, inputRef, "right")
 	if err != nil {
 		return nil, err
 	}
-	diff, err := ag.Compare(ctx, s, *left, *right)
+	diff, err := ag.Compare(ctx, dst, src, *left, *right)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +189,7 @@ func Diff(ctx context.Context, s cadata.GetPoster, inputRef glfs.Ref) (*glfs.Ref
 	if diff.Both != nil {
 		ents = append(ents, makeTreeEntry("both", *diff.Both))
 	}
-	return ag.PostTreeEntries(ctx, s, ents)
+	return ag.PostTreeSlice(ctx, dst, ents)
 }
 
 func makeTreeEntry(name string, ref glfs.Ref) glfs.TreeEntry {

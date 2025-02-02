@@ -78,7 +78,7 @@ func DeriveFromURL(ctx context.Context, gb GraphBuilder, s cadata.Poster, x Impo
 }
 
 // ImportURL imports data from a URL, checking that it matches a hash, and applying any transformations.
-func (e *Executor) ImportURL(jc wantjob.Ctx, s cadata.GetPoster, spec ImportURLTask) (*glfs.Ref, error) {
+func (e *Executor) ImportURL(jc wantjob.Ctx, spec ImportURLTask) (*glfs.Ref, error) {
 	u, err := url.Parse(spec.URL)
 	if err != nil {
 		return nil, err
@@ -99,15 +99,15 @@ func (e *Executor) ImportURL(jc wantjob.Ctx, s cadata.GetPoster, spec ImportURLT
 		return nil, err
 	}
 	defer r.Close()
-	return importStream(jc.Context, s, r, stages, spec.Transforms)
+	return importStream(jc.Context, jc.Dst, r, stages, spec.Transforms)
 }
 
 type pipelineStage = func(w io.Writer, r io.Reader) error
 
-func importStream(ctx context.Context, s cadata.GetPoster, r io.Reader, stages []pipelineStage, transforms []string) (*glfs.Ref, error) {
+func importStream(ctx context.Context, dst cadata.PostExister, r io.Reader, stages []pipelineStage, transforms []string) (*glfs.Ref, error) {
 	ag := glfs.NewAgent()
 	var collect = func(r io.Reader) (*glfs.Ref, error) {
-		return glfs.PostBlob(ctx, s, r)
+		return glfs.PostBlob(ctx, dst, r)
 	}
 	for i, tfName := range transforms {
 		switch tfName {
@@ -125,14 +125,14 @@ func importStream(ctx context.Context, s cadata.GetPoster, r io.Reader, stages [
 				return nil, fmt.Errorf("untar must be last transform")
 			}
 			collect = func(r io.Reader) (*glfs.Ref, error) {
-				return untar(ctx, ag, s, r)
+				return untar(ctx, ag, dst, r)
 			}
 		case TransformUnzip:
 			if i != len(transforms)-1 {
-				return nil, fmt.Errorf("untar must be last transform")
+				return nil, fmt.Errorf("unzip must be last transform")
 			}
 			collect = func(r io.Reader) (*glfs.Ref, error) {
-				return unzip(ctx, ag, s, r)
+				return unzip(ctx, ag, dst, r)
 			}
 
 		default:
@@ -195,7 +195,7 @@ func checkHash(h hash.Hash, sum []byte) pipelineStage {
 	}
 }
 
-func untar(ctx context.Context, op *glfs.Agent, s cadata.Poster, r io.Reader) (*glfs.Ref, error) {
+func untar(ctx context.Context, op *glfs.Agent, s cadata.PostExister, r io.Reader) (*glfs.Ref, error) {
 	tr := tar.NewReader(r)
 	ref, err := glfstar.ReadTAR(ctx, op, s, tr)
 	if err != nil {
@@ -207,7 +207,7 @@ func untar(ctx context.Context, op *glfs.Agent, s cadata.Poster, r io.Reader) (*
 	return ref, nil
 }
 
-func unzip(ctx context.Context, op *glfs.Agent, s cadata.Poster, r io.Reader) (*glfs.Ref, error) {
+func unzip(ctx context.Context, op *glfs.Agent, s cadata.PostExister, r io.Reader) (*glfs.Ref, error) {
 	f, err := os.CreateTemp("", "unzip-*")
 	if err != nil {
 		return nil, err

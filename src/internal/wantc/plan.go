@@ -47,7 +47,7 @@ type Plan struct {
 	Targets []Target `json:"targets"`
 }
 
-func PostPlan(ctx context.Context, s cadata.Poster, x Plan) (*glfs.Ref, error) {
+func PostPlan(ctx context.Context, s cadata.PostExister, x Plan) (*glfs.Ref, error) {
 	data, err := json.Marshal(x)
 	if err != nil {
 		return nil, err
@@ -67,7 +67,27 @@ func PostPlan(ctx context.Context, s cadata.Poster, x Plan) (*glfs.Ref, error) {
 			Ref:      target.DAG,
 		})
 	}
-	return glfs.PostTreeEntries(ctx, s, ents)
+	return glfs.PostTreeSlice(ctx, s, ents)
+}
+
+func SyncPlan(ctx context.Context, dst cadata.PostExister, src cadata.Getter, plan Plan) error {
+	allRefs := func(yield func(glfs.Ref) bool) {
+		for _, target := range plan.Targets {
+			if !yield(target.DAG) {
+				break
+			}
+		}
+		if !yield(plan.Known) {
+			return
+		}
+		yield(plan.Source)
+	}
+	for ref := range allRefs {
+		if err := glfs.Sync(ctx, dst, src, ref); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 const MaxPlanSize = 1e6

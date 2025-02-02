@@ -36,7 +36,7 @@ func SerialExecAll(jc wantjob.Ctx, s cadata.Getter, x DAG) ([]wantjob.Result, er
 			nodeStores[i] = s
 			outRef = n.Value
 		case n.IsDerived():
-			input, err := PrepareInput(ctx, scratch, union, n.Inputs, resolve)
+			input, err := PrepareInput(ctx, stores.Fork{W: scratch, R: union}, union, n.Inputs, resolve)
 			if err != nil {
 				return nil, err
 			}
@@ -47,10 +47,10 @@ func SerialExecAll(jc wantjob.Ctx, s cadata.Getter, x DAG) ([]wantjob.Result, er
 				Op:    n.Op,
 				Input: glfstasks.MarshalGLFSRef(*input),
 			})
-			union = append(union, outSrc)
 			if err != nil {
 				return nil, err
 			}
+			union = append(union, outSrc)
 			if err := out.Err(); err != nil {
 				jc.Infof("ERROR: %v", err)
 			}

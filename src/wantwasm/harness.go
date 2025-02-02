@@ -157,7 +157,7 @@ func importTree(ctx context.Context, s cadata.Store, p string, finfo os.FileInfo
 		ys[i] = glfs.TreeEntry{Name: xs[i].Name(), FileMode: finfo.Mode(), Ref: *ref}
 	}
 	runtime.GC()
-	return glfs.PostTreeEntries(ctx, s, ys)
+	return glfs.PostTreeSlice(ctx, s, ys)
 }
 
 func importFile(ctx context.Context, s cadata.Store, p string) (*glfs.Ref, error) {

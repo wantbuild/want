@@ -9,7 +9,6 @@ import (
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"
-	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/wantjob"
 )
 
@@ -34,7 +33,6 @@ func NewExecutor() *Executor {
 
 func (e *Executor) Execute(jc wantjob.Ctx, s cadata.Getter, x wantjob.Task) ([]byte, error) {
 	ctx := jc.Context
-	s2 := stores.Fork{W: jc.Dst, R: s}
 
 	switch x.Op {
 	case OpFromURL:
@@ -43,7 +41,7 @@ func (e *Executor) Execute(jc wantjob.Ctx, s cadata.Getter, x wantjob.Task) ([]b
 			if err != nil {
 				return nil, err
 			}
-			return e.ImportURL(jc, s2, *spec)
+			return e.ImportURL(jc, *spec)
 		})
 	case OpFromGit:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
@@ -51,7 +49,7 @@ func (e *Executor) Execute(jc wantjob.Ctx, s cadata.Getter, x wantjob.Task) ([]b
 			if err != nil {
 				return nil, err
 			}
-			return e.ImportGit(ctx, s2, *spec)
+			return e.ImportGit(ctx, jc.Dst, *spec)
 		})
 	case OpUnpack:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
@@ -59,7 +57,7 @@ func (e *Executor) Execute(jc wantjob.Ctx, s cadata.Getter, x wantjob.Task) ([]b
 			if err != nil {
 				return nil, err
 			}
-			return e.Unpack(ctx, s2, *spec)
+			return e.Unpack(ctx, jc.Dst, s, *spec)
 		})
 	case OpFromGoZip:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
@@ -67,7 +65,7 @@ func (e *Executor) Execute(jc wantjob.Ctx, s cadata.Getter, x wantjob.Task) ([]b
 			if err != nil {
 				return nil, err
 			}
-			return e.ImportGoZip(jc, s2, *spec)
+			return e.ImportGoZip(jc, jc.Dst, *spec)
 		})
 	case OpFromOCIImage:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {

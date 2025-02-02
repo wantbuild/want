@@ -36,7 +36,7 @@ func GetImportGitTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*Import
 	return loadJSON[ImportGitTask](ctx, s, x)
 }
 
-func (e *Executor) ImportGit(ctx context.Context, s cadata.GetPoster, spec ImportGitTask) (*glfs.Ref, error) {
+func (e *Executor) ImportGit(ctx context.Context, s cadata.PostExister, spec ImportGitTask) (*glfs.Ref, error) {
 	if len(spec.CommitHash) < 40 {
 		return nil, fmt.Errorf("invalid commit_hash %q, len=%d", spec.CommitHash, len(spec.CommitHash))
 	}

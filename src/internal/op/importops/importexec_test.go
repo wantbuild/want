@@ -37,7 +37,7 @@ func TestImportURL(t *testing.T) {
 			s := stores.NewMem()
 			e := NewExecutor()
 			jc := wantjob.Ctx{Context: ctx, Dst: s}
-			y, err := e.ImportURL(jc, s, tc)
+			y, err := e.ImportURL(jc, tc)
 			require.NoError(t, err)
 			require.NotNil(t, y)
 		})

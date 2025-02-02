@@ -57,7 +57,7 @@ func GetMakeTestExecTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*Mak
 	}, nil
 }
 
-func PostMakeTestExecTask(ctx context.Context, s cadata.Poster, x MakeTestExecTask) (*glfs.Ref, error) {
+func PostMakeTestExecTask(ctx context.Context, s cadata.PostExister, x MakeTestExecTask) (*glfs.Ref, error) {
 	configData, err := json.Marshal(x.MakeTestExecConfig)
 	if err != nil {
 		return nil, err

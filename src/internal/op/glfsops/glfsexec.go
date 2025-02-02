@@ -1,11 +1,12 @@
 package glfsops
 
 import (
+	"fmt"
+
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"
-	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/wantjob"
 )
 
@@ -19,6 +20,12 @@ func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]
 		return nil, wantjob.NewErrUnknownOperator(x.Op)
 	}
 	return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
-		return op(jc.Context, stores.Fork{W: jc.Dst, R: src}, x)
+		ref, err := op(jc.Context, jc.Dst, src, x)
+		if ref != nil {
+			if err := glfstasks.FastSync(jc.Context, jc.Dst, src, *ref); err != nil {
+				return nil, fmt.Errorf("glfsops: syncing %w", err)
+			}
+		}
+		return ref, err
 	})
 }

@@ -65,7 +65,7 @@ func Success(x glfs.Ref) *wantjob.Result {
 	return &wantjob.Result{Data: MarshalGLFSRef(x)}
 }
 
-func FastSync(ctx context.Context, dst cadata.Store, src cadata.Getter, root glfs.Ref) error {
+func FastSync(ctx context.Context, dst cadata.PostExister, src cadata.Getter, root glfs.Ref) error {
 	rootData := MarshalGLFSRef(root)
 	var err error
 	switch dst := dst.(type) {
@@ -90,14 +90,14 @@ func check(ctx context.Context, src cadata.Getter, root glfs.Ref, history []stri
 	if yes, err := stores.ExistsOnGet(ctx, src, root.CID); err != nil {
 		return err
 	} else if !yes {
-		return fmt.Errorf("integrity check failed, store is missing %v", root.CID)
+		return fmt.Errorf("integrity check failed, store %v: %T is missing %v", src, src, root.CID)
 	}
 	if root.Type == glfs.TypeTree {
-		tree, err := glfs.GetTree(ctx, src, root)
+		tree, err := glfs.GetTreeSlice(ctx, src, root, 1e6)
 		if err != nil {
 			return err
 		}
-		for _, ent := range tree.Entries {
+		for _, ent := range tree {
 			history = append(history, ent.Name)
 			if err := check(ctx, src, ent.Ref, history); err != nil {
 				return fmt.Errorf("check entry at %v: %w", history, err)

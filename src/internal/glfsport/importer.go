@@ -19,7 +19,7 @@ import (
 )
 
 type Importer struct {
-	Store  cadata.Poster
+	Store  cadata.PostExister
 	Dir    string
 	Filter func(p string) bool
 	Cache  Cache
@@ -88,7 +88,7 @@ func (im *Importer) importDir(ctx context.Context, sem *semaphore.Weighted, p st
 	if err := eg.Wait(); err != nil {
 		return nil, err
 	}
-	return glfs.PostTreeEntries(ctx, im.Store, ents)
+	return glfs.PostTreeSlice(ctx, im.Store, ents)
 }
 
 func (im *Importer) importFile(ctx context.Context, p string) (*glfs.Ref, error) {

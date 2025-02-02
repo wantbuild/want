@@ -28,7 +28,7 @@ type unpackBlobConfig struct {
 	Transforms []string `json:"transforms"`
 }
 
-func PostUnpackTask(ctx context.Context, s cadata.Poster, spec UnpackTask) (*glfs.Ref, error) {
+func PostUnpackTask(ctx context.Context, s cadata.PostExister, spec UnpackTask) (*glfs.Ref, error) {
 	configData, err := json.Marshal(unpackBlobConfig{
 		Transforms: spec.Transforms,
 	})
@@ -39,7 +39,7 @@ func PostUnpackTask(ctx context.Context, s cadata.Poster, spec UnpackTask) (*glf
 	if err != nil {
 		return nil, err
 	}
-	return glfs.PostTreeEntries(ctx, s, []glfs.TreeEntry{
+	return glfs.PostTreeSlice(ctx, s, []glfs.TreeEntry{
 		{Name: "x", FileMode: 0o777, Ref: spec.X},
 		{Name: "config.json", FileMode: 0o644, Ref: *configRef},
 	})
@@ -61,11 +61,11 @@ func GetUnpackTask(ctx context.Context, s cadata.Getter, ref glfs.Ref) (*UnpackT
 	return &UnpackTask{X: *input, Transforms: config.Transforms}, nil
 }
 
-func (e *Executor) Unpack(ctx context.Context, s cadata.GetPoster, spec UnpackTask) (*glfs.Ref, error) {
+func (e *Executor) Unpack(ctx context.Context, dst cadata.PostExister, s cadata.Getter, spec UnpackTask) (*glfs.Ref, error) {
 	op := glfs.NewAgent()
 	r, err := op.GetBlob(ctx, s, spec.X)
 	if err != nil {
 		return nil, fmt.Errorf("unpack: while getting blob: %w", err)
 	}
-	return importStream(ctx, s, r, nil, spec.Transforms)
+	return importStream(ctx, dst, r, nil, spec.Transforms)
 }

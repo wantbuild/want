@@ -19,7 +19,7 @@ type (
 )
 
 type GraphBuilder struct {
-	dst   cadata.GetPoster
+	dst   cadata.Store
 	index map[[32]byte]wantdag.NodeID
 	b     wantdag.Builder
 }
@@ -148,7 +148,7 @@ func (gb *GraphBuilder) blob(ctx context.Context, data []byte) (wantdag.NodeID, 
 }
 
 func (gb *GraphBuilder) emptyTree(ctx context.Context) (wantdag.NodeID, error) {
-	ref, err := glfs.PostTreeEntries(ctx, gb.dst, nil)
+	ref, err := glfs.PostTreeSlice(ctx, gb.dst, nil)
 	if err != nil {
 		return 0, err
 	}

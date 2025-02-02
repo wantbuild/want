@@ -5,6 +5,7 @@ import (
 	"path"
 
 	"github.com/blobcache/glfs"
+	"go.brendoncarroll.net/exp/streams"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/wantjob"
@@ -14,17 +15,30 @@ const OpMakeTestExec = wantjob.OpName("golang.makeTestExec")
 
 // IsGoModule returns (true, nil) if the directory is a Go Module
 func IsGoModule(ctx context.Context, s cadata.Getter, x glfs.Ref) (bool, error) {
-	tree, err := glfs.GetTree(ctx, s, x)
+	tr, err := glfs.NewAgent().NewTreeReader(s, x)
 	if err != nil {
 		return false, err
 	}
-	if ent := tree.Lookup("go.mod"); ent == nil {
-		return false, nil
+	var foundMod, foundSum bool
+	for {
+		ent, err := streams.Next(ctx, tr)
+		if err != nil {
+			if streams.IsEOS(err) {
+				break
+			}
+			return false, err
+		}
+		switch ent.Name {
+		case "go.mod":
+			foundMod = true
+		case "go.sum":
+			foundSum = true
+		}
+		if foundMod && foundSum {
+			return true, nil
+		}
 	}
-	if ent := tree.Lookup("go.sum"); ent == nil {
-		return false, nil
-	}
-	return true, nil
+	return false, nil
 }
 
 // IsGoPackage returns (true, nil) if the directory at x is a Go Package
@@ -35,11 +49,18 @@ func IsGoPackage(ctx context.Context, s cadata.Getter, x glfs.Ref) (bool, error)
 	if x.Type != glfs.TypeTree {
 		return false, nil
 	}
-	tree, err := glfs.GetTree(ctx, s, x)
+	tr, err := glfs.NewAgent().NewTreeReader(s, x)
 	if err != nil {
 		return false, err
 	}
-	for _, ent := range tree.Entries {
+	for {
+		ent, err := streams.Next(ctx, tr)
+		if err != nil {
+			if streams.IsEOS(err) {
+				break
+			}
+			return false, err
+		}
 		if path.Ext(ent.Name) == goExt {
 			return true, nil
 		}

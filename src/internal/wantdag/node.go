@@ -19,7 +19,7 @@ const (
 type OpName = wantjob.OpName
 
 // NodeID identifies a Node within a Graph
-type NodeID uint64
+type NodeID uint32
 
 // Node is either a fact or a derived value in a computation graph.
 type Node struct {

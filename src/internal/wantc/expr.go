@@ -219,7 +219,7 @@ func (c *Compiler) compileSelection(ctx context.Context, cs *compileState, exprP
 		out, err := c.selectFacts(ctx, cs, ks, pick)
 		if err != nil {
 			if x.AllowEmpty && strings.Contains(err.Error(), "no entry at") {
-				emptyDirRef, err := glfs.PostTree(ctx, cs.dst, glfs.Tree{})
+				emptyDirRef, err := glfs.PostTreeSlice(ctx, cs.dst, nil)
 				if err != nil {
 					return nil, err
 				}
@@ -274,7 +274,7 @@ func (c *Compiler) compileTree(ctx context.Context, dst cadata.Store, src cadata
 			Ref:      ref,
 		})
 	}
-	ref, err := glfs.PostTreeEntries(ctx, dst, ents)
+	ref, err := glfs.PostTreeSlice(ctx, dst, ents)
 	if err != nil {
 		return nil, err
 	}
@@ -317,14 +317,13 @@ func (c *Compiler) compileInputs(ctx context.Context, cs *compileState, stagePat
 }
 
 func (c *Compiler) selectFacts(ctx context.Context, cs *compileState, set stringsets.Set, pick string) (*value, error) {
-	s := stores.Fork{W: cs.dst, R: cs.src}
-	ref, err := glfs.FilterPaths(ctx, s, cs.ground, func(p string) bool {
+	ref, err := glfs.FilterPaths(ctx, cs.dst, cs.src, cs.ground, func(p string) bool {
 		return set.Contains(p)
 	})
 	if err != nil {
 		return nil, err
 	}
-	ref, err = glfs.GetAtPath(ctx, s, *ref, pick)
+	ref, err = glfs.GetAtPath(ctx, cs.dst, *ref, pick)
 	if err != nil {
 		return nil, err
 	}

@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/blobcache/glfs"
+	"github.com/blobcache/glfs/glfsiofs"
 	"github.com/pkg/errors"
 	"go.brendoncarroll.net/exp/slices2"
 	"go.brendoncarroll.net/star"
 
-	"wantbuild.io/want/src/internal/glfsiofs"
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/wantc"
 	"wantbuild.io/want/src/wantcfg"
@@ -95,12 +95,12 @@ var lsCmd = star.Command{
 		if ref.Type != glfs.TypeTree {
 			return errors.Errorf("cannot ls non-tree: %v", ref)
 		}
-		tree, err := glfs.GetTree(ctx, src, *ref)
+		tree, err := glfs.GetTreeSlice(ctx, src, *ref, 1e6)
 		if err != nil {
 			return err
 		}
 		w := c.StdOut
-		if err := fmtTree(w, tree.Entries); err != nil {
+		if err := fmtTree(w, tree); err != nil {
 			return err
 		}
 		return w.Flush()

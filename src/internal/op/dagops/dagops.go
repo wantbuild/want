@@ -10,7 +10,6 @@ import (
 
 const (
 	// OpExec evaluates a subgraph.
-	OpExecAll  = wantjob.OpName("execAll")
 	OpExecLast = wantjob.OpName("execLast")
 )
 
@@ -20,10 +19,6 @@ type Executor struct{}
 
 func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]byte, error) {
 	switch x.Op {
-	case OpExecAll:
-		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
-			return e.ExecAll(jc, src, x)
-		})
 	case OpExecLast:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
 			return e.ExecLast(jc, src, x)
@@ -31,20 +26,6 @@ func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]
 	default:
 		return nil, wantjob.NewErrUnknownOperator(x.Op)
 	}
-}
-
-func (e Executor) ExecAll(jc wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
-	defer jc.InfoSpan("dag.execAll")()
-	ctx := jc.Context
-	dag, err := wantdag.GetDAG(ctx, s, ref)
-	if err != nil {
-		return nil, err
-	}
-	nrs, err := wantdag.ParallelExecAll(jc, s, dag)
-	if err != nil {
-		return nil, err
-	}
-	return wantdag.PostNodeResults(ctx, jc.Dst, nrs)
 }
 
 func (e Executor) ExecLast(jc wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {

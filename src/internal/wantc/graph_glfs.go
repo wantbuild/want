@@ -84,12 +84,12 @@ func FactString(ctx context.Context, gb *wantdag.Builder, s cadata.GetPoster, p 
 	return nid
 }
 
-func FactTree(ctx context.Context, gb *wantdag.Builder, s cadata.GetPoster, ents []glfs.TreeEntry) wantdag.NodeID {
-	ref, err := glfs.PostTreeEntries(ctx, s, ents)
+func FactTree(ctx context.Context, gb *wantdag.Builder, dst cadata.PostExister, src cadata.Getter, ents []glfs.TreeEntry) wantdag.NodeID {
+	ref, err := glfs.PostTreeSlice(ctx, dst, ents)
 	if err != nil {
 		panic(err)
 	}
-	nid, err := gb.Fact(ctx, s, *ref)
+	nid, err := gb.Fact(ctx, src, *ref)
 	if err != nil {
 		panic(err)
 	}
