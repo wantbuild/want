@@ -2,20 +2,26 @@ package want
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"sync"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/kr/text"
+	"go.brendoncarroll.net/exp/singleflight"
 	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/stdctx/logctx"
 	"go.brendoncarroll.net/tai64"
 	"go.uber.org/zap"
 
 	"wantbuild.io/want/src/internal/dbutil"
+	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/wantdb"
 	"wantbuild.io/want/src/wantjob"
 )
@@ -42,6 +48,7 @@ type job struct {
 	logWriters map[string]*os.File
 
 	createdAt, startAt, endAt tai64.TAI64N
+	stackTrace                []byte
 }
 
 func newJob(sys *jobSystem, parent *job, idx wantjob.Idx, dst cadata.Store, src cadata.Getter, task wantjob.Task) *job {
@@ -60,10 +67,12 @@ func newJob(sys *jobSystem, parent *job, idx wantjob.Idx, dst cadata.Store, src 
 		dst:  dst,
 		src:  src,
 
-		ctx:       ctx,
-		cf:        cf,
-		done:      make(chan struct{}),
-		createdAt: tai64.Now(),
+		ctx:  ctx,
+		cf:   cf,
+		done: make(chan struct{}),
+
+		createdAt:  tai64.Now(),
+		stackTrace: debug.Stack(),
 	}
 }
 
@@ -84,6 +93,10 @@ func (j *job) Cancel(ctx context.Context, idx wantjob.Idx) error {
 		return err
 	}
 	return child.cancel()
+}
+
+func (j *job) Delete(ctx context.Context, idx wantjob.Idx) error {
+	return errors.New("delete not implemented")
 }
 
 func (j *job) Await(ctx context.Context, idx wantjob.Idx) error {
@@ -182,7 +195,7 @@ func (j *job) finish(ctx context.Context, res wantjob.Result) error {
 		}
 		delete(j.logWriters, k)
 	}
-	if err := j.sys.finishJob(ctx, j.id, res); err != nil {
+	if err := j.sys.finishJob(ctx, j, res); err != nil {
 		return err
 	}
 	j.result = &res
@@ -208,9 +221,11 @@ func (js *job) isDone() bool {
 }
 
 type jobSystem struct {
-	db     *sqlx.DB
-	logDir string
-	exec   wantjob.Executor
+	db         *sqlx.DB
+	logDir     string
+	verifyGLFS bool
+	exec       wantjob.Executor
+	og         onceGroup[wantjob.TaskID, wantjob.Result]
 
 	bgCtx context.Context
 	cf    context.CancelFunc
@@ -225,9 +240,10 @@ type jobSystem struct {
 func newJobSystem(db *sqlx.DB, logDir string, exec wantjob.Executor, numWorkers int) *jobSystem {
 	bgCtx, cf := context.WithCancel(context.Background())
 	s := &jobSystem{
-		db:     db,
-		logDir: logDir,
-		exec:   exec,
+		db:         db,
+		logDir:     logDir,
+		exec:       exec,
+		verifyGLFS: false,
 
 		bgCtx: bgCtx,
 		cf:    cf,
@@ -288,6 +304,24 @@ func (sys *jobSystem) Await(ctx context.Context, idx wantjob.Idx) error {
 		return fmt.Errorf("job not found %v", idx)
 	}
 	return j.await(ctx)
+}
+
+func (sys *jobSystem) Delete(ctx context.Context, idx wantjob.Idx) error {
+	sys.mu.Lock()
+	defer sys.mu.Unlock()
+	j, exists := sys.rootJobs[idx]
+	if exists {
+		if err := j.cancel(); err != nil {
+			return err
+		}
+		if err := dbutil.DoTx(ctx, sys.db, func(tx *sqlx.Tx) error {
+			return wantdb.DropJob(tx, wantjob.JobID{idx})
+		}); err != nil {
+			return err
+		}
+		delete(sys.rootJobs, idx)
+	}
+	return nil
 }
 
 func (sys *jobSystem) Cancel(ctx context.Context, idx wantjob.Idx) error {
@@ -356,7 +390,8 @@ func (sys *jobSystem) spawn(ctx context.Context, parent *job, src cadata.Getter,
 	return idx, j, nil
 }
 
-// maybeEnqueue enqueues the job if it was advanced to DONE using the cache.
+// maybeEnqueue enqueues the job if it is still running
+// (it was not advanced to directly to DONE using the cache.)
 func (s *jobSystem) maybeEnqueue(jstate *job, dbJob *wantjob.Job) {
 	switch dbJob.State {
 	case wantjob.QUEUED:
@@ -369,7 +404,10 @@ func (s *jobSystem) maybeEnqueue(jstate *job, dbJob *wantjob.Job) {
 }
 
 func (s *jobSystem) process(x *job) error {
-	res := func() wantjob.Result {
+	taskID := x.task.ID()
+	var original bool
+	res, err := s.og.Do(taskID, func() (wantjob.Result, error) {
+		original = true
 		jc := wantjob.Ctx{
 			Context: x.ctx,
 			Dst:     x.dst,
@@ -377,18 +415,53 @@ func (s *jobSystem) process(x *job) error {
 			Writer:  x.Writer,
 		}
 		out, err := s.exec.Execute(jc, x.src, x.task)
+		var res wantjob.Result
 		if err != nil {
-			return *wantjob.Result_ErrExec(err)
+			res = *wantjob.Result_ErrExec(err)
+		} else {
+			res = *wantjob.Success(out)
 		}
-		return *wantjob.Success(out)
-	}()
-	return x.finish(s.bgCtx, res)
+		if err := x.finish(s.bgCtx, res); err != nil {
+			return res, err
+		}
+		return res, nil
+	})
+	if err != nil {
+		return err
+	}
+	// if it was not originally computed, and the output is successful GLFS, then
+	// we need to Pull into the job's store.
+	if !original && res.ErrCode == 0 {
+		if err := x.dst.(*wantdb.DBStore).Pull(s.bgCtx, res.Data); err != nil {
+			return err
+		}
+		return x.finish(s.bgCtx, res)
+	}
+	return nil
 }
 
-func (s *jobSystem) finishJob(ctx context.Context, jobid wantjob.JobID, res wantjob.Result) error {
+func (s *jobSystem) finishJob(ctx context.Context, j *job, res wantjob.Result) error {
+	if s.verifyGLFS {
+		if err := s.checkGLFS(ctx, j.dst, res); err != nil {
+			log.Println("SPAWNED AT:\n", text.Indent(string(j.stackTrace), "\t"))
+			return fmt.Errorf("job=%v op=%v left invalid store: %w", j.id, j.task.Op, err)
+		}
+	}
 	return dbutil.DoTx(ctx, s.db, func(tx *sqlx.Tx) error {
-		return wantdb.FinishJob(tx, jobid, res)
+		return wantdb.FinishJob(tx, j.id, res)
 	})
+}
+
+func (sys *jobSystem) checkGLFS(ctx context.Context, s cadata.Store, res wantjob.Result) error {
+	if res.ErrCode > 0 {
+		return nil
+	}
+	if ref, err := glfstasks.ParseGLFSRef(res.Data); err == nil {
+		if err := glfstasks.Check(ctx, s, *ref); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *jobSystem) openLogFile(id wantjob.JobID, topic string) (*os.File, error) {
@@ -412,4 +485,39 @@ func (s *jobSystem) Shutdown() {
 		x.cf()
 	}
 	s.wg.Wait()
+}
+
+type onceGroup[K comparable, V any] struct {
+	sf    singleflight.Group[K, V]
+	mu    sync.RWMutex
+	cache map[K]V
+}
+
+func (og *onceGroup[K, V]) Do(k K, fn func() (V, error)) (V, error) {
+	og.mu.RLock()
+	val, exists := og.cache[k]
+	og.mu.RUnlock()
+	if exists {
+		return val, nil
+	}
+
+	val, err, _ := og.sf.Do(k, func() (V, error) {
+		og.mu.RLock()
+		val, exists := og.cache[k]
+		og.mu.RUnlock()
+		if exists {
+			return val, nil
+		}
+		val, err := fn()
+		if err == nil {
+			og.mu.Lock()
+			if og.cache == nil {
+				og.cache = make(map[K]V)
+			}
+			og.cache[k] = val
+			og.mu.Unlock()
+		}
+		return val, err
+	})
+	return val, err
 }

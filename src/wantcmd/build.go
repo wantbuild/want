@@ -100,7 +100,7 @@ var lsCmd = star.Command{
 			return err
 		}
 		w := c.StdOut
-		if err := fmtTree(w, *tree); err != nil {
+		if err := fmtTree(w, tree.Entries); err != nil {
 			return err
 		}
 		return w.Flush()

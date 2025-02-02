@@ -3,7 +3,6 @@ package want
 import (
 	"strings"
 
-	"go.brendoncarroll.net/exp/singleflight"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/op/assertops"
@@ -19,7 +18,6 @@ import (
 
 type executor struct {
 	execs map[wantjob.OpName]wantjob.Executor
-	sf    singleflight.Group[wantjob.TaskID, []byte]
 }
 
 type QEMUConfig = qemuops.Config
@@ -66,11 +64,8 @@ func (e *executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task)
 	if !exists {
 		return nil, wantjob.ErrOpNotFound{Op: task.Op}
 	}
-	out, err, _ := e.sf.Do(task.ID(), func() ([]byte, error) {
-		return e2.Execute(jc, src, wantjob.Task{
-			Op:    wantjob.OpName(parts[1]),
-			Input: task.Input,
-		})
+	return e2.Execute(jc, src, wantjob.Task{
+		Op:    wantjob.OpName(parts[1]),
+		Input: task.Input,
 	})
-	return out, err
 }

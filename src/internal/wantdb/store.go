@@ -84,6 +84,10 @@ func (s *DBStore) Pull(ctx context.Context, root []byte) error {
 	})
 }
 
+func (s *DBStore) String() string {
+	return fmt.Sprintf("DBStore(%v)", s.id)
+}
+
 type TxStore struct {
 	id StoreID
 	tx *sqlx.Tx

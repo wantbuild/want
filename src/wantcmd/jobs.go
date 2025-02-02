@@ -4,15 +4,19 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"go.brendoncarroll.net/star"
+	"wantbuild.io/want/src/wantjob"
 )
 
 var jobCmd = star.NewDir(star.Metadata{
 	Short: "inspect and manage jobs",
 }, map[star.Symbol]star.Command{
-	"ls": lsJobCmd,
+	"ls":   lsJobCmd,
+	"drop": dropJobCmd,
 })
 
 var lsJobCmd = star.Command{
@@ -44,6 +48,20 @@ var lsJobCmd = star.Command{
 	},
 }
 
+var dropJobCmd = star.Command{
+	Metadata: star.Metadata{Short: "drop a job"},
+	Pos:      []star.IParam{jobidParam},
+	F: func(c star.Context) error {
+		wbs, err := newSys(&c)
+		if err != nil {
+			return err
+		}
+		defer wbs.Close()
+		jobid := jobidParam.Load(c)
+		return wbs.JobSystem().Delete(c.Context, jobid[0])
+	},
+}
+
 var dashCmd = star.Command{
 	Metadata: star.Metadata{Short: "serve dashboard on localhost"},
 	F: func(c star.Context) error {
@@ -61,5 +79,23 @@ var dashCmd = star.Command{
 		c.Printf("listening on http://%v ...\n", l.Addr())
 		c.StdOut.Flush()
 		return http.Serve(l, http.FileServerFS(fsys))
+	},
+}
+
+var jobidParam = star.Param[wantjob.JobID]{
+	Parse: func(x string) (wantjob.JobID, error) {
+		parts := strings.Split(strings.Trim(x, "/"), "/")
+		var ret wantjob.JobID
+		for _, part := range parts {
+			n, err := strconv.ParseUint(part, 16, 32)
+			if err != nil {
+				return nil, err
+			}
+			ret = append(ret, wantjob.Idx(n))
+		}
+		if len(ret) == 0 {
+			return nil, fmt.Errorf("empty job id")
+		}
+		return ret, nil
 	},
 }

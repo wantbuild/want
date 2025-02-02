@@ -22,9 +22,10 @@ type memJob struct {
 	dst      cadata.Store
 	children []*memJob
 
-	doneOnce sync.Once
-	done     chan struct{}
-	res      *Result
+	doneOnce    sync.Once
+	done        chan struct{}
+	res         *Result
+	isTombstone bool
 }
 
 func newMemJob(parentCtx context.Context, exec Executor, src cadata.Getter, task Task) *memJob {
@@ -68,8 +69,19 @@ func (j *memJob) Spawn(ctx context.Context, src cadata.Getter, task Task) (Idx, 
 	return Idx(n), nil
 }
 
+func (j *memJob) Delete(ctx context.Context, idx Idx) error {
+	if err := j.Cancel(ctx, idx); err != nil {
+		return err
+	}
+	j.children[idx].isTombstone = true
+	return nil
+}
+
 func (j *memJob) Cancel(ctx context.Context, idx Idx) error {
-	child := j.children[idx]
+	child := j.get(idx)
+	if child == nil {
+		return fmt.Errorf("job not found")
+	}
 
 	child.cf()
 	child.doneOnce.Do(func() {
@@ -79,7 +91,12 @@ func (j *memJob) Cancel(ctx context.Context, idx Idx) error {
 }
 
 func (j *memJob) Await(ctx context.Context, idx Idx) error {
-	done := j.children[idx].done
+	child := j.children[idx]
+	if child == nil {
+		return fmt.Errorf("job not found")
+	}
+
+	done := child.done
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -98,6 +115,14 @@ func (j *memJob) ViewResult(ctx context.Context, idx Idx) (*Result, cadata.Gette
 		return nil, nil, fmt.Errorf("ViewResult called on unfinished Job")
 	}
 	return child.res, child.dst, nil
+}
+
+func (j *memJob) get(idx Idx) *memJob {
+	child := j.children[idx]
+	if child != nil && child.isTombstone {
+		child = nil
+	}
+	return child
 }
 
 func (j *memJob) isDone() bool {

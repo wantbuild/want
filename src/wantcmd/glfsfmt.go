@@ -12,9 +12,9 @@ import (
 	"go.brendoncarroll.net/stdctx/units"
 )
 
-func fmtTree(w io.Writer, tree glfs.Tree) error {
+func fmtTree(w io.Writer, tree []glfs.TreeEntry) error {
 	var longest int
-	for _, ent := range tree.Entries {
+	for _, ent := range tree {
 		if len(ent.Name) > longest {
 			longest = len(ent.Name)
 		}
@@ -23,7 +23,7 @@ func fmtTree(w io.Writer, tree glfs.Tree) error {
 	if _, err := fmt.Fprintf(w, format, "MODE", "TYPE", "SIZE", "CONTENT_ID", "NAME"); err != nil {
 		return err
 	}
-	for _, ent := range tree.Entries {
+	for _, ent := range tree {
 		_, err := fmt.Fprintf(w, format, ent.FileMode, fmtType(ent.Ref), fmtRefSize(ent.Ref), fmtCID(ent.Ref, true), ent.Name)
 		if err != nil {
 			return err

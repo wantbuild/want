@@ -103,6 +103,40 @@ func finishJobAtRow(tx *sqlx.Tx, rowid int64, res wantjob.Result) error {
 	return err
 }
 
+func ListChildren(tx *sqlx.Tx, jobid wantjob.JobID) (ret []wantjob.Idx, _ error) {
+	rowid, err := lookupJobRowID(tx, jobid)
+	if err != nil {
+		return nil, err
+	}
+	err = tx.Select(&ret, `SELECT idx FROM job_children WHERE parent = ?`, rowid)
+	return ret, err
+}
+
+func DropJob(tx *sqlx.Tx, jobid wantjob.JobID) error {
+	// drop children first
+	idxs, err := ListChildren(tx, jobid)
+	if err != nil {
+		return err
+	}
+	for _, idx := range idxs {
+		childid := append(jobid, idx)
+		if err := DropJob(tx, childid); err != nil {
+			return err
+		}
+	}
+	rid, err := lookupJobRowID(tx, jobid)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM jobs WHERE rowid = ?`, rid); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM job_roots WHERE jobrow = ?`, rid); err != nil {
+		return err
+	}
+	return nil
+}
+
 type jobRow struct {
 	Idx        wantjob.Idx               `db:"idx"`
 	TaskID     wantjob.TaskID            `db:"task"`

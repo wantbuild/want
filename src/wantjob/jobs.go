@@ -130,11 +130,21 @@ func (j Job) Elapsed() time.Duration {
 
 // System manages spawning, running, and awaiting jobs.
 type System interface {
+	// Spawn creates a new job, which will perform task pulling data from src as needed.
+	// Job returns an index, which can be used to refer to the Job in other methods.
 	Spawn(ctx context.Context, src cadata.Getter, task Task) (Idx, error)
-	Cancel(ctx context.Context, idx Idx) error
-	Await(ctx context.Context, idx Idx) error
+	// Inspect returns information about a Job
 	Inspect(ctx context.Context, idx Idx) (*Job, error)
+	// Await blocks until the job has completed
+	Await(ctx context.Context, idx Idx) error
+	// Cancel attempts to cancel the job.  If the Job is already in DONE then it cannot be cancelled.
+	Cancel(ctx context.Context, idx Idx) error
+	// ViewResult returns the Job result, or immediately errors if the Job is not in the DONE state.
 	ViewResult(ctx context.Context, idx Idx) (*Result, cadata.Getter, error)
+	// Delete makes the Job inaccessbile and frees any resources it is consuming.
+	// Delete will also cancel the Job if it is running, although this transitory state will
+	// be visible to the caller of Delete.
+	Delete(ctx context.Context, idx Idx) error
 }
 
 var _ System = Ctx{}

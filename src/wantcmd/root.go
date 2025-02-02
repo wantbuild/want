@@ -31,6 +31,7 @@ var rootCmd = star.NewDir(star.Metadata{Short: "want build system"},
 		"job":        jobCmd,
 		"dash":       dashCmd,
 		"serve-http": serveHttpCmd,
+		"scrub":      *scrubCmd,
 	},
 )
 
@@ -69,6 +70,16 @@ var statusCmd = star.Command{
 			c.Printf("%s is not in a want project\n", wd)
 		}
 		return nil
+	},
+}
+
+var scrubCmd = &star.Command{
+	F: func(c star.Context) error {
+		wbs, err := newSys(&c)
+		if err != nil {
+			return err
+		}
+		return wbs.Scrub(c.Context)
 	},
 }
 

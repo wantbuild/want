@@ -33,7 +33,7 @@ type BuildResult struct {
 
 func Build(ctx context.Context, jobs wantjob.System, src cadata.Getter, bt BuildTask) (*BuildResult, error) {
 	scratch := stores.NewMem()
-	btRef, err := wantops.PostBuildTask(ctx, scratch, bt)
+	btRef, err := wantops.PostBuildTask(ctx, stores.Fork{W: scratch, R: src}, bt)
 	if err != nil {
 		return nil, err
 	}
