@@ -3,69 +3,82 @@ package wantc
 import (
 	"encoding/json"
 	"fmt"
+	"path"
+	"slices"
 	"strings"
 	"sync"
 
 	"github.com/google/go-jsonnet"
+	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/src/wantcfg"
 )
 
 var _ jsonnet.Importer = &jsImporter{}
 
-// vfsImporter is a jsonnet.Importer which imports from a build's VFS
+// jsImporter is a jsonnet.Importer which imports from a build's VFS
 type jsImporter struct {
-	load func(p string) ([]byte, error)
+	load    func(FQPath) ([]byte, error)
+	libWant jsonnet.Contents
 
 	mu    sync.RWMutex
-	cache map[string]jsonnet.Contents
+	cache map[FQPath]jsonnet.Contents
 }
 
-func newVFSImporter(load func(p string) ([]byte, error)) *jsImporter {
+func newImporter(load func(fqp FQPath) ([]byte, error)) *jsImporter {
 	return &jsImporter{
-		load:  load,
-		cache: make(map[string]jsonnet.Contents),
+		libWant: jsonnet.MakeContents(wantcfg.LibWant()),
+		load:    load,
+		cache:   make(map[FQPath]jsonnet.Contents),
 	}
 }
 
 func (imp *jsImporter) Import(importedFrom, importedPath string) (contents jsonnet.Contents, foundAt string, err error) {
-	switch importedPath {
-	case "want", "wants":
-		return libOnlyImporter{}.Import(importedFrom, importedPath)
+	if importedPath == "want" {
+		return imp.libWant, "want", nil
 	}
-	p := PathFrom(importedFrom, importedPath)
+	var fqp *FQPath
+	if importedFrom == "" {
+		// this is the root import for the VM to load the file.
+		var err error
+		fqp, err = parseJsonnetPath(importedPath)
+		if err != nil {
+			return jsonnet.Contents{}, "", err
+		}
+	} else {
+		fqp, err = parseJsonnetPath(importedFrom)
+		if err != nil {
+			return jsonnet.Contents{}, "", err
+		}
+		fqp.Path = PathFrom(fqp.Path, importedPath)
+	}
+
 	imp.mu.RLock()
-	if contents, exists := imp.cache[p]; exists {
+	if contents, exists := imp.cache[*fqp]; exists {
 		imp.mu.RUnlock()
-		return contents, p, nil
+		return contents, mkJsonnetPath(*fqp), nil
 	}
 	imp.mu.RUnlock()
-	data, err := imp.load(p)
+
+	data, err := imp.load(*fqp)
 	if err != nil {
-		return jsonnet.MakeContents(""), "", fmt.Errorf("importing %q from %q: %w", importedPath, importedFrom, err)
+		return jsonnet.Contents{}, "", fmt.Errorf("importing %q from %q: %w", importedPath, importedFrom, err)
 	}
 	imp.mu.Lock()
 	defer imp.mu.Unlock()
-	if c, exists := imp.cache[p]; exists {
-		return c, p, nil
+	if c, exists := imp.cache[*fqp]; exists {
+		return c, mkJsonnetPath(*fqp), nil
 	} else {
-		c := jsonnet.MakeContents(string(data))
-		imp.cache[p] = c
-		return c, p, nil
-	}
-}
-
-type libOnlyImporter struct{}
-
-func (imp libOnlyImporter) Import(importedFrom, importedPath string) (contents jsonnet.Contents, foundAt string, err error) {
-	if strings.Contains(importedPath, ":") {
-		return jsonnet.Contents{}, "", fmt.Errorf("import path cannot contain ':'")
-	}
-	switch importedPath {
-	case "want":
-		c := jsonnet.MakeContents(wantcfg.LibWant(importedFrom))
-		return c, "want:" + importedFrom, nil
-	default:
-		return jsonnet.MakeContents(""), "", fmt.Errorf("could not import %q", importedPath)
+		switch path.Ext(importedPath) {
+		case ".libsonnet", ".want", ".wants":
+			data = slices.Concat(
+				[]byte(LocalGround(*fqp)),
+				[]byte(LocalDerived(*fqp)),
+				data,
+			)
+		}
+		c := jsonnet.MakeContentsRaw(data)
+		imp.cache[*fqp] = c
+		return c, mkJsonnetPath(*fqp), nil
 	}
 }
 
@@ -78,4 +91,36 @@ func newJsonnetVM(imp jsonnet.Importer, md map[string]any) *jsonnet.VM {
 	}
 	vm.ExtCode("metadata", string(data))
 	return vm
+}
+
+func LocalGround(fqp FQPath) string {
+	return fmt.Sprintf(`local GROUND = {"module":"%v","derived":false,"callerPath":"%s"};`, fqp.ModuleCID.String(), fqp.Path)
+}
+
+func LocalDerived(fqp FQPath) string {
+	return fmt.Sprintf(`local DERIVED = {"module":"%v","derived":true,"callerPath":"%s"};`, fqp.ModuleCID.String(), fqp.Path)
+}
+
+type FQPath struct {
+	ModuleCID cadata.ID
+	Path      string
+}
+
+func mkJsonnetPath(fqp FQPath) string {
+	return fqp.ModuleCID.String() + ":" + fqp.Path
+}
+
+func parseJsonnetPath(x string) (*FQPath, error) {
+	parts := strings.SplitN(x, ":", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("could not parse %q as a fq path", x)
+	}
+	var modCID cadata.ID
+	if err := modCID.UnmarshalBase64([]byte(parts[0])); err != nil {
+		return nil, nil
+	}
+	return &FQPath{
+		ModuleCID: modCID,
+		Path:      parts[1],
+	}, nil
 }

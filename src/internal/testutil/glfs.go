@@ -25,6 +25,14 @@ func PostFS(t testing.TB, s cadata.Store, m map[string][]byte) glfs.Ref {
 	return *ref
 }
 
+func PostFSStr(t testing.TB, s cadata.Store, m map[string]string) glfs.Ref {
+	m2 := make(map[string][]byte)
+	for k, v := range m {
+		m2[k] = []byte(v)
+	}
+	return PostFS(t, s, m2)
+}
+
 func postFS(ctx context.Context, s cadata.Store, m map[string][]byte) (*glfs.Ref, error) {
 	ag := glfs.NewAgent()
 	var ents []glfs.TreeEntry
@@ -40,6 +48,18 @@ func postFS(ctx context.Context, s cadata.Store, m map[string][]byte) (*glfs.Ref
 		})
 	}
 	return glfs.PostTreeSlice(ctx, s, ents)
+}
+
+func EqualFS(t testing.TB, s cadata.Getter, expected, actual glfs.Ref) bool {
+	if expected.Equals(actual) {
+		return true
+	}
+	t.Error("filesystems do not match")
+	t.Error("Expected:\n")
+	PrintFS(t, s, expected)
+	t.Error("Actual:\n")
+	PrintFS(t, s, actual)
+	return false
 }
 
 func PrintFS(t testing.TB, s cadata.Getter, x glfs.Ref) {

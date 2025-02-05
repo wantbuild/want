@@ -18,15 +18,15 @@ type StmtSet struct {
 	stmts []Stmt
 }
 
-func (c *Compiler) parseStmtSet(ctx context.Context, cs *compileState, p string, data []byte) (*StmtSet, error) {
+func (c *Compiler) parseStmtSet(ctx context.Context, cs *compileState, fqp FQPath) (*StmtSet, error) {
 	vm := newJsonnetVM(cs.jsImporter, cs.buildCtx)
-	jsonStr, err := vm.EvaluateSnippet(p, string(data))
+	jsonStr, err := vm.EvaluateFile(mkJsonnetPath(fqp))
 	if err != nil {
 		return nil, err
 	}
 	var specs []wantcfg.Statement
 	if err := json.Unmarshal([]byte(jsonStr), &specs); err != nil {
-		return nil, fmt.Errorf("error in stage file %s: %w", p, err)
+		return nil, fmt.Errorf("error in stage file %s: %w", fqp.Path, err)
 	}
 
 	var stmts []Stmt
@@ -34,8 +34,8 @@ func (c *Compiler) parseStmtSet(ctx context.Context, cs *compileState, p string,
 		var stmt Stmt
 		switch {
 		case spec.Put != nil:
-			ks := SetFromQuery(p, spec.Put.Dst)
-			e, err := c.compileExpr(ctx, cs, p, spec.Put.Src)
+			ks := SetFromQuery(fqp.Path, spec.Put.Dst)
+			e, err := c.compileExpr(ctx, cs, fqp.Path, spec.Put.Src)
 			if err != nil {
 				return nil, err
 			}
@@ -44,8 +44,8 @@ func (c *Compiler) parseStmtSet(ctx context.Context, cs *compileState, p string,
 				Src: e,
 			}
 		case spec.Export != nil:
-			ks := SetFromQuery(p, spec.Export.Dst)
-			e, err := c.compileExpr(ctx, cs, p, spec.Export.Src)
+			ks := SetFromQuery(fqp.Path, spec.Export.Dst)
+			e, err := c.compileExpr(ctx, cs, fqp.Path, spec.Export.Src)
 			if err != nil {
 				return nil, err
 			}
@@ -59,7 +59,7 @@ func (c *Compiler) parseStmtSet(ctx context.Context, cs *compileState, p string,
 		stmts = append(stmts, stmt)
 	}
 	return &StmtSet{
-		path:  p,
+		path:  fqp.Path,
 		specs: specs,
 		stmts: stmts,
 	}, nil

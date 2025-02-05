@@ -1,7 +1,7 @@
 local want = import "want";
 local golang = import "recipes/golang.libsonnet";
 
-local modSrc = want.selectDir(want.DERIVED, "./go_src.want");
+local modSrc = want.selectDir(DERIVED, "./go_src.want");
 
 local platforms = [
     ["amd64", "linux"],

@@ -29,7 +29,7 @@ local makeExec(modSrc, main, goarch, goos) = want.golang.makeExec(modSrc, modDow
 local makeTestExec(modSrc, main, goarch, goos) = want.golang.makeTestExec(modSrc, modDownload(modSrc), main, goarch, goos);
 
 local wantGoExec = makeExec(
-    want.selectDir(want.GROUND, ""),
+    want.selectDir(GROUND, ""),
     "recipes/golang/wantgo_main",
     goarch="wasm", goos="wasip1",
 );

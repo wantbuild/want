@@ -40,14 +40,6 @@ local tree(m) = {
     tree: m
 };
 
-// Sources
-
-// DERIVED refers to the current build anything generated during it.
-local DERIVED = "DERIVED";
-
-// GROUND refers to the source of the current build without any derived values.
-local GROUND = "GROUND";
-
 // Path Sets
 
 local unit(p) = { __type__: "pathSet", unit: p };
@@ -69,7 +61,6 @@ local select(source, query, pick="", allowEmpty=false, assertType="") = {
         pick: pick,
         allowEmpty: allowEmpty,
         assertType: assertType,
-        callerPath: "@@CALLER_PATH@@", // This is find + replaced, with the actual path.
     }
 };
 
@@ -276,11 +267,8 @@ local wasm = {
     tree :: tree,
     treeEntry :: treeEntry,
 
-    // Selections
 
-    GROUND :: GROUND,
-    DERIVED :: DERIVED,
-
+    // Path Sets
 
     unit :: unit,
     prefix :: prefix,
@@ -291,6 +279,8 @@ local wasm = {
     subtract :: subtract,
 
     dirPath :: dirPath,
+
+    // Selections
 
     select :: select,
     selectFile :: selectFile,

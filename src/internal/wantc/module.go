@@ -49,7 +49,7 @@ func FindModules(ctx context.Context, src cadata.Getter, root glfs.Ref) (map[str
 
 func ParseModuleConfig(x []byte) (*wantcfg.ModuleConfig, error) {
 	vm := jsonnet.MakeVM()
-	vm.Importer(libOnlyImporter{})
+	vm.Importer(snippetImporter{})
 	jsonData, err := vm.EvaluateAnonymousSnippet("WANT", string(x))
 	if err != nil {
 		return nil, err

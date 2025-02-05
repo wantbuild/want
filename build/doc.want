@@ -37,7 +37,7 @@ local rootfs = want.pass([
     want.input("initscript", initscript),
     want.input("/usr/bin", dist),
     want.input("/input/book.toml", bookToml),
-    want.input("/input/src", want.selectDir(want.DERIVED, "doc")),
+    want.input("/input/src", want.selectDir(DERIVED, "doc")),
     want.input("/input/src/SUMMARY.md", summaryMd),
     want.input("/output", want.tree({})),
 ]);

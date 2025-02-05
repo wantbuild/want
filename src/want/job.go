@@ -243,7 +243,7 @@ func newJobSystem(db *sqlx.DB, logDir string, exec wantjob.Executor, numWorkers 
 		db:         db,
 		logDir:     logDir,
 		exec:       exec,
-		verifyGLFS: true,
+		verifyGLFS: false,
 
 		bgCtx: bgCtx,
 		cf:    cf,

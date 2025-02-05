@@ -21,7 +21,7 @@ func PrettyExpr(w io.Writer, x wantcfg.Expr) error {
 		fmt.Fprintf(w, "{type: %v cid: %v}", ref.Type, ref.CID.String())
 	case x.Selection != nil:
 		sel := *x.Selection
-		fmt.Fprintf(w, "(select %s %v)", sel.Source, sel.Query)
+		fmt.Fprintf(w, "(select %v %v)", sel.Source, sel.Query)
 	case x.Compute != nil:
 		return prettyCompute(w, *x.Compute)
 	default:

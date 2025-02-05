@@ -180,7 +180,7 @@ func (c *Compiler) compileExpr(ctx context.Context, cs *compileState, exprPath s
 		if exprPath == "" {
 			return nil, errors.New("cannot use selections when compiling snippet expression")
 		}
-		return c.compileSelection(ctx, cs, exprPath, x.Selection)
+		return c.compileSelection(ctx, cs, exprPath, *x.Selection)
 	default:
 		return nil, errors.Errorf("empty wantcfg.Expr at %s", exprPath)
 	}
@@ -197,16 +197,23 @@ func (c *Compiler) compileCompute(ctx context.Context, cs *compileState, exprPat
 	}, nil
 }
 
-func (c *Compiler) compileSelection(ctx context.Context, cs *compileState, exprPath string, x *wantcfg.Selection) (Expr, error) {
-	if x.CallerPath == "" {
+func (c *Compiler) compileSelection(ctx context.Context, cs *compileState, exprPath string, x wantcfg.Selection) (Expr, error) {
+	var moduleCID cadata.ID
+	if err := moduleCID.UnmarshalBase64([]byte(x.Source.Module)); err != nil {
+		return nil, fmt.Errorf("invalid source: %w", err)
+	}
+
+	callerPath := x.Source.CallerPath
+	if callerPath == "" {
 		return nil, fmt.Errorf("selection in file %q has empty callerPath", exprPath)
 	}
-	x.CallerPath = glfs.CleanPath(x.CallerPath)
-	pick := PathFrom(x.CallerPath, x.Pick)
-	switch x.Source {
-	case wantcfg.Derived:
-		ks := SetFromQuery(x.CallerPath, x.Query)
-		ks = stringsets.Subtract(ks, stringsets.Unit(x.CallerPath))
+	callerPath = glfs.CleanPath(callerPath)
+	pick := PathFrom(callerPath, x.Pick)
+
+	switch {
+	case cs.ground.CID == moduleCID && x.Source.Derived:
+		ks := SetFromQuery(callerPath, x.Query)
+		ks = stringsets.Subtract(ks, stringsets.Unit(callerPath))
 		ks = stringsets.Simplify(ks)
 		return &selection{
 			set:        ks,
@@ -214,8 +221,8 @@ func (c *Compiler) compileSelection(ctx context.Context, cs *compileState, exprP
 			assertType: glfs.Type(x.AssertType),
 			allowEmpty: x.AllowEmpty,
 		}, nil
-	case wantcfg.Ground:
-		ks := SetFromQuery(x.CallerPath, x.Query)
+	case cs.ground.CID == moduleCID:
+		ks := SetFromQuery(callerPath, x.Query)
 		out, err := c.selectFacts(ctx, cs, ks, pick)
 		if err != nil {
 			if x.AllowEmpty && strings.Contains(err.Error(), "no entry at") {
@@ -229,7 +236,7 @@ func (c *Compiler) compileSelection(ctx context.Context, cs *compileState, exprP
 		}
 		return out, nil
 	default:
-		return nil, errors.Errorf("invalid source: %s", x.Source)
+		return nil, errors.Errorf("selection %v in %s invalid source: %v", x, exprPath, x.Source)
 	}
 }
 
@@ -338,4 +345,17 @@ func maxToLen(ins []computeInput) (max int) {
 		}
 	}
 	return max
+}
+
+func IsContextDependent(x Expr) bool {
+	switch x := x.(type) {
+	case *compute:
+		return true
+	case *selection:
+		return false
+	case *value:
+		return true
+	default:
+		panic(x)
+	}
 }

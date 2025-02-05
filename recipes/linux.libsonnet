@@ -1,6 +1,6 @@
 local want = import "want";
 
-local bzImage = want.selectFile(want.GROUND, "./linux/bzImage");
+local bzImage = want.selectFile(GROUND, "./linux/bzImage");
 
 local dumbInit = want.importURL(
     url="https://github.com/Yelp/dumb-init/releases/download/v1.2.5/dumb-init_1.2.5_x86_64",

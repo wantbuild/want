@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/blobcache/glfs"
 	"github.com/stretchr/testify/require"
 
 	"wantbuild.io/want/src/internal/stores"
@@ -95,4 +96,69 @@ func TestSnippets(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestCompile(t *testing.T) {
+	src := stores.NewMem()
+	tcs := []struct {
+		Name   string
+		Module glfs.Ref
+
+		Targets []Target
+		Known   *glfs.Ref
+		Err     error
+	}{
+		{
+			Name: "Minimal",
+			Module: testutil.PostFSStr(t, src, map[string]string{
+				"WANT": "{}",
+			}),
+			Known: ptrTo(testutil.PostTree(t, src, nil)),
+		},
+		{
+			Name: "GROUND",
+			Module: testutil.PostFSStr(t, src, map[string]string{
+				"WANT": "{}",
+				"test.want": `
+					local want = import "want";
+					want.select(GROUND, want.unit("WANT"))
+				`,
+			}),
+		},
+		{
+			Name: "DERIVED",
+			Module: testutil.PostFSStr(t, src, map[string]string{
+				"WANT":     "{}",
+				"test.txt": "foo",
+				"test.want": `
+					local want = import "want";
+					want.select(DERIVED, want.unit("test.text"))
+				`,
+			}),
+			Known: ptrTo(testutil.PostFSStr(t, src, map[string]string{
+				"test.txt": "foo",
+			})),
+		},
+	}
+
+	for i, tc := range tcs {
+		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
+			ctx := testutil.Context(t)
+			c := NewCompiler()
+			dst := stores.NewMem()
+			plan, err := c.Compile(ctx, dst, src, map[string]any{}, tc.Module)
+			if tc.Err != nil {
+				require.ErrorIs(t, err, tc.Err)
+			} else {
+				require.NoError(t, err)
+			}
+			if tc.Known != nil {
+				testutil.EqualFS(t, stores.Union{dst, src}, *tc.Known, plan.Known)
+			}
+		})
+	}
+}
+
+func ptrTo[T any](x T) *T {
+	return &x
 }

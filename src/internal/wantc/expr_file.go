@@ -22,24 +22,24 @@ type ExprRoot struct {
 
 // newExpr creates an *ExprRoot from a spec.
 // If the spec specifies any literals they will be posted to the store.
-func (c *Compiler) parseExprRoot(ctx context.Context, cs *compileState, p string, data []byte) (*ExprRoot, error) {
+func (c *Compiler) parseExprRoot(ctx context.Context, cs *compileState, fqp FQPath) (*ExprRoot, error) {
 	vm := newJsonnetVM(cs.jsImporter, cs.buildCtx)
-	p = strings.Trim(p, "/")
-	jsonStr, err := vm.EvaluateSnippet(p, string(data))
+	fqp.Path = strings.Trim(fqp.Path, "/")
+	jsonStr, err := vm.EvaluateFile(mkJsonnetPath(fqp))
 	if err != nil {
 		return nil, err
 	}
 	var spec wantcfg.Expr
 	if err := json.Unmarshal([]byte(jsonStr), &spec); err != nil {
-		return nil, fmt.Errorf("error in stage file %q: %w", p, err)
+		return nil, fmt.Errorf("error in stage file %q: %w", fqp.Path, err)
 	}
-	e, err := c.compileExpr(ctx, cs, p, spec)
+	e, err := c.compileExpr(ctx, cs, fqp.Path, spec)
 	if err != nil {
 		return nil, err
 	}
 	return &ExprRoot{
 		spec: spec,
-		path: p,
+		path: fqp.Path,
 
 		expr: e,
 	}, nil

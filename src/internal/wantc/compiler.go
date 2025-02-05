@@ -139,6 +139,16 @@ func (c *Compiler) compileModule(ctx context.Context, dst cadata.Store, src cada
 		root:         &selection{set: stringsets.Prefix("")},
 		vfs:          &VFS{},
 		visitedPaths: make(map[string]chan struct{}),
+		jsImporter: newImporter(func(fqp FQPath) ([]byte, error) {
+			if fqp.ModuleCID != ground.CID {
+				return nil, fmt.Errorf("can't import from module %s", fqp.ModuleCID)
+			}
+			ref, err := c.glfs.GetAtPath(ctx, src, ground, fqp.Path)
+			if err != nil {
+				return nil, err
+			}
+			return c.glfs.GetBlobBytes(ctx, src, *ref, MaxJsonnetFileSize)
+		}),
 	}
 	for _, f := range []func(context.Context, *compileState) error{
 		c.addSourceFiles,
@@ -161,13 +171,6 @@ func (c *Compiler) compileModule(ctx context.Context, dst cadata.Store, src cada
 func (c *Compiler) addSourceFiles(ctx context.Context, cs *compileState) error {
 	defer logStep(ctx, "adding source files")()
 	eg, _ := errgroup.WithContext(ctx)
-	cs.jsImporter = newVFSImporter(func(p string) ([]byte, error) {
-		ref, err := c.glfs.GetAtPath(ctx, cs.src, cs.ground, p)
-		if err != nil {
-			return nil, err
-		}
-		return c.glfs.GetBlobBytes(ctx, cs.src, *ref, MaxJsonnetFileSize)
-	})
 	if err := c.addSourceFile(ctx, cs, eg, "", 0o777, cs.ground); err != nil {
 		return err
 	}
@@ -206,9 +209,9 @@ func (c *Compiler) addSourceFile(ctx context.Context, cs *compileState, eg *errg
 		case p == "WANT":
 			// Drop the project configuration file from the build.
 		case IsExprFilePath(p):
-			return c.loadExpr(ctx, cs, p, ref)
+			return c.loadExpr(ctx, cs, p)
 		case IsStmtFilePath(p):
-			return c.loadStmt(ctx, cs, p, ref)
+			return c.loadStmt(ctx, cs, p)
 		default:
 			if err := glfs.Sync(ctx, cs.dst, cs.src, ref); err != nil {
 				return err
@@ -233,31 +236,25 @@ func (c *Compiler) addSourceFile(ctx context.Context, cs *compileState, eg *errg
 	return nil
 }
 
-func (c *Compiler) loadExpr(ctx context.Context, cs *compileState, p string, ref glfs.Ref) error {
-	data, err := c.glfs.GetBlobBytes(ctx, cs.src, ref, MaxJsonnetFileSize)
-	if err != nil {
-		return err
-	}
-	er, err := c.parseExprRoot(ctx, cs, p, data)
+func (c *Compiler) loadExpr(ctx context.Context, cs *compileState, p string) error {
+	fqp := FQPath{ModuleCID: cs.ground.CID, Path: p}
+	er, err := c.parseExprRoot(ctx, cs, fqp)
 	if err != nil {
 		return err
 	}
 	ks := er.Affects()
 	vfs, rel := cs.acquireVFS()
 	defer rel()
-	if err := vfs.Add(VFSEntry{K: ks, V: er.expr, DefinedIn: p}); err != nil {
+	if err := vfs.Add(VFSEntry{K: ks, V: er.expr, DefinedIn: fqp.Path}); err != nil {
 		panic(err)
 	}
 	cs.appendExprRoot(er)
 	return nil
 }
 
-func (c *Compiler) loadStmt(ctx context.Context, cs *compileState, p string, ref glfs.Ref) error {
-	data, err := c.glfs.GetBlobBytes(ctx, cs.src, ref, MaxJsonnetFileSize)
-	if err != nil {
-		return err
-	}
-	ss, err := c.parseStmtSet(ctx, cs, p, data)
+func (c *Compiler) loadStmt(ctx context.Context, cs *compileState, p string) error {
+	fqp := FQPath{ModuleCID: cs.ground.CID, Path: p}
+	ss, err := c.parseStmtSet(ctx, cs, fqp)
 	if err != nil {
 		return err
 	}

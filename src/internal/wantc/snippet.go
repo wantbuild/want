@@ -3,6 +3,7 @@ package wantc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/google/go-jsonnet"
 	"go.brendoncarroll.net/state/cadata"
@@ -16,7 +17,7 @@ import (
 // Selections are not allowed and will result in a compiler error.
 func (c *Compiler) CompileSnippet(ctx context.Context, dst cadata.Store, src cadata.Getter, x []byte) (wantdag.DAG, error) {
 	vm := jsonnet.MakeVM()
-	vm.Importer(libOnlyImporter{})
+	vm.Importer(snippetImporter{})
 	jsonData, err := vm.EvaluateSnippet("", string(x))
 	if err != nil {
 		return nil, err
@@ -35,4 +36,13 @@ func (c *Compiler) CompileSnippet(ctx context.Context, dst cadata.Store, src cad
 		return nil, err
 	}
 	return gb.Finish(), nil
+}
+
+type snippetImporter struct{}
+
+func (snippetImporter) Import(importedFrom, importPath string) (jsonnet.Contents, string, error) {
+	if importPath == "want" {
+		return jsonnet.MakeContents(wantcfg.LibWant()), "want", nil
+	}
+	return jsonnet.Contents{}, "", fmt.Errorf("imports not allowed in snippet")
 }

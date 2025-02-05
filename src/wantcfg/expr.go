@@ -37,7 +37,7 @@ func (n Expr) String() string {
 	case n.Ref != nil:
 		return fmt.Sprintf("{Ref: %v}", n.Ref)
 	case n.Selection != nil:
-		return fmt.Sprintf("{Source: %s, Query: %v}", n.Selection.Source, n.Selection.Query)
+		return fmt.Sprintf("{Source: %v, Query: %v}", n.Selection.Source, n.Selection.Query)
 	case n.Compute != nil:
 		c := *n.Compute
 		return fmt.Sprintf("{Compute Op: %s, Inputs: %v}", c.Op, c.Inputs)
@@ -57,15 +57,11 @@ type Compute struct {
 	Inputs []Input `json:"inputs"`
 }
 
-// Source is the tree to select from.
-type Source string
-
-const (
-	// Ground is the Source for selecting data from the original source tree.
-	Ground = Source("GROUND")
-	// Derived is the Source for selecting derived data from the VFS
-	Derived = Source("DERIVED")
-)
+type Source struct {
+	Module     string `json:"module"`
+	Derived    bool   `json:"derived"`
+	CallerPath string `json:"callerPath"`
+}
 
 type Selection struct {
 	Source Source  `json:"source"`
@@ -74,6 +70,4 @@ type Selection struct {
 
 	AllowEmpty bool   `json:"allowEmpty"`
 	AssertType string `json:"assertType,omitempty"`
-
-	CallerPath string `json:"callerPath"`
 }
