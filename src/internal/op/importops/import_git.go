@@ -5,15 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/blobcache/glfs"
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/storage/memory"
 	"go.brendoncarroll.net/state/cadata"
 
-	"wantbuild.io/want/src/internal/glfsport"
+	"wantbuild.io/want/src/internal/glfsgit"
 )
 
 type ImportGitTask struct {
@@ -36,42 +37,36 @@ func GetImportGitTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*Import
 	return loadJSON[ImportGitTask](ctx, s, x)
 }
 
-func (e *Executor) ImportGit(ctx context.Context, s cadata.PostExister, spec ImportGitTask) (*glfs.Ref, error) {
+func (e *Executor) ImportGit(ctx context.Context, dst cadata.PostExister, spec ImportGitTask) (*glfs.Ref, error) {
 	if len(spec.CommitHash) < 40 {
 		return nil, fmt.Errorf("invalid commit_hash %q, len=%d", spec.CommitHash, len(spec.CommitHash))
 	}
-	dir, err := os.MkdirTemp("", "git-clone-")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(dir)
-	r, err := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
-		URL:           spec.URL,
-		Depth:         1,
-		SingleBranch:  true,
-		NoCheckout:    true,
-		ReferenceName: plumbing.NewBranchReferenceName(spec.Branch),
+	gstor := memory.NewStorage()
+	r := git.NewRemote(gstor, &config.RemoteConfig{
+		Name: "origin",
+		URLs: []string{spec.URL},
 	})
-	if err != nil {
-		return nil, err
-	}
-	wt, err := r.Worktree()
-	if err != nil {
-		return nil, err
-	}
-	if err := wt.Checkout(&git.CheckoutOptions{
-		Hash: plumbing.NewHash(spec.CommitHash),
+	if err := r.Fetch(&git.FetchOptions{
+		RemoteName: "origin",
+		Depth:      1,
+		RefSpecs: []config.RefSpec{
+			config.RefSpec(fmt.Sprintf("%s:%s", spec.CommitHash, spec.CommitHash)),
+		},
 	}); err != nil {
 		return nil, err
 	}
-	imp := glfsport.Importer{
-		Cache: glfsport.NullCache{},
-		Dir:   dir,
-		Filter: func(p string) bool {
-			isGit := strings.HasPrefix(p, ".git/") || p == ".git"
-			return !isGit
-		},
-		Store: s,
+	h := plumbing.NewHash(spec.CommitHash)
+	co, exists := gstor.Commits[h]
+	if !exists {
+		return nil, fmt.Errorf("could not find commit %v", h)
 	}
-	return imp.Import(ctx, "")
+	commit, err := object.DecodeCommit(gstor, co)
+	if err != nil {
+		return nil, err
+	}
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil, err
+	}
+	return glfsgit.ImportTree(ctx, dst, gstor, tree)
 }

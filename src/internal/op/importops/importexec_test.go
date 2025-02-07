@@ -144,3 +144,25 @@ func TestImportOCILayers(t *testing.T) {
 		})
 	}
 }
+
+func TestImportGit(t *testing.T) {
+	t.Parallel()
+	//t.Skip()
+	tcs := []ImportGitTask{
+		{
+			URL:        "https://github.com/blobcache/glfs",
+			CommitHash: "21b8a58b3cf89de82e24ec54abe2aab0afb9b2fa",
+		},
+	}
+	ctx := testutil.Context(t)
+	for i, tc := range tcs {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			t.Parallel()
+			s := stores.NewMem()
+			e := NewExecutor()
+			y, err := e.ImportGit(ctx, s, tc)
+			require.NoError(t, err)
+			require.NotNil(t, y)
+		})
+	}
+}

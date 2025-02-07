@@ -3,7 +3,7 @@ module wantbuild.io/want
 go 1.23.4
 
 require (
-	github.com/blobcache/glfs v0.0.0-20250201054903-21b8a58b3cf8
+	github.com/blobcache/glfs v0.0.0-20250207031631-193fa2b641e7
 	github.com/go-git/go-git/v5 v5.13.1
 	github.com/google/go-containerregistry v0.20.2
 	github.com/google/go-jsonnet v0.20.0
