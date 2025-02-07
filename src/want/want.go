@@ -13,13 +13,10 @@ import (
 
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/op/dagops"
-	"wantbuild.io/want/src/internal/op/goops"
-	"wantbuild.io/want/src/internal/op/qemuops"
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/wantc"
 	"wantbuild.io/want/src/internal/wantdag"
 	"wantbuild.io/want/src/internal/wantdb"
-	"wantbuild.io/want/src/internal/wantsetup"
 	"wantbuild.io/want/src/wantjob"
 	"wantbuild.io/want/src/wantrepo"
 )
@@ -60,10 +57,6 @@ func (s *System) goDir() string {
 
 // Init initializes the system
 func (s *System) Init(ctx context.Context) error {
-	return s.init(ctx, true)
-}
-
-func (s *System) init(ctx context.Context, install bool) error {
 	if err := s.db.PingContext(ctx); err != nil {
 		return err
 	}
@@ -71,22 +64,6 @@ func (s *System) init(ctx context.Context, install bool) error {
 		return err
 	}
 	numWorkers := runtime.GOMAXPROCS(0)
-
-	if install {
-		earlyJobs := newJobSystem(s.db, s.logDir(), wantsetup.NewExecutor(), numWorkers)
-		defer earlyJobs.Shutdown()
-		for p, snippet := range map[string]string{
-			s.qemuDir(): qemuops.InstallSnippet(),
-			s.goDir():   goops.InstallSnippet(),
-		} {
-			if _, err := os.Stat(p); err == nil {
-				continue // TODO: better way to verify the integrity of the install.
-			}
-			if err := wantsetup.Install(ctx, earlyJobs, p, snippet); err != nil {
-				return err
-			}
-		}
-	}
 
 	exec := newExecutor(ExecutorConfig{
 		QEMU: QEMUConfig{

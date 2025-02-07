@@ -1,7 +1,10 @@
 package want
 
 import (
+	"fmt"
+	"os"
 	"strings"
+	"sync"
 
 	"go.brendoncarroll.net/state/cadata"
 
@@ -13,11 +16,16 @@ import (
 	"wantbuild.io/want/src/internal/op/qemuops"
 	"wantbuild.io/want/src/internal/op/wantops"
 	"wantbuild.io/want/src/internal/op/wasmops"
+	"wantbuild.io/want/src/internal/wantsetup"
 	"wantbuild.io/want/src/wantjob"
 )
 
+type executorFactory = func(jc wantjob.Ctx) (wantjob.Executor, error)
+
 type executor struct {
+	mu    sync.RWMutex
 	execs map[wantjob.OpName]wantjob.Executor
+	setup map[wantjob.OpName]executorFactory
 }
 
 type QEMUConfig = qemuops.Config
@@ -35,10 +43,6 @@ func NewExecutor(cfg ExecutorConfig) wantjob.Executor {
 // newExecutor
 // qemuDir is the qemu install dir
 func newExecutor(cfg ExecutorConfig) *executor {
-
-	qemuExec := qemuops.NewExecutor(cfg.QEMU)
-	golangExec := goops.NewExecutor(cfg.GoDir)
-
 	return &executor{
 		execs: map[wantjob.OpName]wantjob.Executor{
 			"glfs":   glfsops.Executor{},
@@ -51,21 +55,54 @@ func newExecutor(cfg ExecutorConfig) *executor {
 				DAGExecOp: "dag." + dagops.OpExecLast,
 			},
 
-			"qemu":   qemuExec,
-			"golang": golangExec,
-			"wasm":   wasmops.NewExecutor(),
+			"wasm": wasmops.NewExecutor(),
+		},
+		setup: map[wantjob.OpName]func(jc wantjob.Ctx) (wantjob.Executor, error){
+			"qemu": func(jc wantjob.Ctx) (wantjob.Executor, error) {
+				if err := install(jc, qemuops.InstallSnippet(), cfg.QEMU.InstallDir); err != nil {
+					return nil, err
+				}
+				return qemuops.NewExecutor(cfg.QEMU), nil
+			},
+			"golang": func(jc wantjob.Ctx) (wantjob.Executor, error) {
+				if err := install(jc, goops.InstallSnippet(), cfg.GoDir); err != nil {
+					return nil, err
+				}
+				return goops.NewExecutor(cfg.GoDir), nil
+			},
 		},
 	}
 }
 
 func (e *executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task) ([]byte, error) {
 	parts := strings.SplitN(string(task.Op), ".", 2)
+	e.mu.RLock()
 	e2, exists := e.execs[wantjob.OpName(parts[0])]
+	e.mu.RUnlock()
 	if !exists {
-		return nil, wantjob.ErrOpNotFound{Op: task.Op}
+		setup, exists := e.setup[wantjob.OpName(parts[0])]
+		if !exists {
+			return nil, wantjob.ErrOpNotFound{Op: task.Op}
+		}
+		exec, err := setup(jc)
+		if err != nil {
+			return nil, fmt.Errorf("setting up exec for %v: %w", task.Op, err)
+		}
+		e.mu.Lock()
+		e.execs[wantjob.OpName(parts[0])] = exec
+		e.mu.Unlock()
+		e2 = exec
 	}
 	return e2.Execute(jc, src, wantjob.Task{
 		Op:    wantjob.OpName(parts[1]),
 		Input: task.Input,
 	})
+}
+
+func install(jc wantjob.Ctx, snippet string, dstPath string) error {
+	if _, err := os.Stat(dstPath); err == nil {
+		// TODO: better way to verify the integrity of the install.
+		return nil
+	}
+	return wantsetup.Install(jc.Context, jc.System, dstPath, snippet)
 }

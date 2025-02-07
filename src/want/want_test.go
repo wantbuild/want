@@ -15,7 +15,7 @@ import (
 )
 
 func TestInit(t *testing.T) {
-	t.SkipNow() // This dowloads a bunch of stuff from the internet
+	t.SkipNow() // This downloads a bunch of stuff from the internet
 
 	ctx := testutil.Context(t)
 	dir := t.TempDir()
@@ -28,7 +28,7 @@ func TestEvalNoRepo(t *testing.T) {
 	db := wantdb.NewMemory()
 	require.NoError(t, wantdb.Setup(ctx, db))
 	sys := New(t.TempDir(), runtime.GOMAXPROCS(0))
-	require.NoError(t, sys.init(ctx, false)) // init without install
+	require.NoError(t, sys.Init(ctx)) // init without install
 	s := stores.NewMem()
 
 	tcs := []struct {
