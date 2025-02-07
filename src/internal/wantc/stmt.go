@@ -43,16 +43,6 @@ func (c *Compiler) parseStmtSet(ctx context.Context, cs *compileState, fqp FQPat
 				Dst: ks,
 				Src: e,
 			}
-		case spec.Export != nil:
-			ks := SetFromQuery(fqp.Path, spec.Export.Dst)
-			e, err := c.compileExpr(ctx, cs, fqp.Path, spec.Export.Src)
-			if err != nil {
-				return nil, err
-			}
-			stmt = &exportStmt{
-				Dst: ks,
-				Src: e,
-			}
 		default:
 			return nil, errors.New("empty statement")
 		}
