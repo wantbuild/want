@@ -76,7 +76,7 @@ func SyncPlan(ctx context.Context, dst cadata.PostExister, src cadata.Getter, pl
 	allRefs := func(yield func(glfs.Ref) bool) {
 		for _, target := range plan.Targets {
 			if !yield(target.DAG) {
-				break
+				return
 			}
 		}
 		if !yield(plan.Known) {

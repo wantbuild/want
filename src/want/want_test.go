@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/blobcache/glfs"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"wantbuild.io/want/src/internal/stores"
@@ -63,6 +64,19 @@ func TestEvalNoRepo(t *testing.T) {
 				{Name: "k3", FileMode: 0o644, Ref: testutil.PostBlob(t, s, []byte("v3"))},
 			}),
 		},
+		{
+			Name: "pass3",
+			I: `want.pass([
+				want.input("a.txt", want.blob("foo")),
+				want.input("b.d",  want.tree({})),
+				want.input("c.txt", want.blob("bar")),
+			])`,
+			O: testutil.PostTree(t, s, []glfs.TreeEntry{
+				{Name: "a.txt", FileMode: 0o777, Ref: testutil.PostBlob(t, s, []byte("foo"))},
+				{Name: "b.d", FileMode: 0o777, Ref: testutil.PostTree(t, s, nil)},
+				{Name: "c.txt", FileMode: 0o777, Ref: testutil.PostBlob(t, s, []byte("bar"))},
+			}),
+		},
 	}
 	for i, tc := range tcs {
 		tc := tc
@@ -70,7 +84,12 @@ func TestEvalNoRepo(t *testing.T) {
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
 			out, src, err := sys.Eval(ctx, db, nil, "", []byte(in))
 			require.NoError(t, err)
-			require.Equal(t, tc.O, *out)
+			if !assert.Equal(t, tc.O, *out) {
+				t.Log("EXPECTED:")
+				testutil.PrintFS(t, s, tc.O)
+				t.Log("ACTUAL:")
+				testutil.PrintFS(t, src, *out)
+			}
 			require.NoError(t, glfs.WalkRefs(ctx, src, *out, func(ref glfs.Ref) error { return nil }))
 		})
 	}
