@@ -1,9 +1,11 @@
 package wantcmd
 
 import (
+	"archive/zip"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path"
 	"time"
 
@@ -157,6 +159,7 @@ var catCmd = star.Command{
 var serveHttpCmd = star.Command{
 	Metadata: star.Metadata{Short: "serve the build output over http"},
 	Pos:      []star.IParam{pathParam},
+	Flags:    []star.IParam{outParam},
 	F: func(c star.Context) error {
 		ctx := c.Context
 		wbs, err := newSys(&c)
@@ -200,6 +203,47 @@ var serveHttpCmd = star.Command{
 	},
 }
 
+var exportZipCmd = star.Command{
+	Metadata: star.Metadata{Short: "export the build output to zip file"},
+	Pos:      []star.IParam{pathParam},
+	Flags:    []star.IParam{outParam},
+	F: func(c star.Context) error {
+		ctx := c.Context
+		wbs, err := newSys(&c)
+		if err != nil {
+			return err
+		}
+		defer wbs.Close()
+		repo, err := openRepo()
+		if err != nil {
+			return err
+		}
+		q := mkBuildQuery(pathParam.Load(c))
+		res, err := wbs.Build(ctx, repo, q)
+		if err != nil {
+			return err
+		}
+		src := res.Store
+		ref := res.OutputRoot
+		if ref == nil {
+			return fmt.Errorf("error during build")
+		}
+		ref, err = glfs.GetAtPath(ctx, src, *ref, wantc.BoundingPrefix(q))
+		if err != nil {
+			return err
+		}
+		zw := zip.NewWriter(outParam.Load(c))
+		if err := zw.AddFS(glfsiofs.New(src, *ref)); err != nil {
+			return err
+		}
+		if err := zw.Close(); err != nil {
+			return err
+		}
+		c.Printf("%v\n", outParam.Load(c).Name())
+		return nil
+	},
+}
+
 func mkBuildQuery(prefixes ...string) wantcfg.PathSet {
 	var q wantcfg.PathSet
 	switch len(prefixes) {
@@ -211,6 +255,13 @@ func mkBuildQuery(prefixes ...string) wantcfg.PathSet {
 		q = wantcfg.Union(slices2.Map(prefixes, wantcfg.Prefix)...)
 	}
 	return q
+}
+
+var outParam = star.Param[*os.File]{
+	Name: "out",
+	Parse: func(s string) (*os.File, error) {
+		return os.OpenFile(s, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	},
 }
 
 var pathParam = star.Param[string]{
