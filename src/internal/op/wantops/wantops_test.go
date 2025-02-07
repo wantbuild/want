@@ -8,6 +8,7 @@ import (
 
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/testutil"
+	"wantbuild.io/want/src/internal/wantc"
 )
 
 func TestPostGetBuildTask(t *testing.T) {
@@ -37,9 +38,10 @@ func TestPostGetCompileTask(t *testing.T) {
 
 	modRef, err := glfs.PostTreeSlice(ctx, s, nil)
 	require.NoError(t, err)
-	x := CompileTask{
-		Module:   *modRef,
-		Metadata: map[string]any{"abc": "123"},
+	x := wantc.CompileTask{
+		Module:    *modRef,
+		Metadata:  map[string]any{"abc": "123"},
+		Namespace: wantc.Namespace{},
 	}
 	ref, err := PostCompileTask(ctx, s, x)
 	require.NoError(t, err)

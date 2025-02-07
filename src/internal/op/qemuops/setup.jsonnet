@@ -1,4 +1,4 @@
-local want = import "want";
+local want = import "@want";
 
 local qbootRom = want.importURL(
     url="https://github.com/wantbuild/qemu-static/releases/download/v0.1.0/qboot.rom",

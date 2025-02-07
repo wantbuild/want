@@ -80,7 +80,7 @@ func TestEvalNoRepo(t *testing.T) {
 	}
 	for i, tc := range tcs {
 		tc := tc
-		in := `local want = import "want";` + "\n" + tc.I
+		in := `local want = import "@want";` + "\n" + tc.I
 		t.Run(fmt.Sprintf("%d-%s", i, tc.Name), func(t *testing.T) {
 			out, src, err := sys.Eval(ctx, db, nil, "", []byte(in))
 			require.NoError(t, err)

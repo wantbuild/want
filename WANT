@@ -1,8 +1,13 @@
+local want = import "@want";
+
 {
-  "ignore": {
-    "union": [
-      {"unit": ".git"},
-      {"prefix": ".git/"},
+  namespace: {
+    "want": want.blob(importstr "@want"),
+  },
+  ignore: {
+    union: [
+      {unit: ".git"},
+      {prefix: ".git/"},
     ]
   },
 }

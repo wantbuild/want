@@ -46,9 +46,8 @@ func Init(workDir string) error {
 		return err
 	}
 	defer cfgFile.Close()
-	cfg := wantcfg.DefaultProjectConfig()
-	data := jsonMarshalPretty(cfg)
-	if _, err := cfgFile.Write(data); err != nil {
+	cfgStr := defaultModuleConfig()
+	if _, err := cfgFile.Write([]byte(cfgStr)); err != nil {
 		return err
 	}
 	return cfgFile.Sync()
@@ -82,6 +81,17 @@ func (r *Repo) Metadata() map[string]any {
 	return map[string]any{}
 }
 
+func defaultModuleConfig() string {
+	return `local want = import "@want";
+{
+	ignore: want.dirPath(".git"),
+	namespace: {
+		want: want.blob(importstr "@want"),
+	}
+}
+`
+}
+
 // IsRepo returns (true, nil) if the directory contains a want repo
 func IsRepo(p string) (bool, error) {
 	info, err := os.Stat(p)
@@ -92,15 +102,14 @@ func IsRepo(p string) (bool, error) {
 		return false, nil
 	}
 	cfgPath := filepath.Join(p, "WANT")
-	data, err := os.ReadFile(cfgPath)
+	finfo, err := os.Stat(cfgPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
 		}
 		return false, err
 	}
-	_, err = wantc.ParseModuleConfig(data)
-	return err == nil, nil
+	return !finfo.IsDir(), nil
 }
 
 func FindRepo(p string) (bool, string, error) {

@@ -17,17 +17,26 @@ import (
 // Selections are not allowed and will result in a compiler error.
 func (c *Compiler) CompileSnippet(ctx context.Context, dst cadata.Store, src cadata.Getter, x []byte) (wantdag.DAG, error) {
 	vm := jsonnet.MakeVM()
-	vm.Importer(snippetImporter{})
-	jsonData, err := vm.EvaluateSnippet("", string(x))
+	vm.Importer(&snippetImporter{})
+	jsonData, err := vm.EvaluateAnonymousSnippet("", string(x))
 	if err != nil {
 		return nil, err
 	}
-	var spec wantcfg.Expr
-	if err := json.Unmarshal([]byte(jsonData), &spec); err != nil {
+	var expr wantcfg.Expr
+	if err := json.Unmarshal([]byte(jsonData), &expr); err != nil {
 		return nil, err
 	}
+	return c.CompileExpr(ctx, dst, src, expr)
+}
+
+// CompileExpr takes a Expr in the build language and produces a DAG that will evaluate it.
+// The Expr is evaluated in the snippet context.
+func (c *Compiler) CompileExpr(ctx context.Context, dst cadata.Store, src cadata.Getter, x wantcfg.Expr) (wantdag.DAG, error) {
+	vm := jsonnet.MakeVM()
+	vm.Importer(&snippetImporter{})
+
 	cs := &compileState{dst: dst, src: src}
-	expr, err := c.compileExpr(ctx, cs, "", spec)
+	expr, err := c.compileExpr(ctx, cs, "", x)
 	if err != nil {
 		return nil, err
 	}
@@ -38,11 +47,16 @@ func (c *Compiler) CompileSnippet(ctx context.Context, dst cadata.Store, src cad
 	return gb.Finish(), nil
 }
 
-type snippetImporter struct{}
+type snippetImporter struct {
+	libWant jsonnet.Contents
+}
 
-func (snippetImporter) Import(importedFrom, importPath string) (jsonnet.Contents, string, error) {
-	if importPath == "want" {
-		return jsonnet.MakeContents(wantcfg.LibWant()), "want", nil
+func (imp *snippetImporter) Import(importedFrom, importPath string) (jsonnet.Contents, string, error) {
+	if importPath == "@want" {
+		if imp.libWant == (jsonnet.Contents{}) {
+			imp.libWant = jsonnet.MakeContents(wantcfg.LibWant())
+		}
+		return imp.libWant, "@want", nil
 	}
-	return jsonnet.Contents{}, "", fmt.Errorf("imports not allowed in snippet")
+	return jsonnet.Contents{}, "", fmt.Errorf("imports other than @want are not allowed in snippet")
 }

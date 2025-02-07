@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/blobcache/glfs"
+	"go.brendoncarroll.net/exp/streams"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/stores"
@@ -105,4 +106,39 @@ func check(ctx context.Context, src cadata.Getter, root glfs.Ref, history []stri
 		}
 	}
 	return nil
+}
+
+func PostMap[V any](ctx context.Context, s cadata.PostExister, m map[string]V, fn func(context.Context, cadata.PostExister, V) (*glfs.Ref, error)) (*glfs.Ref, error) {
+	var ents []glfs.TreeEntry
+	for k, v := range m {
+		ref, err := fn(ctx, s, v)
+		if err != nil {
+			return nil, err
+		}
+		ents = append(ents, glfs.TreeEntry{Name: k, Ref: *ref})
+	}
+	return glfs.PostTreeSlice(ctx, s, ents)
+}
+
+func GetMap[V any](ctx context.Context, s cadata.Getter, x glfs.Ref, fn func(context.Context, cadata.Getter, glfs.Ref) (*V, error)) (map[string]V, error) {
+	ret := make(map[string]V)
+	tr, err := glfs.NewAgent().NewTreeReader(s, x)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		ent, err := streams.Next(ctx, tr)
+		if err != nil {
+			if streams.IsEOS(err) {
+				break
+			}
+			return nil, err
+		}
+		v, err := fn(ctx, s, ent.Ref)
+		if err != nil {
+			return nil, err
+		}
+		ret[ent.Name] = *v
+	}
+	return ret, nil
 }

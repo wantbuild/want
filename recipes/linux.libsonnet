@@ -1,4 +1,4 @@
-local want = import "want";
+local want = import "@want";
 
 local bzImage = want.selectFile(GROUND, "./linux/bzImage");
 

@@ -46,7 +46,7 @@ func Build(ctx context.Context, jobs wantjob.System, src cadata.Getter, bt Build
 		return nil, err
 	}
 	return &BuildResult{
-		Source:        br.Plan.Source,
+		Source:        bt.Main,
 		Targets:       br.Targets,
 		TargetResults: br.TargetResults,
 		OutputRoot:    br.Output,
@@ -81,7 +81,7 @@ func (sys *System) Blame(ctx context.Context, repo *wantrepo.Repo) ([]Target, er
 	if err != nil {
 		return nil, err
 	}
-	plan, _, err := wantops.DoCompile(ctx, sys.jobs, joinOpName("want", wantops.OpCompile), srcStore, wantops.CompileTask{
+	plan, _, err := wantops.DoCompile(ctx, sys.jobs, joinOpName("want", wantops.OpCompile), srcStore, wantc.CompileTask{
 		Module:   *srcRoot,
 		Metadata: repo.Metadata(),
 	})

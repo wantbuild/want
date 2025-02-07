@@ -1,4 +1,4 @@
-local want = import "want";
+local want = import "@want";
 local oci = import "./oci.libsonnet";
 
 oci.importImage(

@@ -24,6 +24,10 @@ type Expr struct {
 	Selection *Selection `json:"selection,omitempty"`
 }
 
+func Blob(x string) Expr {
+	return Expr{Blob: &x}
+}
+
 func (e Expr) IsValue() bool {
 	return e.Blob != nil || e.Tree != nil
 }

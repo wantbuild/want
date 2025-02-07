@@ -1,4 +1,4 @@
-local want = import "want";
+local want = import "@want";
 
 local ARCH_AMD64 = "x86_64";
 

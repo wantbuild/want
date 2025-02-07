@@ -1,4 +1,4 @@
-local want = import "want";
+local want = import "@want";
 local linux = import "./linux.libsonnet";
 local alpine = import "./alpine.libsonnet";
 

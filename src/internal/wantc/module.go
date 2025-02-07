@@ -11,6 +11,20 @@ import (
 	"wantbuild.io/want/src/wantcfg"
 )
 
+type ModuleID = cadata.ID
+
+func NewModuleID(x glfs.Ref) ModuleID {
+	// TODO: hash DEK and CID together?
+	return x.CID
+}
+
+type FQPath struct {
+	ModuleID ModuleID
+	Path     string
+}
+
+type Namespace map[string]glfs.Ref
+
 // IsModule returns true if x is valid Want Module.
 func IsModule(ctx context.Context, src cadata.Getter, x glfs.Ref) (bool, error) {
 	if x.Type != glfs.TypeTree {
@@ -47,9 +61,22 @@ func FindModules(ctx context.Context, src cadata.Getter, root glfs.Ref) (map[str
 	return modules, nil
 }
 
+// GetModuleConfig gets the WANT file from the directory at modRef, evaluates it and returns it.
+func GetModuleConfig(ctx context.Context, src cadata.Getter, modRef glfs.Ref) (*wantcfg.ModuleConfig, error) {
+	cfgRef, err := glfs.GetAtPath(ctx, src, modRef, "WANT")
+	if err != nil {
+		return nil, err
+	}
+	data, err := glfs.GetBlobBytes(ctx, src, *cfgRef, MaxJsonnetFileSize)
+	if err != nil {
+		return nil, err
+	}
+	return ParseModuleConfig(data)
+}
+
 func ParseModuleConfig(x []byte) (*wantcfg.ModuleConfig, error) {
 	vm := jsonnet.MakeVM()
-	vm.Importer(snippetImporter{})
+	vm.Importer(&snippetImporter{})
 	jsonData, err := vm.EvaluateAnonymousSnippet("WANT", string(x))
 	if err != nil {
 		return nil, err

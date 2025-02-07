@@ -44,7 +44,6 @@ func (t Target) BoundingPrefix() string {
 
 // Plan is the result of compilation.
 type Plan struct {
-	Source  glfs.Ref `json:"source"`
 	Known   glfs.Ref `json:"known"`
 	Targets []Target `json:"targets"`
 }
@@ -82,7 +81,6 @@ func SyncPlan(ctx context.Context, dst cadata.PostExister, src cadata.Getter, pl
 		if !yield(plan.Known) {
 			return
 		}
-		yield(plan.Source)
 	}
 	for ref := range allRefs {
 		if err := glfs.Sync(ctx, dst, src, ref); err != nil {
@@ -126,9 +124,6 @@ func GetPlan(ctx context.Context, s cadata.Getter, x glfs.Ref) (*Plan, error) {
 		default:
 			return nil, fmt.Errorf("plan tree has unknown entry %s", ent.Name)
 		}
-	}
-	if plan.Source == (glfs.Ref{}) {
-		return nil, fmt.Errorf("plan is missing valid plan.json")
 	}
 	if plan.Known == (glfs.Ref{}) {
 		return nil, fmt.Errorf("plan is missing known tree")

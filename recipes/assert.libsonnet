@@ -1,4 +1,4 @@
-local want = import "want";
+local want = import "@want";
 
 local subsetOf(x, superset) =
     want.compute("assert.all", [

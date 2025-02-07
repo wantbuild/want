@@ -1,4 +1,4 @@
-local want = import "want";
+local want = import "@want";
 
 local repo(account, name, commitHash) =
     local url = "https://github.com/%s/%s" % [account, name];

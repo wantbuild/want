@@ -1,4 +1,4 @@
-local want = import "want";
+local want = import "@want";
 
 local hashes = {
     "amd64-linux": "6924efde5de86fe277676e929dc9917d466efa02fb934197bc2eba35d5680971",

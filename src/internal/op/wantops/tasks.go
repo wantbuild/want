@@ -9,6 +9,7 @@ import (
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
+	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/wantc"
 	"wantbuild.io/want/src/internal/wantdag"
 	"wantbuild.io/want/src/wantcfg"
@@ -158,12 +159,7 @@ func GetBuildResult(ctx context.Context, s cadata.Getter, x glfs.Ref) (*BuildRes
 	return &ret, nil
 }
 
-type CompileTask struct {
-	Module   glfs.Ref
-	Metadata wantc.Metadata
-}
-
-func PostCompileTask(ctx context.Context, s cadata.PostExister, x CompileTask) (*glfs.Ref, error) {
+func PostCompileTask(ctx context.Context, s cadata.PostExister, x wantc.CompileTask) (*glfs.Ref, error) {
 	mdJson, err := json.Marshal(x.Metadata)
 	if err != nil {
 		return nil, err
@@ -172,13 +168,18 @@ func PostCompileTask(ctx context.Context, s cadata.PostExister, x CompileTask) (
 	if err != nil {
 		return nil, err
 	}
+	nsRef, err := glfs.PostTreeMap(ctx, s, x.Namespace)
+	if err != nil {
+		return nil, err
+	}
 	return glfs.PostTreeMap(ctx, s, map[string]glfs.Ref{
 		"module":    x.Module,
 		"meta.json": *mdRef,
+		"namespace": *nsRef,
 	})
 }
 
-func GetCompileTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*CompileTask, error) {
+func GetCompileTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*wantc.CompileTask, error) {
 	moduleRef, err := glfs.GetAtPath(ctx, s, x, "module")
 	if err != nil {
 		return nil, err
@@ -195,8 +196,21 @@ func GetCompileTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*CompileT
 	if err := json.Unmarshal(data, &md); err != nil {
 		return nil, fmt.Errorf("meta.json did not contain valid json: %q, %w", data, err)
 	}
-	return &CompileTask{
-		Module:   *moduleRef,
-		Metadata: md,
+	nsRef, err := glfs.GetAtPath(ctx, s, x, "namespace")
+	if err != nil && !glfs.IsErrNoEnt(err) {
+		return nil, err
+	}
+	var ns map[string]glfs.Ref
+	if nsRef != nil {
+		if ns, err = glfstasks.GetMap(ctx, s, *nsRef, func(ctx context.Context, g cadata.Getter, r glfs.Ref) (*glfs.Ref, error) {
+			return &r, nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+	return &wantc.CompileTask{
+		Module:    *moduleRef,
+		Metadata:  md,
+		Namespace: ns,
 	}, nil
 }

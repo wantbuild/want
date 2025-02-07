@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"maps"
 	"path"
 	"regexp"
 	"slices"
@@ -44,15 +45,22 @@ func NewCompiler() *Compiler {
 	}
 }
 
-func (c *Compiler) Compile(ctx context.Context, dst cadata.Store, src cadata.Getter, metadata Metadata, ground glfs.Ref) (*Plan, error) {
-	isMod, err := IsModule(ctx, src, ground)
+type CompileTask struct {
+	Metadata  Metadata
+	Module    glfs.Ref
+	Deps      map[ModuleID]glfs.Ref
+	Namespace Namespace
+}
+
+func (c *Compiler) Compile(ctx context.Context, dst cadata.Store, src cadata.Getter, ct CompileTask) (*Plan, error) {
+	isMod, err := IsModule(ctx, src, ct.Module)
 	if err != nil {
 		return nil, err
 	}
 	if !isMod {
 		return nil, fmt.Errorf("not a want module")
 	}
-	return c.compileModule(ctx, dst, src, metadata, ground)
+	return c.compileModule(ctx, dst, src, ct.Metadata, ct.Module, ct.Namespace, ct.Deps)
 }
 
 // compileState holds the state for a single run of the compiler
@@ -61,7 +69,6 @@ type compileState struct {
 	dst      cadata.Store
 	buildCtx Metadata
 	ground   glfs.Ref
-	root     Expr
 
 	jsImporter   *jsImporter
 	vpMu         sync.Mutex
@@ -130,25 +137,79 @@ func (cs *compileState) acquireVFS() (*VFS, func()) {
 	return cs.vfs, cs.vfsMu.Unlock
 }
 
-func (c *Compiler) compileModule(ctx context.Context, dst cadata.Store, src cadata.Getter, metadata Metadata, ground glfs.Ref) (*Plan, error) {
+func (c *Compiler) compileModule(ctx context.Context, dst cadata.Store, src cadata.Getter, metadata Metadata, ground glfs.Ref, ns Namespace, deps map[ModuleID]glfs.Ref) (*Plan, error) {
+	cfg, err := GetModuleConfig(ctx, src, ground)
+	if err != nil {
+		return nil, err
+	}
+	// check namespace
+	for name := range cfg.Namespace {
+		if _, exists := ns[name]; !exists {
+			return nil, ErrMissingDep{Name: name}
+		}
+	}
+	for name := range ns {
+		if _, exists := cfg.Namespace[name]; !exists {
+			return nil, ErrExtraDep{Name: name}
+		}
+	}
+	deps = maps.Clone(deps)
+	if deps == nil {
+		deps = make(map[cadata.ID]glfs.Ref)
+	}
+	for _, ref := range ns {
+		if ref.Type != glfs.TypeTree {
+			deps[NewModuleID(ref)] = ref
+		}
+	}
+	if _, exists := deps[NewModuleID(ground)]; exists {
+		// This is a bug in the want.build Operation
+		return nil, fmt.Errorf("module deps must not contain the main module")
+	}
 	cs := &compileState{
 		src:          src,
 		dst:          dst,
 		buildCtx:     metadata,
 		ground:       ground,
-		root:         &selection{set: stringsets.Prefix("")},
 		vfs:          &VFS{},
 		visitedPaths: make(map[string]chan struct{}),
-		jsImporter: newImporter(func(fqp FQPath) ([]byte, error) {
-			if fqp.ModuleCID != ground.CID {
-				return nil, fmt.Errorf("can't import from module %s", fqp.ModuleCID)
+		jsImporter: newImporter(func(modid ModuleID, k string) (ModuleID, error) {
+			if modid == ground.CID {
+				if dep, ok := ns[k]; ok {
+					return dep.CID, nil
+				} else {
+					return ModuleID{}, fmt.Errorf("%v not found in namespace", k)
+				}
 			}
-			ref, err := c.glfs.GetAtPath(ctx, src, ground, fqp.Path)
-			if err != nil {
-				return nil, err
-			}
-			return c.glfs.GetBlobBytes(ctx, src, *ref, MaxJsonnetFileSize)
-		}),
+			// TODO: need to also resolve namespace entries in dependency modules
+			return ModuleID{}, fmt.Errorf("cannot resolve %v", modid)
+		},
+			func(fqp FQPath) ([]byte, error) {
+				modRef, exists := deps[fqp.ModuleID]
+				if !exists && fqp.ModuleID == NewModuleID(ground) {
+					modRef = ground
+				} else if !exists {
+					return nil, fmt.Errorf("cannot find module %v to import path %v", fqp.ModuleID, fqp.Path)
+				}
+				p := fqp.Path
+				if after, yes := strings.CutPrefix(p, "@"); yes {
+					parts := strings.SplitN(after, "/", 2)
+					modRef = ns[parts[0]]
+					if len(parts) > 1 {
+						p = parts[1]
+					} else {
+						p = ""
+					}
+				}
+				ref := &modRef
+				if p != "" {
+					ref, err = c.glfs.GetAtPath(ctx, src, *ref, p)
+					if err != nil {
+						return nil, err
+					}
+				}
+				return c.glfs.GetBlobBytes(ctx, src, *ref, MaxJsonnetFileSize)
+			}),
 	}
 	for _, f := range []func(context.Context, *compileState) error{
 		c.addSourceFiles,
@@ -162,7 +223,6 @@ func (c *Compiler) compileModule(ctx context.Context, dst cadata.Store, src cada
 		}
 	}
 	return &Plan{
-		Source:  ground,
 		Known:   *cs.knownRef,
 		Targets: cs.targets,
 	}, nil
@@ -237,7 +297,7 @@ func (c *Compiler) addSourceFile(ctx context.Context, cs *compileState, eg *errg
 }
 
 func (c *Compiler) loadExpr(ctx context.Context, cs *compileState, p string) error {
-	fqp := FQPath{ModuleCID: cs.ground.CID, Path: p}
+	fqp := FQPath{ModuleID: cs.ground.CID, Path: p}
 	er, err := c.parseExprRoot(ctx, cs, fqp)
 	if err != nil {
 		return err
@@ -253,7 +313,7 @@ func (c *Compiler) loadExpr(ctx context.Context, cs *compileState, p string) err
 }
 
 func (c *Compiler) loadStmt(ctx context.Context, cs *compileState, p string) error {
-	fqp := FQPath{ModuleCID: cs.ground.CID, Path: p}
+	fqp := FQPath{ModuleID: cs.ground.CID, Path: p}
 	ss, err := c.parseStmtSet(ctx, cs, fqp)
 	if err != nil {
 		return err
@@ -303,11 +363,6 @@ func (c *Compiler) lowerSelections(ctx context.Context, cs *compileState) error 
 			stmt.setExpr(e2)
 		}
 	}
-	root, err := c.replaceSelections(ctx, cs.dst, cache, vfs, cs.root)
-	if err != nil {
-		return err
-	}
-	cs.root = root
 	return nil
 }
 
@@ -419,7 +474,6 @@ func (c *Compiler) detectCycles(ctx context.Context, cs *compileState) error {
 			}
 		}
 	}
-	traverseExpr(cs.root)
 	return check()
 }
 

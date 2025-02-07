@@ -67,10 +67,21 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 	if err != nil {
 		return nil, err
 	}
+	deps := make(map[wantc.ModuleID]glfs.Ref)
+	nss := make(map[wantc.ModuleID]wantc.Namespace)
+	if err := dependencyClosure(ctx, src, buildTask.Main, deps, nss, func(expr wantcfg.Expr) (*glfs.Ref, error) {
+		return e.EvalExpr(jc, src, expr)
+	}); err != nil {
+		return nil, err
+	}
+	delete(deps, wantc.NewModuleID(buildTask.Main))
+	jc.Infof("prepared %d dependencies", len(deps))
 	// plan
-	plan, planStore, err := DoCompile(ctx, jc.System, e.CompileOp, src, CompileTask{
-		Module:   buildTask.Main,
-		Metadata: buildTask.Metadata,
+	plan, planStore, err := DoCompile(ctx, jc.System, e.CompileOp, src, wantc.CompileTask{
+		Module:    buildTask.Main,
+		Metadata:  buildTask.Metadata,
+		Namespace: nss[wantc.NewModuleID(buildTask.Main)],
+		Deps:      deps,
 	})
 	if err != nil {
 		return nil, err
@@ -156,7 +167,7 @@ func (e Executor) Compile(jc wantjob.Ctx, s cadata.Getter, x glfs.Ref) (*glfs.Re
 		return nil, err
 	}
 	c := wantc.NewCompiler()
-	plan, err := c.Compile(ctx, dst, s, ct.Metadata, ct.Module)
+	plan, err := c.Compile(ctx, dst, s, *ct)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +205,7 @@ func (e Executor) PathSetRegexp(jc wantjob.Ctx, dst cadata.Store, s cadata.Gette
 	return glfs.PostBlob(ctx, dst, strings.NewReader(re.String()))
 }
 
-func DoCompile(ctx context.Context, sys wantjob.System, compileOp wantjob.OpName, src cadata.Getter, ct CompileTask) (*wantc.Plan, cadata.Getter, error) {
+func DoCompile(ctx context.Context, sys wantjob.System, compileOp wantjob.OpName, src cadata.Getter, ct wantc.CompileTask) (*wantc.Plan, cadata.Getter, error) {
 	scratch := stores.NewMem()
 	ctRef, err := PostCompileTask(ctx, stores.Fork{W: scratch, R: src}, ct)
 	if err != nil {
@@ -209,4 +220,52 @@ func DoCompile(ctx context.Context, sys wantjob.System, compileOp wantjob.OpName
 		return nil, nil, err
 	}
 	return plan, planStore, nil
+}
+
+func (e Executor) EvalExpr(jc wantjob.Ctx, src cadata.Getter, expr wantcfg.Expr) (*glfs.Ref, error) {
+	ctx := jc.Context
+	c := wantc.NewCompiler()
+	dag, err := c.CompileExpr(ctx, jc.Dst, src, expr)
+	if err != nil {
+		return nil, err
+	}
+	dagRef, err := wantdag.PostDAG(ctx, jc.Dst, dag)
+	if err != nil {
+		return nil, err
+	}
+	outRef, outGet, err := glfstasks.Do(ctx, jc.System, jc.Dst, e.DAGExecOp, *dagRef)
+	if err != nil {
+		return nil, err
+	}
+	if err := glfstasks.FastSync(ctx, jc.Dst, outGet, *outRef); err != nil {
+		return nil, err
+	}
+	return outRef, nil
+}
+
+func dependencyClosure(ctx context.Context, src cadata.Getter, modRef glfs.Ref, deps map[wantc.ModuleID]glfs.Ref, nss map[wantc.ModuleID]wantc.Namespace, eval func(wantcfg.Expr) (*glfs.Ref, error)) error {
+	modid := wantc.NewModuleID(modRef)
+	if _, exists := deps[modid]; exists {
+		return nil
+	}
+	if modRef.Type == glfs.TypeTree {
+		modCfg, err := wantc.GetModuleConfig(ctx, src, modRef)
+		if err != nil {
+			return err
+		}
+		nss[modid] = make(wantc.Namespace)
+		for name, expr := range modCfg.Namespace {
+			ref, err := eval(expr)
+			if err != nil {
+				return err
+			}
+			if err := dependencyClosure(ctx, src, *ref, deps, nss, eval); err != nil {
+				return err
+			}
+			ns := nss[modRef.CID]
+			ns[name] = *ref
+		}
+	}
+	deps[modid] = modRef
+	return nil
 }

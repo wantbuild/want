@@ -77,10 +77,10 @@ func TestSnippets(t *testing.T) {
 	tcs := []struct {
 		I string
 	}{
-		{`local want = import "want";
+		{`local want = import "@want";
 			want.blob("hello world")
 		`},
-		{`local want = import "want";
+		{`local want = import "@want";
 			want.tree({
 				"k1": want.treeEntry("0644", want.blob("hello")),
 			})
@@ -101,12 +101,18 @@ func TestSnippets(t *testing.T) {
 func TestCompile(t *testing.T) {
 	src := stores.NewMem()
 	tcs := []struct {
-		Name   string
-		Module glfs.Ref
+		// Name of the test (optional)
+		Name string
+		// Module is the mod
+		Module    glfs.Ref
+		Namespace Namespace
 
+		// If not nil, check that the actual targets match these expected targets
 		Targets []Target
-		Known   *glfs.Ref
-		Err     error
+		// If not nil, check that the actual Known matches this Ref
+		Known *glfs.Ref
+		// Check that the error matches
+		Err error
 	}{
 		{
 			Name: "Minimal",
@@ -118,26 +124,52 @@ func TestCompile(t *testing.T) {
 		{
 			Name: "GROUND",
 			Module: testutil.PostFSStr(t, src, map[string]string{
-				"WANT": "{}",
+				"WANT": `{namespace: {want: {blob: importstr "@want"} } }`,
 				"test.want": `
-					local want = import "want";
+					local want = import "@want";
 					want.select(GROUND, want.unit("WANT"))
 				`,
 			}),
+			Namespace: map[string]glfs.Ref{"want": testutil.PostBlob(t, src, []byte(wantcfg.LibWant()))},
 		},
 		{
 			Name: "DERIVED",
 			Module: testutil.PostFSStr(t, src, map[string]string{
-				"WANT":     "{}",
+				"WANT":     `{namespace: {want: {blob: importstr "@want"} } }`,
 				"test.txt": "foo",
 				"test.want": `
-					local want = import "want";
+					local want = import "@want";
 					want.select(DERIVED, want.unit("test.text"))
 				`,
 			}),
+			Namespace: map[string]glfs.Ref{"want": testutil.PostBlob(t, src, []byte(wantcfg.LibWant()))},
+
 			Known: ptrTo(testutil.PostFSStr(t, src, map[string]string{
 				"test.txt": "foo",
 			})),
+		},
+		{
+			Name: "ErrMissingDep",
+			Module: testutil.PostFSStr(t, src, map[string]string{
+				"WANT": `
+				local want = import "@want";
+				{
+					"namespace": {
+						"name1": want.blob("{}"),
+					},
+				}`,
+			}),
+			Err: ErrMissingDep{Name: "name1"},
+		},
+		{
+			Name: "ErrExtraDep",
+			Module: testutil.PostFSStr(t, src, map[string]string{
+				"WANT": `{}`,
+			}),
+			Namespace: map[string]glfs.Ref{
+				"name1": testutil.PostBlob(t, src, nil),
+			},
+			Err: ErrExtraDep{Name: "name1"},
 		},
 	}
 
@@ -146,7 +178,7 @@ func TestCompile(t *testing.T) {
 			ctx := testutil.Context(t)
 			c := NewCompiler()
 			dst := stores.NewMem()
-			plan, err := c.Compile(ctx, dst, src, map[string]any{}, tc.Module)
+			plan, err := c.Compile(ctx, dst, src, CompileTask{Module: tc.Module, Namespace: tc.Namespace})
 			if tc.Err != nil {
 				require.ErrorIs(t, err, tc.Err)
 			} else {
