@@ -28,8 +28,17 @@ local bookToml = want.blob(|||
 local summaryMd = want.blob(|||
     # Summary
 
-    - [Concepts](10_Concepts.md)
-    - [Build Configuration](20_Build_Configuration.md)
+    [Introduction](00_Introduction.md)
+
+    - [Using Want](10_Using_Want.md)
+    - [Concepts](20_Concepts.md)
+        - [Blobs, Trees, and Refs](21_Blobs_Trees_Refs.md)
+        - [Tasks & Jobs](22_Tasks_Jobs.md)
+    - [Build Configuration](30_Build_Configuration.md)
+        - [Module Files](31_Module_Files.md)
+        - [Expression Files](32_Expression_Files.md)
+        - [Statement Files](33_Statement_Files.md)
+        - [Standard Library](34_Standard_Library.md)
 |||);
 
 local rootfs = want.pass([

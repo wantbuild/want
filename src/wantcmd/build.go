@@ -159,7 +159,7 @@ var catCmd = star.Command{
 var serveHttpCmd = star.Command{
 	Metadata: star.Metadata{Short: "serve the build output over http"},
 	Pos:      []star.IParam{pathParam},
-	Flags:    []star.IParam{outParam},
+	Flags:    []star.IParam{},
 	F: func(c star.Context) error {
 		ctx := c.Context
 		wbs, err := newSys(&c)
