@@ -21,14 +21,14 @@ func (ps PathSet) String() string {
 	// TODO: this is duplicated
 	switch {
 	case ps.Unit != nil:
-		return fmt.Sprintf("%q", *ps.Unit)
+		return fmt.Sprintf("{%q}", *ps.Unit)
 	case ps.Prefix != nil:
-		return fmt.Sprintf("%q*", *ps.Prefix)
+		return fmt.Sprintf("(prefix %q)", *ps.Prefix)
 	case ps.Suffix != nil:
-		return fmt.Sprintf("*%q", *ps.Suffix)
+		return fmt.Sprintf("(suffix %q)", *ps.Suffix)
 
 	case ps.Not != nil:
-		return "!" + ps.Not.String()
+		return fmt.Sprintf("(NOT %v)", *ps.Not)
 
 	case ps.Intersect != nil:
 		parts := slices2.Map(ps.Intersect, func(x PathSet) string { return x.String() })
@@ -38,7 +38,7 @@ func (ps PathSet) String() string {
 		return "(" + strings.Join(parts, " | ") + ")"
 
 	default:
-		return "{empty}"
+		return "{}"
 	}
 }
 

@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"path"
+	"strings"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
+	"wantbuild.io/want/src/wantcfg"
 	"wantbuild.io/want/src/wantjob"
 	"wantbuild.io/want/src/wantqemu"
 )
@@ -123,14 +125,16 @@ func RunTests(jc wantjob.Ctx, src cadata.Getter, x RunTestsTask) (*glfs.Ref, err
 		if err != nil {
 			return nil, err
 		}
+		args := []string{"-test.v", "-test.coverprofile", "/output"}
 		taskRef, err := wantqemu.PostMicroVMTask(jc.Context, jc.Dst, wantqemu.MicroVMTask{
 			Cores:  1,
 			Memory: 1e9,
 			Kernel: x.Kernel,
-			Root:   *rootfs,
-			Init:   "/input/testexec",
-			Args:   []string{"-test.v", "-test.coverprofile", "/output"},
-			Output: "output",
+			VirtioFS: map[string]wantqemu.VirtioFSSpec{
+				"rootfs": {Root: *rootfs, Writeable: true},
+			},
+			KernelArgs: "panic=-1 reboot=t init=/input/testexec " + strings.Join(args, " "),
+			Output:     wantqemu.GrabVirtioFS("rootfs", wantcfg.Prefix("output")),
 		})
 		if err != nil {
 			return nil, err
@@ -140,7 +144,7 @@ func RunTests(jc wantjob.Ctx, src cadata.Getter, x RunTestsTask) (*glfs.Ref, err
 			return nil, err
 		}
 		res, outStore, err := wantjob.Do(jc.Context, jc.System, jc.Dst, wantjob.Task{
-			Op:    "qemu.amd64_microvm_virtiofs",
+			Op:    "qemu.amd64_microvm",
 			Input: taskJson,
 		})
 		if err != nil {

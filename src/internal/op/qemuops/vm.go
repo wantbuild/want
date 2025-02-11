@@ -3,165 +3,33 @@
 package qemuops
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"iter"
 	"maps"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
-	"time"
 
-	"github.com/blobcache/glfs"
-	"go.brendoncarroll.net/state/cadata"
-
-	"wantbuild.io/want/src/internal/glfsport"
 	"wantbuild.io/want/src/wantjob"
 )
 
 const (
 	kernelFilename = "kernel"
-	rootFSName     = "rootfs"
+	initrdFilename = "initrd"
 )
-
-func (e *Executor) newVM_VirtioFS(jc wantjob.Ctx, src cadata.Getter, dir string, vmcfg vmConfig) (*vm_VirtioFS, error) {
-	vhostPath := filepath.Join(dir, "vhost.sock")
-	rootFSPath := filepath.Join(dir, rootFSName)
-
-	uid := os.Getuid()
-	gid := os.Getgid()
-	const maxIdRange = 1 << 16
-	// viriofsd
-	viofsCmd := func() *exec.Cmd {
-		args := []string{
-			fmt.Sprintf("--socket-path=%s", vhostPath),
-			fmt.Sprintf("--shared-dir=%s", rootFSPath),
-			"--cache=always",
-			"--sandbox=namespace",
-
-			fmt.Sprintf("--translate-uid=squash-host:0:0:%d", maxIdRange),
-			fmt.Sprintf("--translate-gid=squash-host:0:0:%d", maxIdRange),
-			fmt.Sprintf("--translate-uid=squash-guest:0:%d:%d", uid, maxIdRange),
-			fmt.Sprintf("--translate-gid=squash-guest:0:%d:%d", gid, maxIdRange),
-			//"--log-level=debug",
-		}
-		cmd := e.virtiofsdCmd(args...)
-		cmd.Stdout = jc.Writer("virtiofsd/stdout")
-		cmd.Stderr = jc.Writer("virtiofsd/stderr")
-		return cmd
-	}()
-	vmcfg.CharDevs["char0"] = chardevConfig{
-		Backend: "socket",
-		Props: map[string]string{
-			"path": vhostPath,
-		},
-	}
-	vmcfg.Objects["mem0"] = objectConfig{
-		Type: "memory-backend-file",
-		Props: map[string]string{
-			"size":     fmt.Sprintf("%dM", vmcfg.Memory/1e6),
-			"mem-path": "/dev/shm",
-			"share":    "on",
-		},
-	}
-	vmcfg.Numa = []numaConfig{
-		{Type: "node", MemDev: "mem0"},
-	}
-	vmcfg.Devices = append(vmcfg.Devices, deviceConfig{
-		Type: "vhost-user-fs-device",
-		Props: map[string]string{
-			"queue-size": "1024",
-			"chardev":    "char0",
-			"tag":        "myfs",
-		},
-	})
-
-	vm, err := e.newVM(jc, src, dir, vmcfg)
-	if err != nil {
-		return nil, err
-	}
-	return &vm_VirtioFS{
-		vm:       vm,
-		viofsCmd: viofsCmd,
-	}, nil
-}
-
-// vm_VirtioFS is a VM with a virtiofs root
-// in addition to the QEMU VM it manages a virtiofsd instance
-// sharing a directory on the host.
-type vm_VirtioFS struct {
-	*vm
-
-	viofsCmd *exec.Cmd
-}
-
-func (vm *vm_VirtioFS) init(ctx context.Context, kernel, rootfs glfs.Ref) error {
-	if err := vm.exp.Export(ctx, rootfs, "rootfs"); err != nil {
-		return err
-	}
-	return vm.vm.init(ctx, kernel)
-}
-
-func (vm *vm_VirtioFS) run(jc wantjob.Ctx) error {
-	if err := vm.viofsCmd.Start(); err != nil {
-		return err
-	}
-	if err := vm.awaitVhostSock(jc); err != nil {
-		return err
-	}
-	return vm.vm.run(jc)
-}
-
-func (vm *vm_VirtioFS) awaitVhostSock(jc wantjob.Ctx) error {
-	for i := 0; i < 10; i++ {
-		_, err := os.Stat(vm.vhostPath())
-		if os.IsNotExist(err) {
-			jc.Infof("waiting for vhost.sock to come up")
-			time.Sleep(100 * time.Millisecond)
-		} else if err != nil {
-			return err
-		} else {
-			jc.Infof("vhost.sock is up")
-			return nil
-		}
-	}
-	return fmt.Errorf("timedout waiting for %q", vm.vhostPath())
-}
-
-func (vm *vm_VirtioFS) vhostPath() string {
-	return filepath.Join(vm.dir, "vhost.sock")
-}
-
-func (vm *vm_VirtioFS) importPath(ctx context.Context, p string) (*glfs.Ref, error) {
-	return vm.vm.imp.Import(ctx, path.Join(rootFSName, p))
-}
-
-func (vm *vm_VirtioFS) Close() error {
-	if vm.viofsCmd.Process != nil {
-		if err := vm.viofsCmd.Process.Kill(); err != nil {
-			return err
-		}
-		return vm.viofsCmd.Process.Release()
-	}
-	return vm.vm.Close()
-}
 
 type vm struct {
 	dir string
-	exp glfsport.Exporter
-	imp glfsport.Importer
 
 	qemuCmd *exec.Cmd
-
-	closed bool
+	closed  bool
 }
 
-func (e *Executor) newVM(jc wantjob.Ctx, src cadata.Getter, dir string, vmcfg vmConfig) (*vm, error) {
+func (e *Executor) newVM(jc wantjob.Ctx, dir string, vmcfg vmConfig) *vm {
 	if vmcfg.NumCPUs == 0 {
 		vmcfg.NumCPUs = uint32(runtime.NumCPU())
 	}
@@ -178,17 +46,21 @@ func (e *Executor) newVM(jc wantjob.Ctx, src cadata.Getter, dir string, vmcfg vm
 			"-smp", strconv.FormatUint(uint64(vmcfg.NumCPUs), 10),
 			"-L", filepath.Join(e.cfg.InstallDir, "share"),
 
-			"-kernel", filepath.Join(dir, kernelFilename),
-			"-append", vmcfg.AppendKernelArgs,
-
 			"-display", "none",
 			"-nodefaults",
 			"-no-user-config",
 			"-no-reboot",
 
-			"-chardev", "stdio,id=virtiocon0",
-			"-device", "virtio-serial-device",
-			"-device", "virtconsole,chardev=virtiocon0",
+			"-kernel", filepath.Join(dir, kernelFilename),
+		}
+		add := func(xs ...string) {
+			args = append(args, xs...)
+		}
+		if vmcfg.AppendKernelArgs != "" {
+			add("-append", vmcfg.AppendKernelArgs)
+		}
+		if vmcfg.Initrd {
+			add("-initrd", filepath.Join(dir, initrdFilename))
 		}
 		args = vmcfg.DeviceArgs(args)
 
@@ -199,26 +71,9 @@ func (e *Executor) newVM(jc wantjob.Ctx, src cadata.Getter, dir string, vmcfg vm
 	}()
 
 	return &vm{
-		dir: dir,
-		exp: glfsport.Exporter{
-			Cache: glfsport.NullCache{},
-			Store: src,
-			Dir:   dir,
-		},
-		imp: glfsport.Importer{
-			Cache: glfsport.NullCache{},
-			Store: jc.Dst,
-			Dir:   dir,
-		},
+		dir:     dir,
 		qemuCmd: qemuCmd,
-	}, nil
-}
-
-func (vm *vm) init(ctx context.Context, kernel glfs.Ref) error {
-	if err := vm.exp.Export(ctx, kernel, kernelFilename); err != nil {
-		return err
 	}
-	return nil
 }
 
 func (vm *vm) run(jc wantjob.Ctx) error {
@@ -242,9 +97,6 @@ func (vm *vm) Close() (retErr error) {
 				return vm.qemuCmd.Process.Release()
 			}
 			return nil
-		},
-		func() error {
-			return os.RemoveAll(vm.dir)
 		},
 	} {
 		if err := closer(); err != nil && !errors.Is(err, os.ErrProcessDone) {
@@ -322,11 +174,14 @@ func (cfg deviceConfig) appendArgs(args []string) []string {
 	return args
 }
 
+// vmConfig is a structured form of the command line configuration that
+// will be passed to QEMU.
 type vmConfig struct {
 	NumCPUs uint32
 	Memory  uint64
 
 	AppendKernelArgs string
+	Initrd           bool
 
 	CharDevs map[string]chardevConfig
 	NetDevs  map[string]netdevConfig
@@ -334,6 +189,10 @@ type vmConfig struct {
 	Numa     []numaConfig
 
 	Devices []deviceConfig
+}
+
+func (vc *vmConfig) addDevice(dc deviceConfig) {
+	vc.Devices = append(vc.Devices, dc)
 }
 
 func (vc vmConfig) Args(args []string) []string {
@@ -367,6 +226,35 @@ func (vc vmConfig) DeviceArgs(args []string) []string {
 		args = dev.appendArgs(args)
 	}
 	return args
+}
+
+func configAddVirtioFS(vmcfg *vmConfig, vhostPath string, tag string) {
+	charDevID := "vfs_" + tag
+	vmcfg.CharDevs[charDevID] = chardevConfig{
+		Backend: "socket",
+		Props: map[string]string{
+			"path": vhostPath,
+		},
+	}
+	vmcfg.Objects["mem0"] = objectConfig{
+		Type: "memory-backend-file",
+		Props: map[string]string{
+			"size":     fmt.Sprintf("%dM", vmcfg.Memory/1e6),
+			"mem-path": "/dev/shm",
+			"share":    "on",
+		},
+	}
+	vmcfg.Numa = append(vmcfg.Numa, numaConfig{
+		Type: "node", MemDev: "mem0",
+	})
+	vmcfg.Devices = append(vmcfg.Devices, deviceConfig{
+		Type: "vhost-user-fs-device",
+		Props: map[string]string{
+			"queue-size": "1024",
+			"chardev":    charDevID,
+			"tag":        tag,
+		},
+	})
 }
 
 func sortedKeys[V any](m map[string]V) iter.Seq2[string, V] {

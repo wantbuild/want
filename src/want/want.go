@@ -9,6 +9,7 @@ import (
 
 	"github.com/blobcache/glfs"
 	"github.com/jmoiron/sqlx"
+	"github.com/pbnjay/memory"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"
@@ -68,7 +69,7 @@ func (s *System) Init(ctx context.Context) error {
 	exec := newExecutor(ExecutorConfig{
 		QEMU: QEMUConfig{
 			InstallDir: s.qemuDir(),
-			MemLimit:   4e9,
+			MemLimit:   int64(memory.TotalMemory()) / 2 * 3,
 		},
 		GoDir: s.goDir(),
 	})

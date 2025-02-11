@@ -130,7 +130,7 @@ func TestCompile(t *testing.T) {
 					want.select(GROUND, want.unit("WANT"))
 				`,
 			}),
-			Namespace: map[string]glfs.Ref{"want": testutil.PostBlob(t, src, []byte(wantcfg.LibWant()))},
+			Namespace: map[string]glfs.Ref{"want": testutil.PostBlob(t, src, []byte(LibWant()))},
 		},
 		{
 			Name: "DERIVED",
@@ -142,7 +142,7 @@ func TestCompile(t *testing.T) {
 					want.select(DERIVED, want.unit("test.text"))
 				`,
 			}),
-			Namespace: map[string]glfs.Ref{"want": testutil.PostBlob(t, src, []byte(wantcfg.LibWant()))},
+			Namespace: map[string]glfs.Ref{"want": testutil.PostBlob(t, src, []byte(LibWant()))},
 
 			Known: ptrTo(testutil.PostFSStr(t, src, map[string]string{
 				"test.txt": "foo",

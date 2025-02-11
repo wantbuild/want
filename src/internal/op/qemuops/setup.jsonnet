@@ -6,16 +6,11 @@ local qbootRom = want.importURL(
 	hash="9b9dfc6c25740d6225625570d71cab6805cc9216e68c8932e343266daaeb8c4b",
 );
 
-local virtiofsds = {
-    "arm64-linux": want.importURL(
-		url="http://mirror.archlinuxarm.org/aarch64/extra/virtiofsd-1.13.0-1-aarch64.pkg.tar.xz",
-		algo="SHA256",
-		transforms=["unxz", "untar"],
-    ),
+local virtiofsds = { 
     "amd64-linux": want.importURL(
-        url="https://london.mirror.pkgbuild.com/extra/os/x86_64/virtiofsd-1.13.0-1-x86_64.pkg.tar.zst",
+        url = "https://london.mirror.pkgbuild.com/extra/os/x86_64/virtiofsd-1.13.1-1-x86_64.pkg.tar.zst",
 		algo="SHA256",
-        hash="c2ae0b587508ddac445b4eb07cf6589b3e3391b27c2e6eaeb636bc585c1e2165",
+        hash="17a56fd4392a8a752c18d05e7c0f8895440eab974f5557c4b3c22d5e5df2f1af",
 		transforms=["unzstd", "untar"],
     ),
 };
@@ -24,12 +19,7 @@ local virtiofsd(arch, os) =
     local key = arch + "-" + os;
     want.pick(virtiofsds[key], "usr/lib/virtiofsd");
 
-local qemuSystem_X86_64s = {
-    "arm64-linux": want.importURL(
-        url="https://github.com/wantbuild/qemu-static/releases/download/v0.1.0/qemu-system-x86_64_arm64_linux",
-        algo="SHA256",
-        hash="36960c7b8ed29b8bfd7bf5d538620ec9e1080ec2ac1b8e0929c5df9e47a0f5f5",
-    ),
+local qemuSystem_X86_64s = { 
     "amd64-linux": want.importURL(
         url ="https://github.com/wantbuild/qemu-static/releases/download/v0.1.0/qemu-system-x86_64_amd64_linux",
         algo="SHA256",

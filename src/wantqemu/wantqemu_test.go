@@ -17,13 +17,16 @@ func TestPostGetMicroVMTask(t *testing.T) {
 		Cores:  1,
 		Memory: 1024 * 1e6,
 		Kernel: testutil.PostBlob(t, s, []byte("kernel bytes")),
-		Root: testutil.PostFS(t, s, map[string][]byte{
-			"a": []byte("1"),
-			"b": []byte("2"),
-			"c": []byte("3"),
-		}),
-		Init: "/path/to/init",
-		Args: []string{"1", "2", "3"},
+		VirtioFS: map[string]VirtioFSSpec{
+			"fs1": {
+				Writeable: true,
+				Root: testutil.PostFS(t, s, map[string][]byte{
+					"a": []byte("1"),
+					"b": []byte("2"),
+					"c": []byte("3"),
+				}),
+			},
+		},
 	}
 
 	ref, err := PostMicroVMTask(ctx, s, x)

@@ -74,10 +74,15 @@ func PrintFS(t testing.TB, s cadata.Getter, x glfs.Ref) {
 		t.Log(string(data))
 		return
 	}
-	err := ag.WalkTree(ctx, s, x, func(prefix string, tree glfs.TreeEntry) error {
-		p := path.Join(prefix, tree.Name)
+	err := ag.WalkTree(ctx, s, x, func(prefix string, ent glfs.TreeEntry) error {
+		p := path.Join(prefix, ent.Name)
 		spacing := strings.Repeat("  ", strings.Count(prefix, "/"))
-		t.Log(spacing, p, tree.FileMode, tree.Ref)
+		t.Log(spacing, p, ent.FileMode, ent.Ref)
+		if ent.Ref.Type == glfs.TypeBlob && ent.Ref.Size < 100 {
+			data, err := glfs.GetBlobBytes(ctx, s, ent.Ref, 1024)
+			require.NoError(t, err)
+			t.Log(spacing, string(data))
+		}
 		return nil
 	})
 	require.NoError(t, err)
@@ -153,6 +158,13 @@ func PostBlob(t testing.TB, s cadata.Poster, data []byte) glfs.Ref {
 	ctx := Context(t)
 	ag := glfs.NewAgent()
 	ref, err := ag.PostBlob(ctx, s, bytes.NewReader(data))
+	require.NoError(t, err)
+	return *ref
+}
+
+func PostString(t testing.TB, s cadata.Poster, x string) glfs.Ref {
+	ctx := Context(t)
+	ref, err := glfs.PostBlob(ctx, s, strings.NewReader(x))
 	require.NoError(t, err)
 	return *ref
 }

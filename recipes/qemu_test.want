@@ -15,7 +15,15 @@ local rootfs = want.pass([
     |||))
 ]);
 
+local kargs = "console=hvc0 reboot=t panic=-1 rootfstype=virtiofs root=myfs rw init=/bin/sh initscript";
+
 wassert.pathExists(
-    want.qemu.amd64_microvm_virtiofs(1, 1e9, kernel, rootfs, init="/bin/sh", args=["initscript"], output=""),
+    want.qemu.amd64_microvm(1, 1e9, kernel,
+        initrd=null, kargs=kargs,
+        virtiofs={
+            "myfs": want.qemu.virtiofs(root=rootfs, writeable=true),
+        },
+        output=want.qemu.virtiofs_output("myfs", want.prefix(""))
+    ),
     "success.txt"
 )

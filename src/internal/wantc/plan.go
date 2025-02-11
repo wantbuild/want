@@ -24,7 +24,7 @@ type Target struct {
 	DAG glfs.Ref `json:"dag"`
 	// Expr is an expression which is equivalent to this target.
 	// Expr will always be context-free. Meaning it does not depend on selections which
-	// are relevant to the module it was compiled in.
+	// are relative to the module it was compiled in.
 	Expr wantcfg.Expr `json:"expr"`
 
 	// DefinedIn is the path of the file that defines the Target

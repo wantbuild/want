@@ -1,4 +1,4 @@
-package wantcfg
+package wantc
 
 import (
 	_ "embed"

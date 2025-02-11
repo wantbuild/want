@@ -53,7 +53,7 @@ local compileGo(src) =
         want.input("/input", src),
         want.input("/output", want.tree({})),
     ]);
-    want.qemu.amd64_microvm_virtiofs(1, 1e9, kernel, root, init=null, args=["/initscript"], output="/output");
+    linux.runVM(1, 1e9, kernel=kernel, rootfs=root, init="/sbin/init", args=["/initscript"], output=want.prefix("output"));
 
 {
     dist: dist,

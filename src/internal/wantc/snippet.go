@@ -54,7 +54,7 @@ type snippetImporter struct {
 func (imp *snippetImporter) Import(importedFrom, importPath string) (jsonnet.Contents, string, error) {
 	if importPath == "@want" {
 		if imp.libWant == (jsonnet.Contents{}) {
-			imp.libWant = jsonnet.MakeContents(wantcfg.LibWant())
+			imp.libWant = jsonnet.MakeContents(LibWant())
 		}
 		return imp.libWant, "@want", nil
 	}

@@ -189,18 +189,29 @@ local evalSnippet(snip) =
     compute("graph.pickLastValue", [input("", output)]);
 
 local qemu = {
-    amd64_microvm_virtiofs :: function(cpus, memory, kernel, root, init=null, args=[], output="")
+    virtiofs :: function(root, writeable)
+        {root: root, "writeable": writeable},
+
+    virtiofs_output :: function(fsid, q)
+        {"virtiofs": {"id": fsid, "query": q}},
+
+    amd64_microvm :: function(cpus, memory, kernel, kargs, initrd, virtiofs, output)
+        // TODO: remove root from virtiofs configs
         local config = blob(std.manifestJsonEx({
-            args: args,
-            cpus: cpus,
-            memory: memory,
-            init: init,
-            output: output,
+            "cpus": cpus,
+            "memory": memory,
+            "kernel_args": kargs,
+            "initrd": initrd,
+            "virtiofs": virtiofs,
+            "output": output,
         }, ""));
-        compute("qemu.amd64_microvm_virtiofs", [
+        local virtiofsTree = compute("glfs.pass",
+            std.map(function(k) input(k, virtiofs[k].root), std.objectFields(virtiofs))
+        );
+        compute("qemu.amd64_microvm", [
+            input("virtiofs", virtiofsTree),
             input("kernel", kernel),
-            input("root", root),
-            input("config.json", config),
+            input("vm.json", config),
         ]),
 };
 

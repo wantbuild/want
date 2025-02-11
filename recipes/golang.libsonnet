@@ -60,7 +60,7 @@ local goCmd(modSrc, cmd, basefs, kernel) =
         want.input("/input", modSrc),
         want.input("/output", want.tree({})),
     ]);
-    want.qemu.amd64_microvm_virtiofs(1, 4e9, kernel, rootfs, init="/bin/sh", args=["/initscript"], output="/output");
+    linux.runVM(1, 4e9, kernel, rootfs, init="/bin/sh", args=["/initscript"], output=want.prefix("output"));
 
 local goTest(modSrc, basefs=alpine.rootfs(alpine.ARCH_AMD64), kernel=defaultKernel) =
     local cmd = "test -v -coverprofile /output/coverage -ldflags '-s -w -buildid=' -buildvcs=false ./...";

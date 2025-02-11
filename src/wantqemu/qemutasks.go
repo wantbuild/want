@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"strings"
+	"fmt"
+	"path"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
+	"wantbuild.io/want/src/internal/glfstasks"
+	"wantbuild.io/want/src/wantcfg"
 )
 
 // MicroVMTask is an Amd64 Linux MicroVM Task
@@ -16,36 +19,64 @@ type MicroVMTask struct {
 	// Memory is the memory in bytes
 	Memory uint64
 
-	// Kernel is the linux kernel image used to boot the VM
-	Kernel glfs.Ref
-	// Root is the root filesystem to boot
-	Root glfs.Ref
-	// Init is the path to init
-	Init string
-	// Args are the arguments passed to init
-	Args []string
+	// Kernel is the linux kernel image used to boot the VM.
+	Kernel     glfs.Ref
+	KernelArgs string
+	Initrd     *glfs.Ref
+	VirtioFS   map[string]VirtioFSSpec
 
-	// Output is the subpath within the root to use as the result of the Task.
-	Output string
+	Output Output
 }
 
-// MicroVMConfig is the config file for a MicroVMTask
-type MicroVMConfig struct {
-	Cores  uint32   `json:"cores"`
-	Memory uint64   `json:"memory"`
-	Init   string   `json:"init,omitempty"`
-	Args   []string `json:"args"`
-	Output string   `json:"output,omitempty"`
+func (t MicroVMTask) Validate() error {
+	if t.Output.VirtioFS != nil {
+		k := t.Output.VirtioFS.ID
+		if _, exists := t.VirtioFS[k]; !exists {
+			return fmt.Errorf("output refers to virtiofs (id=%s) which does not exist", k)
+		}
+	}
+	return nil
+}
+
+type VirtioFSSpec struct {
+	// Root is the initial data in the filesystem
+	Root glfs.Ref `json:"-"`
+	// Writable if the filesystem should be made writable.
+	Writeable bool `json:"writeable"`
+}
+
+type VirtioFSOutput struct {
+	// ID is the id of the virtiofs filesystem
+	ID    string          `json:"id"`
+	Query wantcfg.PathSet `json:"query"`
+}
+
+type Output struct {
+	// VirtioFS will read the output from a virtiofs filesystem
+	VirtioFS *VirtioFSOutput `json:"virtiofs,omitempty"`
+}
+
+func GrabVirtioFS(fsid string, q wantcfg.PathSet) Output {
+	return Output{VirtioFS: &VirtioFSOutput{ID: fsid, Query: q}}
+}
+
+// microVMConfig is the config file for a MicroVMTask
+type microVMConfig struct {
+	Cores      uint32                  `json:"cores"`
+	Memory     uint64                  `json:"memory"`
+	KernelArgs string                  `json:"kernel_args"`
+	VirtioFS   map[string]VirtioFSSpec `json:"virtiofs"`
+	Output     Output                  `json:"output"`
 }
 
 func PostMicroVMTask(ctx context.Context, s cadata.PostExister, x MicroVMTask) (*glfs.Ref, error) {
 	ag := glfs.NewAgent()
-	configData, err := json.Marshal(MicroVMConfig{
-		Cores:  x.Cores,
-		Memory: x.Memory,
-		Args:   x.Args,
-		Init:   x.Init,
-		Output: strings.Trim(x.Output, "/"),
+	configData, err := json.Marshal(microVMConfig{
+		Cores:      x.Cores,
+		Memory:     x.Memory,
+		KernelArgs: x.KernelArgs,
+		VirtioFS:   x.VirtioFS,
+		Output:     x.Output,
 	})
 	if err != nil {
 		return nil, err
@@ -55,43 +86,70 @@ func PostMicroVMTask(ctx context.Context, s cadata.PostExister, x MicroVMTask) (
 		return nil, err
 	}
 	ents := []glfs.TreeEntry{
-		{Name: "config.json", FileMode: 0o644, Ref: *cRef},
-		{Name: "kernel", FileMode: 0o644, Ref: x.Kernel},
-		{Name: "root", FileMode: 0o644, Ref: x.Root},
+		{Name: "vm.json", Ref: *cRef},
+		{Name: "kernel", Ref: x.Kernel},
+	}
+	if x.Initrd != nil {
+		ents = append(ents, glfs.TreeEntry{Name: "initrd", Ref: *x.Initrd})
+	}
+	for name, vfs := range x.VirtioFS {
+		ents = append(ents, glfs.TreeEntry{Name: path.Join("virtiofs", name), FileMode: 0o777, Ref: vfs.Root})
 	}
 	return ag.PostTreeSlice(ctx, s, ents)
 }
 
 func GetMicroVMTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*MicroVMTask, error) {
-	ag := glfs.NewAgent()
-	configRef, err := ag.GetAtPath(ctx, s, x, "config.json")
+	// config
+	cfg, err := glfstasks.GetJSONAt[microVMConfig](ctx, s, x, "vm.json")
 	if err != nil {
 		return nil, err
 	}
-	configData, err := ag.GetBlobBytes(ctx, s, *configRef, 1e6)
+	// kernel
+	kRef, err := glfs.GetAtPath(ctx, s, x, "kernel")
 	if err != nil {
 		return nil, err
 	}
-	var cf MicroVMConfig
-	if err := json.Unmarshal(configData, &cf); err != nil {
+	// initrd
+	initrd, err := glfs.GetAtPath(ctx, s, x, "initrd")
+	if err != nil && !glfs.IsErrNoEnt(err) {
 		return nil, err
 	}
-	kRef, err := ag.GetAtPath(ctx, s, x, "kernel")
-	if err != nil {
-		return nil, err
-	}
-	rRef, err := ag.GetAtPath(ctx, s, x, "root")
-	if err != nil {
-		return nil, err
+	// virtiofs
+	if len(cfg.VirtioFS) > 0 {
+		vfsdir, err := glfs.GetAtPath(ctx, s, x, "virtiofs")
+		if err != nil {
+			return nil, err
+		}
+		vfsm, err := glfstasks.GetMap(ctx, s, *vfsdir, func(ctx context.Context, g cadata.Getter, r glfs.Ref) (*glfs.Ref, error) {
+			return &r, nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		for k := range vfsm {
+			if spec, exists := cfg.VirtioFS[k]; !exists {
+				return nil, fmt.Errorf("config is missing virtiofs entry for %v", k)
+			} else {
+				spec.Root = vfsm[k]
+				cfg.VirtioFS[k] = spec
+			}
+		}
+		for k := range cfg.VirtioFS {
+			if _, exists := vfsm[k]; !exists {
+				return nil, fmt.Errorf("missing filesystem ref for %v", k)
+			}
+		}
 	}
 	return &MicroVMTask{
-		Cores:  cf.Cores,
-		Memory: cf.Memory,
-		Init:   cf.Init,
-		Args:   cf.Args,
-		Output: cf.Output,
+		Cores:  cfg.Cores,
+		Memory: cfg.Memory,
 
-		Kernel: *kRef,
-		Root:   *rRef,
+		Kernel:     *kRef,
+		KernelArgs: cfg.KernelArgs,
+		Initrd:     initrd,
+
+		VirtioFS: cfg.VirtioFS,
+
+		Output: cfg.Output,
 	}, nil
 }

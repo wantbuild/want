@@ -3,22 +3,26 @@
 package qemuops
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
 	"golang.org/x/sync/semaphore"
 
+	"wantbuild.io/want/src/internal/glfscpio"
+	"wantbuild.io/want/src/internal/glfsport"
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/wantjob"
 	"wantbuild.io/want/src/wantqemu"
 )
 
 const (
-	OpAmd64MicroVMVirtioFS = wantjob.OpName("amd64_microvm_virtiofs")
+	OpAmd64MicroVM = wantjob.OpName("amd64_microvm")
 )
 
 type MicroVMTask = wantqemu.MicroVMTask
@@ -47,7 +51,7 @@ func NewExecutor(cfg Config) *Executor {
 func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task) ([]byte, error) {
 	ctx := jc.Context
 	switch task.Op {
-	case OpAmd64MicroVMVirtioFS:
+	case OpAmd64MicroVM:
 		return glfstasks.Exec(task.Input, func(x glfs.Ref) (*glfs.Ref, error) {
 			t, err := wantqemu.GetMicroVMTask(ctx, src, x)
 			if err != nil {
@@ -60,7 +64,7 @@ func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task)
 				return nil, err
 			}
 			defer e.memSem.Release(int64(t.Memory))
-			return e.amd64MicroVMVirtiofs(jc, src, *t)
+			return e.amd64MicroVM(jc, src, *t)
 		})
 
 	default:
@@ -68,7 +72,7 @@ func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task)
 	}
 }
 
-func (e *Executor) amd64MicroVMVirtiofs(jc wantjob.Ctx, s cadata.Getter, t MicroVMTask) (*glfs.Ref, error) {
+func (e *Executor) amd64MicroVM(jc wantjob.Ctx, s cadata.Getter, t MicroVMTask) (*glfs.Ref, error) {
 	dir, err := os.MkdirTemp("", "microvm-")
 	if err != nil {
 		return nil, err
@@ -79,49 +83,104 @@ func (e *Executor) amd64MicroVMVirtiofs(jc wantjob.Ctx, s cadata.Getter, t Micro
 		}
 	}()
 
-	kargs := kernelArgs{
-		Console:        "hvc0",
-		ClockSource:    "jiffies",
-		IgnoreLogLevel: true,
-		Reboot:         "t",
-		Panic:          -1,
-		Init:           t.Init,
-		InitArgs:       t.Args,
-		RandomTrustCpu: "on",
-	}.VirtioFSRoot("myfs")
+	// begin default vmConfig
+	vmCfg := vmConfig{
+		NumCPUs: t.Cores,
+		Memory:  t.Memory,
 
-	vm, err := e.newVM_VirtioFS(jc, s, dir, vmConfig{
-		NumCPUs:          t.Cores,
-		Memory:           t.Memory,
-		AppendKernelArgs: kargs.String(),
-
-		CharDevs: make(map[string]chardevConfig),
-		NetDevs:  make(map[string]netdevConfig),
-		Objects:  make(map[string]objectConfig),
+		CharDevs: map[string]chardevConfig{
+			"virtiocon0": {
+				Backend: "stdio",
+			},
+		},
+		NetDevs: map[string]netdevConfig{},
+		Objects: map[string]objectConfig{},
+	}
+	vmCfg.addDevice(deviceConfig{
+		Type: "virtio-serial-device",
 	})
-	if err != nil {
+	vmCfg.addDevice(deviceConfig{
+		Type: "virtconsole",
+		Props: map[string]string{
+			"chardev": "virtiocon0",
+		},
+	})
+	// end default vmConfig
+	if t.KernelArgs != "" {
+		vmCfg.AppendKernelArgs = t.KernelArgs
+	}
+	// virtiofs
+	if len(t.VirtioFS) > 1 {
+		return nil, fmt.Errorf("multiple virtiofs are not yet supported")
+	}
+	vfsds := make(map[string]*virtioFSd)
+	for k, spec := range t.VirtioFS {
+		if strings.Contains(k, "..") {
+			return nil, fmt.Errorf("invalid name %v", k)
+		}
+		rootFSPath := filepath.Join(dir, k+"-root")
+		vhostPath := filepath.Join(dir, k+"-vhost.sock")
+		configAddVirtioFS(&vmCfg, vhostPath, k)
+		stdout := jc.Writer("virtiofsd/stdout")
+		stderr := jc.Writer("virtiofsd/stderr")
+		vfsd := e.newVirtioFSd(rootFSPath, vhostPath, stdout, stderr)
+		defer vfsd.Close()
+		vfsds[k] = vfsd
+
+		done := jc.InfoSpan("setup virtiofs " + k)
+		if err := vfsd.Export(jc.Context, s, "", spec.Root); err != nil {
+			return nil, err
+		}
+		if err := vfsd.Start(); err != nil {
+			return nil, err
+		}
+		if err := vfsd.awaitVhostSock(jc); err != nil {
+			return nil, err
+		}
+		done()
+	}
+	exp := glfsport.Exporter{
+		Dir:   dir,
+		Cache: glfsport.NullCache{},
+		Store: s,
+	}
+	// kernel
+	df := jc.InfoSpan("setup kernel")
+	if err := exp.Export(jc.Context, t.Kernel, kernelFilename); err != nil {
 		return nil, err
 	}
+	df()
+	// initrd
+	if t.Initrd != nil {
+		vmCfg.Initrd = true
+		df := jc.InfoSpan("setup initrd")
+		if err := exportInitrd(jc.Context, s, dir, *t.Initrd); err != nil {
+			return nil, err
+		}
+		df()
+	}
+
+	vm := e.newVM(jc, dir, vmCfg)
 	defer vm.Close()
-	jc.Infof("initialize rootfs: begin")
-	if err := vm.init(jc.Context, t.Kernel, t.Root); err != nil {
-		return nil, err
-	}
-	jc.Infof("initialize rootfs: done")
 	jc.Infof("run vm")
 	if err := vm.run(jc); err != nil {
 		return nil, err
 	}
-	jc.Infof("import from vm fs: begin")
-	output, err := vm.importPath(jc.Context, t.Output)
-	if err != nil {
-		return nil, err
-	}
-	jc.Infof("import from vm fs: end")
 	if err := vm.Close(); err != nil {
 		return nil, err
 	}
-	return output, nil
+	switch {
+	case t.Output.VirtioFS != nil:
+		spec := *t.Output.VirtioFS
+		vfsd := vfsds[spec.ID]
+		if vfsd == nil {
+			return nil, fmt.Errorf("no such virtiofs id=%v", vfsd)
+		}
+		defer jc.InfoSpan("importing from virtiofs")()
+		return vfsd.Import(jc.Context, jc.Dst, spec.Query)
+	default:
+		return nil, fmt.Errorf("invalid output spec %v", t.Output)
+	}
 }
 
 func (e *Executor) systemx86Cmd(args ...string) *exec.Cmd {
@@ -136,4 +195,16 @@ func (e *Executor) virtiofsdCmd(args ...string) *exec.Cmd {
 	cmd := exec.Command(cmdPath, args...)
 	cmd.Dir = e.cfg.InstallDir
 	return cmd
+}
+
+func exportInitrd(ctx context.Context, s cadata.Getter, dir string, initrdRef glfs.Ref) error {
+	f, err := os.OpenFile(filepath.Join(dir, initrdFilename), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := glfscpio.Write(ctx, s, initrdRef, f); err != nil {
+		return err
+	}
+	return f.Close()
 }

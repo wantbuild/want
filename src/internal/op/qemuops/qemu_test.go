@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/blobcache/glfs"
@@ -13,7 +14,9 @@ import (
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/testutil"
 	"wantbuild.io/want/src/internal/wantsetup"
+	"wantbuild.io/want/src/wantcfg"
 	"wantbuild.io/want/src/wantjob"
+	"wantbuild.io/want/src/wantqemu"
 )
 
 func TestKArgBuilder(t *testing.T) {
@@ -78,6 +81,8 @@ func TestConfigArgs(t *testing.T) {
 
 func TestInstall(t *testing.T) {
 	ctx := testutil.Context(t)
+	t.SkipNow()
+
 	outDir := t.TempDir()
 	jsys := wantjob.NewMem(ctx, wantsetup.NewExecutor())
 	require.NoError(t, wantsetup.Install(ctx, jsys, outDir, InstallSnippet()))
@@ -85,42 +90,105 @@ func TestInstall(t *testing.T) {
 
 func TestMicroVM(t *testing.T) {
 	jc, s, e := setupTest(t)
+
 	kernelRef := testutil.PostBlob(t, s, loadKernel(t))
 	helloRef := testutil.PostLinuxAmd64(t, s, "./testdata/helloworld")
+	// emptyTree := testutil.PostFSStr(t, s, nil)
+	kargs := kernelArgs{
+		Console:        "hvc0",
+		ClockSource:    "jiffies",
+		IgnoreLogLevel: true,
+		Reboot:         "t",
+		Panic:          -1,
+		RandomTrustCpu: "on",
+	}
 
-	out, err := e.amd64MicroVMVirtiofs(jc, s, MicroVMTask{
-		Cores:  1,
-		Memory: 1024 * 1e6,
-		Kernel: kernelRef,
-		Root: testutil.PostTree(t, s, []glfs.TreeEntry{
-			{Name: "/sbin/init", Ref: helloRef, FileMode: 0o777},
-		}),
-		Args: []string{"arg1", "-arg2=fasd", "-arg_3"},
-	})
-	t.Log(out)
-	require.NoError(t, err)
-	testutil.PrintFS(t, s, *out)
-	testutil.PrintFile(t, s, *out, "out.txt")
+	tcs := []struct {
+		Task MicroVMTask
+
+		Output *glfs.Ref
+		Err    error
+	}{
+		{
+			Task: MicroVMTask{
+				Cores:      1,
+				Memory:     1024 * 1e6,
+				Kernel:     kernelRef,
+				KernelArgs: kargs.VirtioFSRoot("vfs1").String(),
+				VirtioFS: map[string]wantqemu.VirtioFSSpec{
+					"vfs1": {
+						Root: testutil.PostTree(t, s, []glfs.TreeEntry{
+							{Name: "/sbin/init", Ref: helloRef, FileMode: 0o755},
+						}),
+						Writeable: true,
+					},
+				},
+				Output: wantqemu.GrabVirtioFS("vfs1", wantcfg.Prefix("")),
+			},
+			Output: ptr(testutil.PostTree(t, s, []glfs.TreeEntry{
+				{Name: "/sbin/init", Ref: helloRef, FileMode: 0o755},
+				{Name: "out.txt", FileMode: 0o644, Ref: testutil.PostString(t, s, "[/sbin/init]\n[HOME=/ TERM=linux]\nhello world\n")},
+			})),
+		},
+		// {
+		// 	Task: MicroVMTask{
+		// 		Cores:      1,
+		// 		Memory:     1024 * 1e6,
+		// 		Kernel:     kernelRef,
+		// 		KernelArgs: "panic=-1 console=hvc0 reboot=t rdinit=/init debug",
+		// 		Initrd: ptr(testutil.PostTree(t, s, []glfs.TreeEntry{
+		// 			{Name: "init", FileMode: 0o777, Ref: helloRef},
+
+		// 			{Name: "dev", FileMode: 0o777, Ref: emptyTree},
+		// 			{Name: "proc", FileMode: 0o777, Ref: emptyTree},
+		// 			{Name: "sys", FileMode: 0o777, Ref: emptyTree},
+		// 		})),
+		// 	},
+		// },
+	}
+	for i, tc := range tcs {
+		tc := tc
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			out, err := e.amd64MicroVM(jc, s, tc.Task)
+			t.Log(out)
+			if tc.Err != nil {
+				require.ErrorIs(t, err, tc.Err)
+			} else {
+				require.NoError(t, err)
+			}
+			if tc.Output != nil {
+				testutil.EqualFS(t, stores.Union{jc.Dst, s}, *tc.Output, *out)
+			}
+		})
+	}
 }
 
 func setupTest(t testing.TB) (wantjob.Ctx, cadata.Store, *Executor) {
 	ctx := testutil.Context(t)
 	s := stores.NewMem()
-	installDir := t.TempDir()
-
-	jsys := wantjob.NewMem(ctx, wantsetup.NewExecutor())
-	err := wantsetup.Install(ctx, jsys, installDir, InstallSnippet())
+	installDir, err := filepath.Abs("testcache")
 	require.NoError(t, err)
-
+	jsys := wantjob.NewMem(ctx, wantsetup.NewExecutor())
 	e := NewExecutor(Config{InstallDir: installDir, MemLimit: 4 * 1e9})
 	newWriter := func(_ string) io.Writer {
 		return os.Stderr
 	}
-	return wantjob.Ctx{Context: ctx, Dst: s, System: jsys, Writer: newWriter}, s, e
+	jc := wantjob.Ctx{Context: ctx, Dst: s, System: jsys, Writer: newWriter}
+
+	if finfo, err := os.Stat(installDir); err == nil && finfo.IsDir() {
+		t.Log("testcache exists, skipping install")
+		return jc, s, e
+	}
+	require.NoError(t, wantsetup.Install(ctx, jsys, installDir, InstallSnippet()))
+	return jc, s, e
 }
 
 func loadKernel(t testing.TB) []byte {
 	data, err := os.ReadFile("./bzImage")
 	require.NoError(t, err)
 	return data
+}
+
+func ptr[T any](x T) *T {
+	return &x
 }

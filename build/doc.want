@@ -51,4 +51,4 @@ local rootfs = want.pass([
     want.input("/output", want.tree({})),
 ]);
 
-want.qemu.amd64_microvm_virtiofs(1, 1e9, linux.bzImage, rootfs, init="/bin/sh", args=["initscript", ""], output="/output")
+linux.runVM(1, 1e9, linux.bzImage, rootfs, init="/bin/sh", args=["initscript", ""], output=want.prefix("output"))

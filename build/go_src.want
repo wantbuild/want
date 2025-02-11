@@ -9,7 +9,7 @@ local goFiles = want.select(GROUND, want.intersect([
 local nonGoFiles = want.select(
     DERIVED,
     want.union([
-            want.unit("src/wantcfg/want.libsonnet"),
+            want.unit("src/internal/wantc/want.libsonnet"),
             want.prefix("src/internal/wantdb/dbmig/"),  
             want.prefix("src/internal/op/goops/setup.jsonnet"),
             want.prefix("src/internal/op/qemuops/setup.jsonnet"),

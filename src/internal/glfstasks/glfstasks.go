@@ -142,3 +142,19 @@ func GetMap[V any](ctx context.Context, s cadata.Getter, x glfs.Ref, fn func(con
 	}
 	return ret, nil
 }
+
+func GetJSONAt[T any](ctx context.Context, s cadata.Getter, ref glfs.Ref, p string) (ret T, _ error) {
+	ref2, err := glfs.GetAtPath(ctx, s, ref, p)
+	if err != nil {
+		return ret, err
+	}
+	const maxLen = 1 << 20
+	data, err := glfs.GetBlobBytes(ctx, s, *ref2, maxLen)
+	if err != nil {
+		return ret, err
+	}
+	if err := json.Unmarshal(data, &ret); err != nil {
+		return ret, err
+	}
+	return ret, nil
+}
