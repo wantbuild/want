@@ -195,10 +195,10 @@ local qemu = {
     virtiofs_output :: function(fsid, q)
         {"virtiofs": {"id": fsid, "query": q}},
 
-    amd64_microvm :: function(cpus, memory, kernel, kargs, initrd, virtiofs, output)
+    amd64_microvm :: function(cores, memory, kernel, kargs, initrd, virtiofs, output)
         // TODO: remove root from virtiofs configs
         local config = blob(std.manifestJsonEx({
-            "cpus": cpus,
+            "cores": cores,
             "memory": memory,
             "kernel_args": kargs,
             "initrd": initrd,

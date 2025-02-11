@@ -2,8 +2,11 @@ package wantcmd
 
 import (
 	"fmt"
+	"maps"
 	"os"
+	"path/filepath"
 	"runtime"
+	"slices"
 
 	"go.brendoncarroll.net/star"
 
@@ -33,6 +36,7 @@ var rootCmd = star.NewDir(star.Metadata{Short: "want build system"},
 		"serve-http": serveHttpCmd,
 		"export-zip": exportZipCmd,
 		"scrub":      *scrubCmd,
+		"env":        *envCmd,
 	},
 )
 
@@ -84,8 +88,23 @@ var scrubCmd = &star.Command{
 	},
 }
 
+var envCmd = &star.Command{
+	Metadata: star.Metadata{Short: "print the environment variables and defaults"},
+	F: func(c star.Context) error {
+		m := map[string]string{
+			"WANT_STATE": getStateDir(),
+		}
+		ks := slices.Collect(maps.Keys(m))
+		slices.Sort(ks)
+		for _, k := range ks {
+			c.Printf("%s=%s\n", k, m[k])
+		}
+		return c.StdOut.Flush()
+	},
+}
+
 func newSys(c *star.Context) (*want.System, error) {
-	const stateDir = "/tmp/want"
+	stateDir := getStateDir()
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		return nil, err
 	}
@@ -109,4 +128,12 @@ func openRepo() (*wantrepo.Repo, error) {
 		return nil, fmt.Errorf("%s is not in a want project", wd)
 	}
 	return wantrepo.Open(repoPath)
+}
+
+func getStateDir() string {
+	dirpath := os.Getenv("WANT_STATE")
+	if dirpath == "" {
+		dirpath = filepath.Join(os.TempDir(), "want")
+	}
+	return dirpath
 }
