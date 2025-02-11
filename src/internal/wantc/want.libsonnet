@@ -88,15 +88,7 @@ local pass(inputs) = compute("glfs.pass", inputs);
 local put(dst, src) = {
     __type__: "stmt",
     put: {
-        dst: dst,
-        src: assertType("expr")(src),
-    },
-};
-
-local export(dst, src) = {
-    __type__: "stmt",
-    export: {
-        dst: dst,
+        dst: assertType("pathSet")(dst),
         src: assertType("expr")(src),
     },
 };
@@ -304,7 +296,6 @@ local wasm = {
 
     // Statements
     put :: put,
-    export :: export,
 
     // GLFS
     pick :: pick,

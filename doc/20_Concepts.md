@@ -15,4 +15,4 @@ It doesn't matter where they come from, all data turns into Trees and Blobs in t
 
 Want allows you to perform operations (which are Trees & Blobs) on inputs (which are Trees & Blobs) to produce outputs (which are also Trees & Blobs).
 
-There are more details, but if you know how Git works, then just imagine using Git trees to define programs, and their inputs.
+There are more details, but if you know how Git works, then just imagine using Git trees to define programs, and their inputs.  The programs output trees as well.

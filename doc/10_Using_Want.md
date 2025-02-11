@@ -22,7 +22,7 @@ Jsonnet is used for all the configuration files in Want.
 ## Creating a Build Target
 Want calls the things that you, the user *want*, but don't yet have, and need to build *Targets*.  There are 2 ways to specify targets: as Expressions, and as Statements.
 
-They are are each good for different things; in this example we will use an expression.
+They are each good for different things; in this example we will use an expression.
 
 Create a file `myexpr.want` anywhere in your project, and fill it with the following
 ```jsonnet
