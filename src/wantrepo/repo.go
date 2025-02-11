@@ -1,11 +1,14 @@
 package wantrepo
 
 import (
-	"encoding/json"
+	"context"
 	"io"
 	"os"
 	"path/filepath"
 
+	"github.com/blobcache/glfs"
+	"go.brendoncarroll.net/state/cadata"
+	"wantbuild.io/want/src/internal/glfsport"
 	"wantbuild.io/want/src/internal/stringsets"
 	"wantbuild.io/want/src/internal/wantc"
 	"wantbuild.io/want/src/wantcfg"
@@ -81,6 +84,28 @@ func (r *Repo) Metadata() map[string]any {
 	return map[string]any{}
 }
 
+// Import imports a filesystem from the Repo
+func (repo *Repo) Import(ctx context.Context, dst cadata.PostExister, p string) (*glfs.Ref, error) {
+	imp := glfsport.Importer{
+		Store:  dst,
+		Dir:    repo.RootPath(),
+		Filter: repo.PathFilter,
+		Cache:  &glfsport.MemCache{},
+	}
+	return imp.Import(ctx, p)
+}
+
+// Export writes a filesystem to (part of) the Repo
+func (r *Repo) Export(ctx context.Context, src cadata.Getter, p string, ref glfs.Ref) error {
+	exp := glfsport.Exporter{
+		Cache:   glfsport.NullCache{},
+		Store:   src,
+		Dir:     r.dir,
+		Clobber: true,
+	}
+	return exp.Export(ctx, ref, p)
+}
+
 func defaultModuleConfig() string {
 	return `local want = import "@want";
 {
@@ -127,12 +152,4 @@ func FindRepo(p string) (bool, string, error) {
 		}
 		p = p2
 	}
-}
-
-func jsonMarshalPretty(x any) []byte {
-	data, err := json.MarshalIndent(x, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-	return data
 }

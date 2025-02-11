@@ -53,14 +53,13 @@ local subtract(l, r) = intersect([l, not(r)]);
 local dirPath(p) = if p == "" then prefix("") else union([unit(p), prefix(p + "/")]);
 
 // Select
-local select(source, query, pick="", allowEmpty=false, assertType="") = {
+local select(source, query, pick="", allowEmpty=false) = {
     __type__: "expr",
     selection: {
-        source: source,
-        query: query,
+        source: assertType("source")(source),
+        query: assertType("pathSet")(query),
         pick: pick,
         allowEmpty: allowEmpty,
-        assertType: assertType,
     }
 };
 

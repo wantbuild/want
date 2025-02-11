@@ -106,11 +106,11 @@ func newJsonnetVM(imp jsonnet.Importer, md map[string]any) *jsonnet.VM {
 }
 
 func LocalGround(fqp FQPath) string {
-	return fmt.Sprintf(`local GROUND = {"module":"%v","derived":false,"callerPath":"%s"};`, fqp.ModuleID.String(), fqp.Path)
+	return fmt.Sprintf(`local GROUND = {"__type__":"source","module":"%v","derived":false,"callerPath":"%s"};`, fqp.ModuleID.String(), fqp.Path)
 }
 
 func LocalDerived(fqp FQPath) string {
-	return fmt.Sprintf(`local DERIVED = {"module":"%v","derived":true,"callerPath":"%s"};`, fqp.ModuleID.String(), fqp.Path)
+	return fmt.Sprintf(`local DERIVED = {"__type__":"source","module":"%v","derived":true,"callerPath":"%s"};`, fqp.ModuleID.String(), fqp.Path)
 }
 
 func mkJsonnetPath(fqp FQPath) string {

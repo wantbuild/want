@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state"
@@ -21,10 +22,11 @@ import (
 const MaxPathLen = 4096
 
 type Exporter struct {
-	Store  cadata.Getter
-	Dir    string
-	Cache  Cache
-	Filter func(p string) bool
+	Store   cadata.Getter
+	Dir     string
+	Cache   Cache
+	Filter  func(p string) bool
+	Clobber bool
 }
 
 func (ex Exporter) Export(ctx context.Context, root glfs.Ref, target string) error {
@@ -33,6 +35,16 @@ func (ex Exporter) Export(ctx context.Context, root glfs.Ref, target string) err
 	case glfs.TypeTree:
 		return ex.exportTree(ctx, sem, root, 0o755, target)
 	case glfs.TypeBlob:
+		if strings.Count(glfs.CleanPath(target), "/") > 0 {
+			p2, err := ex.path(target)
+			if err != nil {
+				return err
+			}
+			parent := filepath.Dir(p2)
+			if err := os.MkdirAll(parent, 0o755); err != nil {
+				return err
+			}
+		}
 		return ex.exportFile(ctx, root, 0o644, target)
 	default:
 		return fmt.Errorf("cannot export type: %v", root.Type)
@@ -107,17 +119,19 @@ func (ex Exporter) exportFile(ctx context.Context, ref glfs.Ref, mode os.FileMod
 		if err != nil && !state.IsErrNotFound[string](err) {
 			return err
 		}
-		if state.IsErrNotFound[string](err) {
-			return ErrUnexpectedFile{
-				Path: p,
-				Info: finfo,
+		if !ex.Clobber {
+			if state.IsErrNotFound[string](err) {
+				return ErrUnexpectedFile{
+					Path: p,
+					Info: finfo,
+				}
 			}
-		}
-		if !ent.Matches(finfo) {
-			return ErrStaleCache{
-				Path:       p,
-				Info:       finfo,
-				CacheEntry: ent,
+			if !ent.Matches(finfo) {
+				return ErrStaleCache{
+					Path:       p,
+					Info:       finfo,
+					CacheEntry: ent,
+				}
 			}
 		}
 	}

@@ -4,10 +4,9 @@ local want = import "@want";
   namespace: {
     "want": want.blob(importstr "@want"),
   },
-  ignore: {
-    union: [
-      {unit: ".git"},
-      {prefix: ".git/"},
-    ]
-  },
+  ignore: want.union([
+      want.prefix("build/out"),
+      want.unit(".git"),
+      want.prefix(".git/")
+  ]),
 }

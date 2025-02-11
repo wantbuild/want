@@ -9,7 +9,6 @@ import (
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/dbutil"
-	"wantbuild.io/want/src/internal/glfsport"
 	"wantbuild.io/want/src/internal/wantdb"
 	"wantbuild.io/want/src/wantrepo"
 )
@@ -30,13 +29,7 @@ func (sys *System) Import(ctx context.Context, repo *wantrepo.Repo) (wantdb.Sour
 			return 0, err
 		}
 		dst := wantdb.NewTxStore(tx, sid)
-		imp := glfsport.Importer{
-			Store:  dst,
-			Dir:    repo.RootPath(),
-			Filter: repo.PathFilter,
-			Cache:  &glfsport.MemCache{}, // TODO:
-		}
-		root, err := imp.Import(ctx, "")
+		root, err := repo.Import(ctx, dst, "")
 		if err != nil {
 			return 0, err
 		}

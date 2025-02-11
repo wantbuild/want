@@ -21,22 +21,24 @@ func Root() star.Command {
 
 var rootCmd = star.NewDir(star.Metadata{Short: "want build system"},
 	map[star.Symbol]star.Command{
-		"init":   initCmd,
-		"status": statusCmd,
+		"init": initCmd,
+
 		"import": importCmd,
+		"build":  buildCmd,
+		"ls":     lsCmd,
+		"cat":    catCmd,
 
 		"blame": blameCmd,
+		"job":   jobCmd,
+		"dash":  dashCmd,
 
-		"build": buildCmd,
-		"ls":    lsCmd,
-		"cat":   catCmd,
+		"serve-http":  serveHttpCmd,
+		"export-zip":  exportZipCmd,
+		"export-repo": exportRepoCmd,
 
-		"job":        jobCmd,
-		"dash":       dashCmd,
-		"serve-http": serveHttpCmd,
-		"export-zip": exportZipCmd,
-		"scrub":      *scrubCmd,
-		"env":        *envCmd,
+		"status": statusCmd,
+		"scrub":  *scrubCmd,
+		"env":    *envCmd,
 	},
 )
 

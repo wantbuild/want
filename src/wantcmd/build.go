@@ -16,7 +16,9 @@ import (
 	"go.brendoncarroll.net/star"
 
 	"wantbuild.io/want/src/internal/glfstasks"
+	"wantbuild.io/want/src/internal/stringsets"
 	"wantbuild.io/want/src/internal/wantc"
+	"wantbuild.io/want/src/want"
 	"wantbuild.io/want/src/wantcfg"
 )
 
@@ -26,21 +28,13 @@ var buildCmd = star.Command{
 	Pos:      []star.IParam{pathsParam},
 	F: func(c star.Context) error {
 		startTime := time.Now()
-		wbs, err := newSys(&c)
-		if err != nil {
-			return err
-		}
-		defer wbs.Close()
-		repo, err := openRepo()
-		if err != nil {
-			return err
-		}
 		// query
 		q := mkBuildQuery(pathsParam.LoadAll(c)...)
-		res, err := wbs.Build(c.Context, repo, q)
+		res, close, err := doBuild(c, q)
 		if err != nil {
 			return err
 		}
+		defer close()
 		dur := time.Since(startTime)
 		if res.OutputRoot != nil {
 			c.Printf("INPUT: %v\n", res.Source)
@@ -70,21 +64,13 @@ var lsCmd = star.Command{
 	Pos:      []star.IParam{pathParam},
 	F: func(c star.Context) error {
 		ctx := c.Context
-		wbs, err := newSys(&c)
-		if err != nil {
-			return err
-		}
-		defer wbs.Close()
-		repo, err := openRepo()
-		if err != nil {
-			return err
-		}
 		p := pathParam.Load(c)
 		q := mkBuildQuery(p)
-		res, err := wbs.Build(c.Context, repo, q)
+		res, close, err := doBuild(c, q)
 		if err != nil {
 			return err
 		}
+		defer close()
 		src := res.Store
 		ref := res.OutputRoot
 		if ref == nil {
@@ -115,25 +101,15 @@ var catCmd = star.Command{
 	Pos:      []star.IParam{pathsParam},
 	F: func(c star.Context) error {
 		ctx := c.Context
-		wbs, err := newSys(&c)
-		if err != nil {
-			return err
-		}
-		defer wbs.Close()
-		repo, err := openRepo()
-		if err != nil {
-			return err
-		}
 		ps := pathsParam.LoadAll(c)
 		q := mkBuildQuery(pathsParam.LoadAll(c)...)
-		res, err := wbs.Build(c.Context, repo, q)
+		res, close, err := doBuild(c, q)
 		if err != nil {
 			return err
 		}
-
+		defer close()
 		src := res.Store
 		ref := res.OutputRoot
-
 		// process the output
 		w := c.StdOut
 		for _, p := range ps {
@@ -162,17 +138,12 @@ var serveHttpCmd = star.Command{
 	Flags:    []star.IParam{},
 	F: func(c star.Context) error {
 		ctx := c.Context
-		wbs, err := newSys(&c)
-		if err != nil {
-			return err
-		}
-		defer wbs.Close()
-		repo, err := openRepo()
-		if err != nil {
-			return err
-		}
 		q := mkBuildQuery(pathParam.Load(c))
-		res, err := wbs.Build(ctx, repo, q)
+		res, close, err := doBuild(c, q)
+		if err != nil {
+			return err
+		}
+		defer close()
 		if err != nil {
 			return err
 		}
@@ -208,27 +179,18 @@ var exportZipCmd = star.Command{
 	Pos:      []star.IParam{pathParam},
 	Flags:    []star.IParam{outParam},
 	F: func(c star.Context) error {
-		ctx := c.Context
-		wbs, err := newSys(&c)
-		if err != nil {
-			return err
-		}
-		defer wbs.Close()
-		repo, err := openRepo()
-		if err != nil {
-			return err
-		}
 		q := mkBuildQuery(pathParam.Load(c))
-		res, err := wbs.Build(ctx, repo, q)
+		res, close, err := doBuild(c, q)
 		if err != nil {
 			return err
 		}
+		defer close()
 		src := res.Store
 		ref := res.OutputRoot
 		if ref == nil {
 			return fmt.Errorf("error during build")
 		}
-		ref, err = glfs.GetAtPath(ctx, src, *ref, wantc.BoundingPrefix(q))
+		ref, err = glfs.GetAtPath(c.Context, src, *ref, wantc.BoundingPrefix(q))
 		if err != nil {
 			return err
 		}
@@ -244,6 +206,66 @@ var exportZipCmd = star.Command{
 	},
 }
 
+var exportRepoCmd = star.Command{
+	Metadata: star.Metadata{Short: "export build targets to local repo"},
+	Pos:      []star.IParam{pathsParam},
+	Flags:    []star.IParam{},
+	F: func(c star.Context) error {
+		ctx := c.Context
+		q := mkBuildQuery(pathsParam.LoadAll(c)...)
+		repo, err := openRepo()
+		if err != nil {
+			return err
+		}
+		if !supersets(repo.Config().Ignore, q) {
+			return fmt.Errorf("can only export to paths which are ignored in the module config")
+		}
+		res, close, err := doBuild(c, q)
+		if err != nil {
+			return err
+		}
+		defer close()
+		src := res.Store
+		ref := res.OutputRoot
+		if ref == nil {
+			return fmt.Errorf("error during build")
+		}
+		for i, target := range res.Targets {
+			if target.IsStatement {
+				tres := res.TargetResults[i]
+				ref, err := glfstasks.ParseGLFSRef(tres.Data)
+				if err != nil {
+					return err
+				}
+				dst := target.BoundingPrefix()
+				ref, err = glfs.GetAtPath(ctx, src, *ref, dst)
+				if err != nil {
+					return err
+				}
+				if err := repo.Export(ctx, src, dst, *ref); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	},
+}
+
+func doBuild(c star.Context, q wantcfg.PathSet) (*want.BuildResult, func(), error) {
+	ctx := c.Context
+	wbs, err := newSys(&c)
+	if err != nil {
+		return nil, nil, err
+	}
+	repo, err := openRepo()
+	if err != nil {
+		return nil, nil, err
+	}
+	res, err := wbs.Build(ctx, repo, q)
+	return res, func() { wbs.Close() }, err
+}
+
+// TODO: support paths relative to working directory within the module
 func mkBuildQuery(prefixes ...string) wantcfg.PathSet {
 	var q wantcfg.PathSet
 	switch len(prefixes) {
@@ -255,6 +277,10 @@ func mkBuildQuery(prefixes ...string) wantcfg.PathSet {
 		q = wantcfg.Union(slices2.Map(prefixes, wantcfg.Prefix)...)
 	}
 	return q
+}
+
+func supersets(a, b wantcfg.PathSet) bool {
+	return stringsets.Superset(wantc.SetFromQuery("", a), wantc.SetFromQuery("", b))
 }
 
 var outParam = star.Param[*os.File]{
