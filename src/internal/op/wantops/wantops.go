@@ -77,7 +77,7 @@ func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Re
 	delete(deps, wantc.NewModuleID(buildTask.Main))
 	jc.Infof("prepared %d dependencies", len(deps))
 	// plan
-	plan, planStore, err := DoCompile(ctx, jc.System, e.CompileOp, src, wantc.CompileTask{
+	plan, planStore, err := DoCompile(ctx, jc.System, e.CompileOp, stores.Union{jc.Dst, src}, wantc.CompileTask{
 		Module:    buildTask.Main,
 		Metadata:  buildTask.Metadata,
 		Namespace: nss[wantc.NewModuleID(buildTask.Main)],
@@ -207,6 +207,11 @@ func (e Executor) PathSetRegexp(jc wantjob.Ctx, dst cadata.Store, s cadata.Gette
 
 func DoCompile(ctx context.Context, sys wantjob.System, compileOp wantjob.OpName, src cadata.Getter, ct wantc.CompileTask) (*wantc.Plan, cadata.Getter, error) {
 	scratch := stores.NewMem()
+	for _, ref := range ct.Namespace {
+		if err := glfs.Sync(ctx, scratch, src, ref); err != nil {
+			return nil, nil, err
+		}
+	}
 	ctRef, err := PostCompileTask(ctx, stores.Fork{W: scratch, R: src}, ct)
 	if err != nil {
 		return nil, nil, err
