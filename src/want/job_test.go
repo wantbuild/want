@@ -14,7 +14,17 @@ import (
 	"wantbuild.io/want/src/internal/testutil"
 	"wantbuild.io/want/src/internal/wantdb"
 	"wantbuild.io/want/src/wantjob"
+	"wantbuild.io/want/src/wantjob/wantjobtests"
 )
+
+func TestJobSuite(t *testing.T) {
+	wantjobtests.TestJobs(t, func(t testing.TB, exec wantjob.Executor) wantjob.System {
+		ctx := testutil.Context(t)
+		db := wantdb.NewMemory()
+		require.NoError(t, wantdb.Setup(ctx, db))
+		return newJobSystem(db, t.TempDir(), exec, 1)
+	})
+}
 
 func TestJobStores(t *testing.T) {
 	ctx := testutil.Context(t)

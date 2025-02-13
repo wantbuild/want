@@ -1,25 +1,16 @@
-package wantjob
+package wantjob_test
 
 import (
-	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-	"go.brendoncarroll.net/state/cadata"
-
-	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/testutil"
+	"wantbuild.io/want/src/wantjob"
+	"wantbuild.io/want/src/wantjob/wantjobtests"
 )
 
 func TestMemJob(t *testing.T) {
-	ctx := testutil.Context(t)
-	sys := NewMem(ctx, BasicExecutor{
-		"toUpper": func(jc Ctx, src cadata.Getter, data []byte) ([]byte, error) {
-			return []byte(strings.ToUpper(string(data))), nil
-		},
+	wantjobtests.TestJobs(t, func(t testing.TB, exec wantjob.Executor) wantjob.System {
+		ctx := testutil.Context(t)
+		return wantjob.NewMem(ctx, exec)
 	})
-	res, _, err := Do(ctx, sys, stores.NewVoid(), Task{Op: "toUpper", Input: []byte("hello")})
-	require.NoError(t, err)
-	require.NoError(t, res.Err())
-	require.Equal(t, "HELLO", string(res.Data))
 }
