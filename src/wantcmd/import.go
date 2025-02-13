@@ -7,7 +7,7 @@ import (
 	"go.brendoncarroll.net/star"
 )
 
-var importCmd = star.Command{
+var importRepoCmd = star.Command{
 	Metadata: star.Metadata{Short: "import the repository, then exit"},
 	Flags:    []star.IParam{},
 	F: func(c star.Context) error {

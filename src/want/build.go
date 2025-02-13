@@ -10,9 +10,9 @@ import (
 	"wantbuild.io/want/src/internal/op/wantops"
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/wantc"
+	"wantbuild.io/want/src/internal/wantrepo"
 	"wantbuild.io/want/src/wantcfg"
 	"wantbuild.io/want/src/wantjob"
-	"wantbuild.io/want/src/wantrepo"
 )
 
 type (

@@ -10,8 +10,8 @@ import (
 
 	"go.brendoncarroll.net/star"
 
+	"wantbuild.io/want/src/internal/wantrepo"
 	"wantbuild.io/want/src/want"
-	"wantbuild.io/want/src/wantrepo"
 )
 
 // Root
@@ -23,10 +23,10 @@ var rootCmd = star.NewDir(star.Metadata{Short: "want build system"},
 	map[star.Symbol]star.Command{
 		"init": initCmd,
 
-		"import": importCmd,
-		"build":  buildCmd,
-		"ls":     lsCmd,
-		"cat":    catCmd,
+		"import-repo": importRepoCmd,
+		"build":       buildCmd,
+		"ls":          lsCmd,
+		"cat":         catCmd,
 
 		"blame": blameCmd,
 		"job":   jobCmd,

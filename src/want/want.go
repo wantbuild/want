@@ -18,8 +18,8 @@ import (
 	"wantbuild.io/want/src/internal/wantc"
 	"wantbuild.io/want/src/internal/wantdag"
 	"wantbuild.io/want/src/internal/wantdb"
+	"wantbuild.io/want/src/internal/wantrepo"
 	"wantbuild.io/want/src/wantjob"
-	"wantbuild.io/want/src/wantrepo"
 )
 
 // System is an instance of the Want Build System

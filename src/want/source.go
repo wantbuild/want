@@ -10,7 +10,7 @@ import (
 
 	"wantbuild.io/want/src/internal/dbutil"
 	"wantbuild.io/want/src/internal/wantdb"
-	"wantbuild.io/want/src/wantrepo"
+	"wantbuild.io/want/src/internal/wantrepo"
 )
 
 type (
