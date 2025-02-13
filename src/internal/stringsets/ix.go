@@ -13,10 +13,6 @@ func (p Prefix) Contains(x string) bool {
 	return strings.HasPrefix(x, string(p))
 }
 
-func (p Prefix) Regexp() *regexp.Regexp {
-	return regexp.MustCompile("^" + regexp.QuoteMeta(string(p)))
-}
-
 func (p Prefix) String() string {
 	return string(p) + "*"
 }

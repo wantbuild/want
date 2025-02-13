@@ -1,6 +1,12 @@
 local want = import "@want";
 
-local bzImage = want.selectFile(GROUND, "./linux/bzImage");
+local bzImage = want.selectFile(GROUND, "./bzImage");
+
+local bzImage = want.importURL(
+    url = "https://github.com/wantbuild/qemu-static/releases/download/v0.1.0/bzImage",
+    algo = "SHA256",
+    hash = "ae85807554a95b1e38d52c9a0e6380f7db0bf22da9a3347f23849a57ea274d15",
+);
 
 local dumbInit = want.importURL(
     url="https://github.com/Yelp/dumb-init/releases/download/v1.2.5/dumb-init_1.2.5_x86_64",

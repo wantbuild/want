@@ -52,7 +52,7 @@ func DerivePlace(g *wantdag.Builder, x, path NodeID) NodeID {
 }
 
 func DeriveFilter(g *wantdag.Builder, x, filter NodeID) NodeID {
-	return mustDerived(g, "glfs", glfsops.OpFilter, []NodeInput{
+	return mustDerived(g, "glfs", glfsops.OpFilterPathSet, []NodeInput{
 		{Name: "x", Node: x},
 		{Name: "filter", Node: filter},
 	})

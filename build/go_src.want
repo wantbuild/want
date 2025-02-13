@@ -1,5 +1,5 @@
 local want = import "@want";
-local golang = import "recipes/golang.libsonnet";
+local golang = import "recipes/golang/golang.libsonnet";
 
 local goFiles = want.select(GROUND, want.intersect([
     golang.pathSet,

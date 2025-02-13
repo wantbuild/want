@@ -1,8 +1,6 @@
 package stringsets
 
 import (
-	"regexp"
-
 	"go.brendoncarroll.net/exp/maybe"
 )
 
@@ -10,10 +8,6 @@ type Unit string
 
 func (k Unit) Contains(x string) bool {
 	return string(k) == x
-}
-
-func (k Unit) Regexp() *regexp.Regexp {
-	return regexp.MustCompile("^" + regexp.QuoteMeta(string(k)) + "$")
 }
 
 func (k Unit) String() string {

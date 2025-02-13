@@ -1,5 +1,5 @@
 local want = import "@want";
-local wassert = import "./assert.libsonnet";
+local wassert = import "recipes/assert.libsonnet";
 local golang = import "./golang.libsonnet";
 
 local testOut = golang.goTest(

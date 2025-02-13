@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.brendoncarroll.net/state/cadata"
 
-	"wantbuild.io/want/recipes/linux"
 	"wantbuild.io/want/src/want/testwant"
 	"wantbuild.io/want/src/wantjob"
 )
@@ -45,6 +44,7 @@ func TestPostGetRunTestsTask(t *testing.T) {
 func TestRunTests(t *testing.T) {
 	jc := newJobCtx(t)
 	s := jc.Dst
+	bzImage := loadKernel(t)
 	ref, err := RunTests(jc, s, RunTestsTask{
 		Module: mustPostFS(t, s, map[string][]byte{
 			"go.mod": []byte("module example_module \n"),
@@ -76,7 +76,7 @@ func TestRunTests(t *testing.T) {
 		}),
 		VMSpec: VMSpec{
 			BaseFS: mustPostFS(t, s, nil),
-			Kernel: mustPostBlob(t, s, linux.BzImage()),
+			Kernel: mustPostBlob(t, s, bzImage),
 		},
 		RunTestsConfig: RunTestsConfig{
 			GOARCH: "amd64",
@@ -152,4 +152,10 @@ func postFS(ctx context.Context, s cadata.PostExister, m map[string][]byte) (*gl
 		})
 	}
 	return glfs.PostTreeSlice(ctx, s, ents)
+}
+
+func loadKernel(t testing.TB) []byte {
+	data, err := os.ReadFile("./bzImage")
+	require.NoError(t, err)
+	return data
 }

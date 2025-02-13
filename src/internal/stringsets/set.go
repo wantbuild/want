@@ -9,7 +9,6 @@ import (
 type Set interface {
 	String() string
 	Contains(x string) bool
-	Regexp() *regexp.Regexp
 
 	intersects(Set) maybe.Maybe[bool]
 	superset(Set) maybe.Maybe[bool]

@@ -1,7 +1,7 @@
 local want = import "@want";
 local wassert = import "./assert.libsonnet";
-local linux = import "./linux.libsonnet";
-local alpine = import "./alpine.libsonnet";
+local linux = import "recipes/linux/linux.libsonnet";
+local alpine = import "recipes/alpine/alpine.libsonnet";
 
 local kernel = linux.bzImage;
 local alpineRoot = alpine.rootfs(alpine.ARCH_AMD64);

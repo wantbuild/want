@@ -1,6 +1,6 @@
 local want = import "@want";
-local linux = import "./linux.libsonnet";
-local alpine = import "./alpine.libsonnet";
+local linux = import "recipes/linux/linux.libsonnet";
+local alpine = import "recipes/alpine/alpine.libsonnet";
 
 local currentVersion = "1.23.4";
 

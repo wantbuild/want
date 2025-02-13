@@ -3,7 +3,6 @@ package stringsets
 import (
 	"fmt"
 	"reflect"
-	"regexp"
 
 	"go.brendoncarroll.net/exp/maybe"
 )
@@ -14,12 +13,6 @@ type And struct {
 
 func (a And) Contains(x string) bool {
 	return a.L.Contains(x) && a.R.Contains(x)
-}
-
-func (a And) Regexp() *regexp.Regexp {
-	l := a.L.Regexp()
-	r := a.R.Regexp()
-	return regexp.MustCompile(fmt.Sprintf("(?:(?=.*%s)(?=.*%s)).*", l, r))
 }
 
 func (a And) intersects(x Set) maybe.Maybe[bool] {
@@ -117,12 +110,6 @@ type Or struct {
 
 func (o Or) Contains(x string) bool {
 	return o.L.Contains(x) || o.R.Contains(x)
-}
-
-func (o Or) Regexp() *regexp.Regexp {
-	l := o.L.Regexp()
-	r := o.R.Regexp()
-	return regexp.MustCompile(fmt.Sprintf("(%s|%s)", l.String(), r.String()))
 }
 
 func (o Or) intersects(x Set) maybe.Maybe[bool] {

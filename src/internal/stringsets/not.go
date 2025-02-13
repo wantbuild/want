@@ -2,7 +2,6 @@ package stringsets
 
 import (
 	"fmt"
-	"regexp"
 
 	"go.brendoncarroll.net/exp/maybe"
 )
@@ -13,11 +12,6 @@ type Not struct {
 
 func (n Not) Contains(x string) bool {
 	return !n.X.Contains(x)
-}
-
-func (n Not) Regexp() *regexp.Regexp {
-	x := n.X.Regexp()
-	return regexp.MustCompile(fmt.Sprintf("^(?!%s).*$", x.String()))
 }
 
 func (n Not) superset(sub Set) maybe.Maybe[bool] {

@@ -1,0 +1,8 @@
+local want = import "@want";
+local alpine = import "./alpine.libsonnet";
+local wassert = import "recipes/assert.libsonnet";
+
+wassert.pathExists(
+    alpine.apk("community", alpine.ARCH_AMD64, "cpio", "2.15-r0", "5789feb5129eb788b517edd8c51988c925fc4eb1de70a8af28ee9428f387c229"),
+    "usr/bin/cpio",
+)

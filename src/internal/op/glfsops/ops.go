@@ -3,16 +3,18 @@ package glfsops
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
-	"regexp"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
+	"wantbuild.io/want/src/internal/stringsets"
 	"wantbuild.io/want/src/internal/wantdag"
+	"wantbuild.io/want/src/wantcfg"
 	"wantbuild.io/want/src/wantjob"
 )
 
@@ -23,25 +25,25 @@ type (
 )
 
 const (
-	OpMerge       = OpName("merge")
-	OpPick        = OpName("pick")
-	OpPlace       = OpName("place")
-	OpPassthrough = OpName("pass")
-	OpFilter      = OpName("filter")
-	OpChmod       = OpName("chmod")
-	OpDiff        = OpName("diff")
+	OpMerge         = OpName("merge")
+	OpPick          = OpName("pick")
+	OpPlace         = OpName("place")
+	OpPassthrough   = OpName("pass")
+	OpFilterPathSet = OpName("filterPathSet")
+	OpChmod         = OpName("chmod")
+	OpDiff          = OpName("diff")
 )
 
 const MaxPathLen = 4096
 
 var ops = map[OpName]Operator{
-	OpMerge:       Merge,
-	OpPick:        Pick,
-	OpPlace:       Place,
-	OpPassthrough: Passthrough,
-	OpFilter:      Filter,
-	OpChmod:       Chmod,
-	OpDiff:        Diff,
+	OpMerge:         Merge,
+	OpPick:          Pick,
+	OpPlace:         Place,
+	OpPassthrough:   Passthrough,
+	OpFilterPathSet: FilterPathSet,
+	OpChmod:         Chmod,
+	OpDiff:          Diff,
 }
 
 type Operator func(ctx context.Context, dst cadata.PostExister, src cadata.Getter, x glfs.Ref) (*glfs.Ref, error)
@@ -113,7 +115,7 @@ func Passthrough(ctx context.Context, dst cadata.PostExister, src cadata.Getter,
 	return &inputRef, nil
 }
 
-func Filter(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inputRef glfs.Ref) (*glfs.Ref, error) {
+func FilterPathSet(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inputRef glfs.Ref) (*glfs.Ref, error) {
 	root, err := glfs.GetTreeSlice(ctx, src, inputRef, 1e6)
 	if err != nil {
 		return nil, err
@@ -130,12 +132,13 @@ func Filter(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inpu
 	if err != nil {
 		return nil, fmt.Errorf("filter must be blob %w", err)
 	}
-	re, err := regexp.Compile(string(data))
-	if err != nil {
-		return nil, err
+	var q wantcfg.PathSet
+	if err := json.Unmarshal(data, &q); err != nil {
+		return nil, fmt.Errorf("parsing pathset: %w", err)
 	}
+	ss := stringsets.FromPathSet(q)
 	return glfs.FilterPaths(ctx, dst, src, targetEnt.Ref, func(x string) bool {
-		return re.MatchString(x)
+		return ss.Contains(x)
 	})
 }
 

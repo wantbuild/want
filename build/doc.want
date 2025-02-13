@@ -1,6 +1,6 @@
 local want = import "@want";
-local alpine = import "recipes/alpine.libsonnet";
-local linux = import "recipes/linux.libsonnet";
+local alpine = import "recipes/alpine/alpine.libsonnet";
+local linux = import "recipes/linux/linux.libsonnet";
 
 local dist = want.importURL(
     url = "https://github.com/rust-lang/mdBook/releases/download/v0.4.43/mdbook-v0.4.43-x86_64-unknown-linux-musl.tar.gz",

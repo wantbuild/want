@@ -1,6 +1,11 @@
 package stringsets
 
-import "strings"
+import (
+	"strings"
+
+	"go.brendoncarroll.net/exp/slices2"
+	"wantbuild.io/want/src/wantcfg"
+)
 
 func SetFromGlob(g string) Set {
 	parts := strings.Split(g, "*")
@@ -81,5 +86,31 @@ func MapPrependPrefix(x Set, p Prefix) Set {
 		return p + x
 	default:
 		return And{L: x, R: p}.simplify()
+	}
+}
+
+// FromPathSet returns a Set from a wantcfg.PathSet
+func FromPathSet(q wantcfg.PathSet) Set {
+	switch {
+	case q.Unit != nil:
+		return Unit(*q.Unit)
+	case q.Prefix != nil:
+		return Prefix(*q.Prefix)
+	case q.Suffix != nil:
+		return Suffix(*q.Suffix)
+	case q.Union != nil:
+		xs := slices2.Map(q.Union, func(x wantcfg.PathSet) Set {
+			return FromPathSet(x)
+		})
+		return Simplify(Union(xs...))
+	case q.Intersect != nil:
+		xs := slices2.Map(q.Intersect, func(x wantcfg.PathSet) Set {
+			return FromPathSet(x)
+		})
+		return Simplify(Intersection(xs...))
+	case q.Not != nil:
+		return Not{X: FromPathSet(*q.Not)}
+	default:
+		return Empty{}
 	}
 }

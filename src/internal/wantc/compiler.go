@@ -1,12 +1,13 @@
 package wantc
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"maps"
 	"path"
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 	"wantbuild.io/want/src/internal/op/glfsops"
 	"wantbuild.io/want/src/internal/stringsets"
 	"wantbuild.io/want/src/internal/wantdag"
+	"wantbuild.io/want/src/wantcfg"
 )
 
 const (
@@ -573,14 +575,18 @@ func (c *Compiler) pickExpr(ctx context.Context, dst cadata.Store, x Expr, p str
 	}, nil
 }
 
-func (c *Compiler) filterExpr(ctx context.Context, dst cadata.Store, x Expr, re *regexp.Regexp) (Expr, error) {
-	ref, err := c.glfs.PostBlob(ctx, dst, strings.NewReader(re.String()))
+func (c *Compiler) filterExpr(ctx context.Context, dst cadata.Store, x Expr, q wantcfg.PathSet) (Expr, error) {
+	data, err := json.Marshal(q)
+	if err != nil {
+		return nil, err
+	}
+	ref, err := c.glfs.PostBlob(ctx, dst, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
 	filterExpr := &value{*ref}
 	return &compute{
-		Op: glfsops.OpFilter,
+		Op: glfsops.OpFilterPathSet,
 		Inputs: []computeInput{
 			{To: "x", From: x},
 			{To: "filter", From: filterExpr},

@@ -159,12 +159,9 @@ local place(x, p) = compute("glfs.place", [
 ]);
 
 local filter(x, pathSet) =
-    local re = compute("want.regexpFromPathSet", [
-        input("", blob(std.manifestJsonEx(pathSet, ""))),
-    ]);
-    compute("glfs.filter", [
+    compute("glfs.filterPathSet", [
         input(to="x", from=x),
-        input(to="filter", from=re),
+        input(to="filter", from=blob(std.manifestJsonEx(pathSet, ""))),
     ]);
 
 // diff finds the differences between two trees.

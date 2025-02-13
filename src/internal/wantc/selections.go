@@ -3,7 +3,6 @@ package wantc
 import (
 	"context"
 	"path"
-	"regexp"
 	"strings"
 
 	"github.com/blobcache/glfs"
@@ -61,7 +60,7 @@ func (c *Compiler) flattenEdges(ctx context.Context, dst cadata.Store, xs []*edg
 		// Filter
 		if x.Filter != nil {
 			var err error
-			y, err = c.filterExpr(ctx, dst, y, x.Filter)
+			y, err = c.filterExpr(ctx, dst, y, *x.Filter)
 			if err != nil {
 				return nil, err
 			}
@@ -83,7 +82,7 @@ type edge struct {
 
 	Expr    Expr
 	Subpath string
-	Filter  *regexp.Regexp
+	Filter  *wantcfg.PathSet
 }
 
 // select_ returns a list of edges that populate the ks region of gs
