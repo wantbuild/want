@@ -1,0 +1,27 @@
+local want = import "@want";
+local nodejs = import "./nodejs.libsonnet";
+local linux = import "recipes/linux/linux.libsonnet";
+local oci = import "recipes/oci.libsonnet";
+local wassert = import "recipes/assert.libsonnet";
+
+local testProg = want.blob(|||
+    console.log("Hello World");
+|||);
+
+local basefs = oci.importImage("docker.io/library/node", "e44cb8936a64541e90572e91fcd4deac8e3f2e6ddfa9321d6cc42899b21def93");
+
+local rootfs = want.pass([
+    want.input("", basefs),
+    want.input("initscript", want.blob(|||
+        #!/bin/sh 
+        set -ve;
+
+        mkdir /output;
+        node /input/main.js >> /output/out.txt;
+    |||)),
+    want.input("input/main.js", testProg),
+]);
+
+local out = linux.runVM(1, 2e9, linux.bzImage, rootfs, init="initscript", args=[], output=want.prefix("/output"));
+
+wassert.pathExists(out, "out.txt")

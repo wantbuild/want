@@ -19,10 +19,10 @@ local runVM(cores, memory, kernel, rootfs, init="/sbin/init", args=[], output=wa
         "myfs": want.qemu.virtiofs(root=rootfs, writeable=true),
     };
 
-    local kargs = "console=hvc0 reboot=t panic=-1 rootfstype=virtiofs root=myfs rw init=%s " % [init];
+    local kargs = "console=hvc0 reboot=t panic=-1 rootfstype=virtiofs root=myfs rw init=%s " % [init] + std.join(" ", args);
     want.qemu.amd64_microvm(cores, memory, kernel,
         initrd = null,
-        kargs = kargs + std.join(" ", args),
+        kargs = kargs,
         virtiofs = virtiofs,
         output = want.qemu.virtiofs_output("myfs", output),
     );
