@@ -192,18 +192,18 @@ local qemu = {
             "cores": cores,
             "memory": memory,
             "kernel_args": kargs,
-            "initrd": initrd,
             "virtiofs": virtiofs,
             "output": output,
         }, ""));
         local virtiofsTree = compute("glfs.pass",
             std.map(function(k) input(k, virtiofs[k].root), std.objectFields(virtiofs))
         );
-        compute("qemu.amd64_microvm", [
-            input("virtiofs", virtiofsTree),
-            input("kernel", kernel),
-            input("vm.json", config),
-        ]),
+        compute("qemu.amd64_microvm", std.flattenArrays([
+            [input("virtiofs", virtiofsTree)],
+            [input("kernel", kernel)],
+            if initrd != null then [input("initrd", initrd)] else [],
+            [input("vm.json", config)],
+        ])),
 };
 
 local golang = {

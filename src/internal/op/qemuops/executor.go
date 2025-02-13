@@ -5,6 +5,7 @@ package qemuops
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -179,7 +180,7 @@ func (e *Executor) amd64MicroVM(jc wantjob.Ctx, s cadata.Getter, t MicroVMTask) 
 		defer jc.InfoSpan("importing from virtiofs")()
 		return vfsd.Import(jc.Context, jc.Dst, spec.Query)
 	default:
-		return nil, fmt.Errorf("invalid output spec %v", t.Output)
+		return nil, ErrInvalidOutputSpec{t.Output}
 	}
 }
 
@@ -203,8 +204,28 @@ func exportInitrd(ctx context.Context, s cadata.Getter, dir string, initrdRef gl
 		return err
 	}
 	defer f.Close()
-	if err := glfscpio.Write(ctx, s, initrdRef, f); err != nil {
-		return err
+	if initrdRef.Type == glfs.TypeTree {
+		// if it's a tree, then we need to
+		if err := glfscpio.Write(ctx, s, initrdRef, f); err != nil {
+			return err
+		}
+	} else {
+		// if it's a blob, assume it's an image that can be passed directly to QEMU
+		r, err := glfs.GetBlob(ctx, s, initrdRef)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(f, r); err != nil {
+			return err
+		}
 	}
 	return f.Close()
+}
+
+type ErrInvalidOutputSpec struct {
+	Spec wantqemu.Output
+}
+
+func (e ErrInvalidOutputSpec) Error() string {
+	return fmt.Sprintf("invalid output spec: %v", e.Spec)
 }

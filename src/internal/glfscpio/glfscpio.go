@@ -9,7 +9,7 @@ import (
 	"path"
 
 	"github.com/blobcache/glfs"
-	"github.com/u-root/u-root/pkg/cpio"
+	"github.com/cavaliergopher/cpio"
 	"go.brendoncarroll.net/state/cadata"
 )
 
@@ -20,66 +20,94 @@ func Write(ctx context.Context, s cadata.Getter, root glfs.Ref, w io.Writer) err
 	if root.Type != glfs.TypeTree {
 		return fmt.Errorf("cannot write non-tree as CPIO archive")
 	}
-	recWriter := cpio.Newc.Writer(w)
-	if err := glfs.WalkTree(ctx, s, root, func(prefix string, ent glfs.TreeEntry) error {
-		p := path.Join(prefix, ent.Name)
-		var rec cpio.Record
-		switch ent.Ref.Type {
-		case glfs.TypeTree:
-			rec = cpio.Directory(p, uint64(ent.FileMode))
-		default:
-			switch {
-			case ent.FileMode&fs.ModeSymlink > 0:
-				targetPath, err := glfs.GetBlobBytes(ctx, s, ent.Ref, MaxPathLen)
-				if err != nil {
-					return err
-				}
-				rec = cpio.Symlink(p, string(targetPath))
-			default:
-				r, err := glfs.GetBlob(ctx, s, ent.Ref)
-				if err != nil {
-					return err
-				}
-				rec = cpio.Record{
-					ReaderAt: r,
-					Info: cpio.Info{
-						Name:     p,
-						FileSize: ent.Ref.Size,
-						Mode:     uint64(ent.FileMode),
-					},
-				}
-			}
-		}
-		return recWriter.WriteRecord(rec)
+	cpw := cpio.NewWriter(w)
+	// root record
+	if err := cpw.WriteHeader(&cpio.Header{
+		Name:  ".",
+		Links: 1,
+		Mode:  cpio.FileMode(1<<14 | 0o755),
 	}); err != nil {
 		return err
 	}
-	return nil
+	if err := glfs.WalkTree(ctx, s, root, func(prefix string, ent glfs.TreeEntry) error {
+		p := path.Join(prefix, ent.Name)
+		mode := cpio.FileMode(ent.FileMode)
+		switch {
+		case ent.Ref.Type == glfs.TypeTree:
+			if err := cpw.WriteHeader(&cpio.Header{
+				Name:  p,
+				Mode:  mode | cpio.FileMode(fs.ModeDir),
+				Links: 1,
+			}); err != nil {
+				return err
+			}
+		case ent.Ref.Type == glfs.TypeBlob && ent.FileMode&fs.ModeSymlink > 0:
+			data, err := glfs.GetBlobBytes(ctx, s, ent.Ref, MaxPathLen)
+			if err != nil {
+				return err
+			}
+			if err := cpw.WriteHeader(&cpio.Header{
+				Name:     p,
+				Linkname: string(data),
+				Size:     int64(ent.Ref.Size),
+				Mode:     mode,
+				Links:    1,
+			}); err != nil {
+				return err
+			}
+			if _, err := cpw.Write(data); err != nil {
+				return err
+			}
+		default:
+			if err := cpw.WriteHeader(&cpio.Header{
+				Name:  p,
+				Size:  int64(ent.Ref.Size),
+				Mode:  mode,
+				Links: 1,
+			}); err != nil {
+				return err
+			}
+			r, err := glfs.GetBlob(ctx, s, ent.Ref)
+			if err != nil {
+				return err
+			}
+			if n, err := io.Copy(cpw, r); err != nil {
+				return err
+			} else if n != int64(ent.Ref.Size) {
+				return fmt.Errorf("io.Copy copied wrong number of bytes")
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	return cpw.Close()
 }
 
-func Read(ctx context.Context, s cadata.PostExister, r io.ReaderAt) (*glfs.Ref, error) {
-	recReader := cpio.Newc.Reader(r)
-
+func Read(ctx context.Context, s cadata.PostExister, r io.Reader) (*glfs.Ref, error) {
+	cpr := cpio.NewReader(r)
 	var ents []glfs.TreeEntry
 	for {
-		rec, err := recReader.ReadRecord()
+		h, err := cpr.Next()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
 			return nil, err
 		}
-		mode := fs.FileMode(rec.Mode)
+		if h.Name == "." || h.Name == "" {
+			continue
+		}
+		mode := fs.FileMode(h.Mode)
 		if mode.IsDir() {
 		} else {
-			sr := io.NewSectionReader(rec.ReaderAt, 0, int64(rec.FileSize))
-			ref, err := glfs.PostBlob(ctx, s, sr)
+			ref, err := glfs.PostBlob(ctx, s, cpr)
 			if err != nil {
 				return nil, err
 			}
 			ents = append(ents, glfs.TreeEntry{
-				Name:     rec.Name,
-				FileMode: mode,
+				Name:     h.Name,
+				FileMode: mode & fs.ModePerm,
 				Ref:      *ref,
 			})
 		}

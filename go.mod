@@ -4,6 +4,7 @@ go 1.23.4
 
 require (
 	github.com/blobcache/glfs v0.0.0-20250207031631-193fa2b641e7
+	github.com/cavaliergopher/cpio v1.0.1
 	github.com/go-git/go-git/v5 v5.13.1
 	github.com/google/go-containerregistry v0.20.2
 	github.com/google/go-jsonnet v0.20.0
@@ -15,7 +16,6 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.10.0
 	github.com/tetratelabs/wazero v1.8.2
-	github.com/u-root/u-root v0.14.0
 	github.com/ulikunitz/xz v0.5.12
 	go.brendoncarroll.net/exp v0.0.0-20250112210235-9d4b62bdbd02
 	go.brendoncarroll.net/star v0.0.0-20250117202537-11ada0ca27bd
@@ -58,7 +58,6 @@ require (
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0-rc3 // indirect
-	github.com/pierrec/lz4/v4 v4.1.14 // indirect
 	github.com/pjbgf/sha1cd v0.3.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
@@ -66,7 +65,6 @@ require (
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/sirupsen/logrus v1.9.1 // indirect
 	github.com/skeema/knownhosts v1.3.0 // indirect
-	github.com/u-root/uio v0.0.0-20240209044354-b3d14b93376a // indirect
 	github.com/vbatts/tar-split v0.11.3 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	go.uber.org/multierr v1.10.0 // indirect

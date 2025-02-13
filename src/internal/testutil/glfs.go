@@ -54,7 +54,7 @@ func EqualFS(t testing.TB, s cadata.Getter, expected, actual glfs.Ref) bool {
 	if expected.Equals(actual) {
 		return true
 	}
-	t.Error("filesystems do not match")
+	t.Error("filesystems do not match", expected, "vs", actual)
 	t.Error("Expected:\n")
 	PrintFS(t, s, expected)
 	t.Error("Actual:\n")

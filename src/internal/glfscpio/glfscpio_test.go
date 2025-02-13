@@ -3,9 +3,11 @@ package glfscpio
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/blobcache/glfs"
+	"github.com/cavaliergopher/cpio"
 	"github.com/stretchr/testify/require"
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/testutil"
@@ -43,6 +45,8 @@ func TestWriteRead(t *testing.T) {
 			buf := bytes.Buffer{}
 			require.NoError(t, Write(ctx, s, tc.I, &buf))
 
+			ls(t, buf.Bytes())
+
 			// read
 			dst := stores.NewMem()
 			out, err := Read(ctx, dst, bytes.NewReader(buf.Bytes()))
@@ -50,5 +54,19 @@ func TestWriteRead(t *testing.T) {
 
 			testutil.EqualFS(t, stores.Union{dst, s}, tc.I, *out)
 		})
+	}
+}
+
+func ls(t testing.TB, data []byte) {
+	cr := cpio.NewReader(bytes.NewReader(data))
+	for {
+		h, err := cr.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+		}
+		t.Logf("%+v", h)
 	}
 }

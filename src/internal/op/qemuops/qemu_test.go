@@ -130,21 +130,18 @@ func TestMicroVM(t *testing.T) {
 				{Name: "out.txt", FileMode: 0o644, Ref: testutil.PostString(t, s, "[/sbin/init]\n[HOME=/ TERM=linux]\nhello world\n")},
 			})),
 		},
-		// {
-		// 	Task: MicroVMTask{
-		// 		Cores:      1,
-		// 		Memory:     1024 * 1e6,
-		// 		Kernel:     kernelRef,
-		// 		KernelArgs: "panic=-1 console=hvc0 reboot=t rdinit=/init debug",
-		// 		Initrd: ptr(testutil.PostTree(t, s, []glfs.TreeEntry{
-		// 			{Name: "init", FileMode: 0o777, Ref: helloRef},
-
-		// 			{Name: "dev", FileMode: 0o777, Ref: emptyTree},
-		// 			{Name: "proc", FileMode: 0o777, Ref: emptyTree},
-		// 			{Name: "sys", FileMode: 0o777, Ref: emptyTree},
-		// 		})),
-		// 	},
-		// },
+		{
+			Task: MicroVMTask{
+				Cores:      1,
+				Memory:     1024 * 1e6,
+				Kernel:     kernelRef,
+				KernelArgs: "panic=-1 console=hvc0 reboot=t",
+				Initrd: ptr(testutil.PostTree(t, s, []glfs.TreeEntry{
+					{Name: "init", FileMode: 0o777, Ref: helloRef},
+				})),
+			},
+			Err: ErrInvalidOutputSpec{},
+		},
 	}
 	for i, tc := range tcs {
 		tc := tc

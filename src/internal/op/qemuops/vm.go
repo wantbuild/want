@@ -41,20 +41,26 @@ func (e *Executor) newVM(jc wantjob.Ctx, dir string, vmcfg vmConfig) *vm {
 	// qemu
 	qemuCmd := func() *exec.Cmd {
 		args := []string{
-			"-M", "microvm,x-option-roms=off,rtc=off,acpi=off",
+			"-M", "microvm,x-option-roms=off,rtc=off,acpi=off,pit=off,pic=off,isa-serial=off",
 			"-m", strconv.FormatUint(vmcfg.Memory/1e6, 10) + "M",
 			"-smp", strconv.FormatUint(uint64(vmcfg.NumCPUs), 10),
 			"-L", filepath.Join(e.cfg.InstallDir, "share"),
 
-			"-display", "none",
 			"-nodefaults",
 			"-no-user-config",
+			"-nographic",
 			"-no-reboot",
 
 			"-kernel", filepath.Join(dir, kernelFilename),
 		}
 		add := func(xs ...string) {
 			args = append(args, xs...)
+		}
+		if runtime.GOOS == "linux" {
+			add("-enable-kvm")
+			if runtime.GOARCH == "amd64" {
+				add("-cpu", "host")
+			}
 		}
 		if vmcfg.AppendKernelArgs != "" {
 			add("-append", vmcfg.AppendKernelArgs)
