@@ -9,7 +9,6 @@ import (
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
-	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/wantc"
 	"wantbuild.io/want/src/internal/wantdag"
 	"wantbuild.io/want/src/wantcfg"
@@ -82,6 +81,15 @@ type BuildResult struct {
 	Targets       []wantc.Target   `json:"targets"`
 	TargetResults []wantjob.Result `json:"target_results"`
 	Output        *glfs.Ref        `json:"output"`
+}
+
+func (br BuildResult) ErrorCount() (ret int) {
+	for _, res := range br.TargetResults {
+		if res.ErrCode > 0 {
+			ret++
+		}
+	}
+	return ret
 }
 
 func PostBuildResult(ctx context.Context, s cadata.PostExister, x BuildResult) (*glfs.Ref, error) {
@@ -168,14 +176,23 @@ func PostCompileTask(ctx context.Context, s cadata.PostExister, x wantc.CompileT
 	if err != nil {
 		return nil, err
 	}
-	nsRef, err := glfs.PostTreeMap(ctx, s, x.Namespace)
+	depsRef, err := glfs.PostTree(ctx, s, func(yield func(glfs.TreeEntry) bool) {
+		for eid, ref := range x.Deps {
+			if !yield(glfs.TreeEntry{
+				Name: eid.String(),
+				Ref:  ref,
+			}) {
+				return
+			}
+		}
+	})
 	if err != nil {
 		return nil, err
 	}
 	return glfs.PostTreeMap(ctx, s, map[string]glfs.Ref{
 		"module":    x.Module,
 		"meta.json": *mdRef,
-		"namespace": *nsRef,
+		"deps":      *depsRef,
 	})
 }
 
@@ -196,21 +213,27 @@ func GetCompileTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*wantc.Co
 	if err := json.Unmarshal(data, &md); err != nil {
 		return nil, fmt.Errorf("meta.json did not contain valid json: %q, %w", data, err)
 	}
-	nsRef, err := glfs.GetAtPath(ctx, s, x, "namespace")
+	depsRef, err := glfs.GetAtPath(ctx, s, x, "deps")
 	if err != nil && !glfs.IsErrNoEnt(err) {
 		return nil, err
 	}
-	var ns map[string]glfs.Ref
-	if nsRef != nil {
-		if ns, err = glfstasks.GetMap(ctx, s, *nsRef, func(ctx context.Context, g cadata.Getter, r glfs.Ref) (*glfs.Ref, error) {
-			return &r, nil
-		}); err != nil {
+	deps := map[wantc.ExprID]glfs.Ref{}
+	if depsRef != nil {
+		ents, err := glfs.GetTreeSlice(ctx, s, *depsRef, 1e6)
+		if err != nil {
 			return nil, err
+		}
+		for _, ent := range ents {
+			var eid wantc.ExprID
+			if err := eid.UnmarshalBase64([]byte(ent.Name)); err != nil {
+				return nil, err
+			}
+			deps[eid] = ent.Ref
 		}
 	}
 	return &wantc.CompileTask{
-		Module:    *moduleRef,
-		Metadata:  md,
-		Namespace: ns,
+		Module:   *moduleRef,
+		Metadata: md,
+		Deps:     deps,
 	}, nil
 }

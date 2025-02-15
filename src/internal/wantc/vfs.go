@@ -63,11 +63,11 @@ func (v *VFS) nodePath(ks stringsets.Set) []string {
 }
 
 type VFSEntry struct {
-	K          stringsets.Set
-	V          Expr
-	DefinedIn  string
-	DefinedNum int
-	IsExport   bool
+	K           stringsets.Set
+	V           Expr
+	IsSubmodule bool
+	DefinedIn   string
+	DefinedNum  int
 }
 
 type vfsNode struct {

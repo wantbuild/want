@@ -82,7 +82,7 @@ type goConfig struct {
 }
 
 func (e *Executor) newCommand(ctx context.Context, cfg goConfig, args ...string) *exec.Cmd {
-	goRoot := filepath.Join(e.installDir)
+	goRoot := e.installDir
 	cmd := exec.CommandContext(ctx, filepath.Join(goRoot, "bin", "go"), args...)
 	cmd.Env = []string{
 		"PATH=/usr/bin/",

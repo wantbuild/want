@@ -35,8 +35,8 @@ func (c *Compiler) CompileExpr(ctx context.Context, dst cadata.Store, src cadata
 	vm := jsonnet.MakeVM()
 	vm.Importer(&snippetImporter{})
 
-	cs := &compileState{dst: dst, src: src}
-	expr, err := c.compileExpr(ctx, cs, "", x)
+	cc := &compileCtx{ctx: ctx, dst: dst, src: src}
+	expr, err := c.compileExpr(cc, "", x)
 	if err != nil {
 		return nil, err
 	}

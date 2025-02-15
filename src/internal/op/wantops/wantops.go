@@ -3,11 +3,10 @@ package wantops
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
-	"golang.org/x/sync/errgroup"
 
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/stores"
@@ -37,7 +36,25 @@ func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]
 	switch x.Op {
 	case OpBuild:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
-			return e.Build(jc, src, x)
+			buildTask, err := GetBuildTask(ctx, src, x)
+			if err != nil {
+				return nil, err
+			}
+			defer jc.InfoSpan("build")()
+			ctx := jc.Context
+
+			br, err := e.Build(jc, src, *buildTask)
+			if err != nil {
+				return nil, err
+			}
+			outRef, err := PostBuildResult(ctx, jc.Dst, *br)
+			if err != nil {
+				return nil, err
+			}
+			if br.ErrorCount() > 0 {
+				err = errors.New("errors occured")
+			}
+			return outRef, err
 		})
 	case OpCompile:
 		return glfstasks.Exec(x.Input, func(x glfs.Ref) (*glfs.Ref, error) {
@@ -50,104 +67,6 @@ func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]
 	default:
 		return nil, wantjob.NewErrUnknownOperator(x.Op)
 	}
-}
-
-func (e Executor) Build(jc wantjob.Ctx, src cadata.Getter, x glfs.Ref) (*glfs.Ref, error) {
-	defer jc.InfoSpan("build")()
-	ctx := jc.Context
-	buildTask, err := GetBuildTask(ctx, src, x)
-	if err != nil {
-		return nil, err
-	}
-	deps := make(map[wantc.ModuleID]glfs.Ref)
-	nss := make(map[wantc.ModuleID]wantc.Namespace)
-	if err := dependencyClosure(ctx, src, buildTask.Main, deps, nss, func(expr wantcfg.Expr) (*glfs.Ref, error) {
-		return e.EvalExpr(jc, src, expr)
-	}); err != nil {
-		return nil, err
-	}
-	delete(deps, wantc.NewModuleID(buildTask.Main))
-	jc.Infof("prepared %d dependencies", len(deps))
-	// plan
-	plan, planStore, err := DoCompile(ctx, jc.System, e.CompileOp, stores.Union{jc.Dst, src}, wantc.CompileTask{
-		Module:    buildTask.Main,
-		Metadata:  buildTask.Metadata,
-		Namespace: nss[wantc.NewModuleID(buildTask.Main)],
-		Deps:      deps,
-	})
-	if err != nil {
-		return nil, err
-	}
-	// filter targets
-	var targets []wantc.Target
-	var dags []glfs.Ref
-	for _, target := range plan.Targets {
-		if wantc.Intersects(target.To, buildTask.Query) {
-			targets = append(targets, target)
-			dags = append(dags, target.DAG)
-		}
-	}
-	// execute
-	var errorsOccured bool
-	results := make([]wantjob.Result, len(dags))
-	src2 := stores.Union{src, jc.Dst, planStore}
-	eg := errgroup.Group{}
-	for i := range dags {
-		i := i
-		eg.Go(func() error {
-			defer jc.InfoSpan("build " + targets[i].DefinedIn)()
-			res, dagStore, err := wantjob.Do(ctx, jc.System, src2, wantjob.Task{
-				Op:    e.DAGExecOp,
-				Input: glfstasks.MarshalGLFSRef(dags[i]),
-			})
-			if err != nil {
-				return err
-			}
-			errorsOccured = errorsOccured || res.ErrCode > 0
-			if ref, err := glfstasks.ParseGLFSRef(res.Data); err == nil {
-				if err := glfstasks.FastSync(ctx, jc.Dst, dagStore, *ref); err != nil {
-					return err
-				}
-			}
-			results[i] = *res
-			return nil
-		})
-	}
-	if err := eg.Wait(); err != nil {
-		return nil, err
-	}
-
-	groundRef, err := wantc.Select(ctx, jc.Dst, src2, plan.Known, buildTask.Query)
-	if err != nil {
-		return nil, err
-	}
-	layers := []glfs.Ref{*groundRef}
-	for i := range targets {
-		if ref, err := glfstasks.ParseGLFSRef(results[i].Data); err == nil {
-			layers = append(layers, *ref)
-		}
-	}
-	outRef, err := glfs.Merge(ctx, jc.Dst, src2, layers...)
-	if err != nil {
-		return nil, err
-	}
-	if err := wantc.SyncPlan(ctx, jc.Dst, src2, *plan); err != nil {
-		return nil, err
-	}
-	br, err := PostBuildResult(ctx, jc.Dst, BuildResult{
-		Query:         buildTask.Query,
-		Plan:          *plan,
-		Targets:       targets,
-		TargetResults: results,
-		Output:        outRef,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if errorsOccured {
-		err = fmt.Errorf("build failed")
-	}
-	return br, err
 }
 
 func (e Executor) Compile(jc wantjob.Ctx, s cadata.Getter, x glfs.Ref) (*glfs.Ref, error) {
@@ -181,7 +100,7 @@ func (e Executor) CompileSnippet(ctx context.Context, dst cadata.Store, s cadata
 
 func DoCompile(ctx context.Context, sys wantjob.System, compileOp wantjob.OpName, src cadata.Getter, ct wantc.CompileTask) (*wantc.Plan, cadata.Getter, error) {
 	scratch := stores.NewMem()
-	for _, ref := range ct.Namespace {
+	for _, ref := range ct.Deps {
 		if err := glfs.Sync(ctx, scratch, src, ref); err != nil {
 			return nil, nil, err
 		}
@@ -222,29 +141,24 @@ func (e Executor) EvalExpr(jc wantjob.Ctx, src cadata.Getter, expr wantcfg.Expr)
 	return outRef, nil
 }
 
-func dependencyClosure(ctx context.Context, src cadata.Getter, modRef glfs.Ref, deps map[wantc.ModuleID]glfs.Ref, nss map[wantc.ModuleID]wantc.Namespace, eval func(wantcfg.Expr) (*glfs.Ref, error)) error {
-	modid := wantc.NewModuleID(modRef)
-	if _, exists := deps[modid]; exists {
-		return nil
-	}
+func dependencyClosure(ctx context.Context, src cadata.Getter, modRef glfs.Ref, deps map[wantc.ExprID]glfs.Ref, eval func(wantcfg.Expr) (*glfs.Ref, error)) error {
 	if modRef.Type == glfs.TypeTree {
 		modCfg, err := wantc.GetModuleConfig(ctx, src, modRef)
 		if err != nil {
 			return err
 		}
-		nss[modid] = make(wantc.Namespace)
-		for name, expr := range modCfg.Namespace {
+		for _, expr := range modCfg.Namespace {
+			eid := wantc.NewExprID(expr)
+			deps[eid] = modRef
 			ref, err := eval(expr)
 			if err != nil {
 				return err
 			}
-			if err := dependencyClosure(ctx, src, *ref, deps, nss, eval); err != nil {
+			if err := dependencyClosure(ctx, src, *ref, deps, eval); err != nil {
 				return err
 			}
-			ns := nss[modRef.CID]
-			ns[name] = *ref
+			deps[eid] = *ref
 		}
 	}
-	deps[modid] = modRef
 	return nil
 }

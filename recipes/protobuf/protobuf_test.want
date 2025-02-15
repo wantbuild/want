@@ -1,5 +1,5 @@
 local want = import "@want";
-local wassert = import "recipes/assert.libsonnet";
+local wassert = import "assert.libsonnet";
 local protobuf = import "./protobuf.libsonnet";
 
 local exampleProto = |||

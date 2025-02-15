@@ -104,8 +104,8 @@ func TestCompile(t *testing.T) {
 		// Name of the test (optional)
 		Name string
 		// Module is the mod
-		Module    glfs.Ref
-		Namespace Namespace
+		Module glfs.Ref
+		Deps   map[ExprID]glfs.Ref
 
 		// If not nil, check that the actual targets match these expected targets
 		Targets []Target
@@ -119,7 +119,9 @@ func TestCompile(t *testing.T) {
 			Module: testutil.PostFSStr(t, src, map[string]string{
 				"WANT": "{}",
 			}),
-			Known: ptrTo(testutil.PostTree(t, src, nil)),
+			Known: ptrTo(testutil.PostFSStr(t, src, map[string]string{
+				"WANT": "{}",
+			})),
 		},
 		{
 			Name: "GROUND",
@@ -130,7 +132,9 @@ func TestCompile(t *testing.T) {
 					want.select(GROUND, want.unit("WANT"))
 				`,
 			}),
-			Namespace: map[string]glfs.Ref{"want": testutil.PostBlob(t, src, []byte(LibWant()))},
+			Deps: map[ExprID]glfs.Ref{
+				NewExprID(wantcfg.Expr{Blob: ptrTo(LibWant())}): testutil.PostBlob(t, src, []byte(LibWant())),
+			},
 		},
 		{
 			Name: "DERIVED",
@@ -142,9 +146,12 @@ func TestCompile(t *testing.T) {
 					want.select(DERIVED, want.unit("test.text"))
 				`,
 			}),
-			Namespace: map[string]glfs.Ref{"want": testutil.PostBlob(t, src, []byte(LibWant()))},
+			Deps: map[ExprID]glfs.Ref{
+				NewExprID(wantcfg.Expr{Blob: ptrTo(LibWant())}): testutil.PostBlob(t, src, []byte(LibWant())),
+			},
 
 			Known: ptrTo(testutil.PostFSStr(t, src, map[string]string{
+				"WANT":     `{namespace: {want: {blob: importstr "@want"} } }`,
 				"test.txt": "foo",
 			})),
 		},
@@ -162,14 +169,24 @@ func TestCompile(t *testing.T) {
 			Err: ErrMissingDep{Name: "name1"},
 		},
 		{
-			Name: "ErrExtraDep",
+			Name: "2Modules1Dep",
 			Module: testutil.PostFSStr(t, src, map[string]string{
-				"WANT": `{}`,
+				"WANT": `local want = import "@want";
+				{
+					"namespace": {
+						"want": want.blob(importstr "@want"),
+					},
+				}`,
+				"sub1/WANT": `local want = import "@want";
+				{
+					"namespace": {
+						"want": want.blob(importstr "@want"),
+					},
+				}`,
 			}),
-			Namespace: map[string]glfs.Ref{
-				"name1": testutil.PostBlob(t, src, nil),
+			Deps: map[ExprID]glfs.Ref{
+				NewExprID(wantcfg.Expr{Blob: ptrTo(LibWant())}): testutil.PostBlob(t, src, []byte(LibWant())),
 			},
-			Err: ErrExtraDep{Name: "name1"},
 		},
 	}
 
@@ -178,7 +195,7 @@ func TestCompile(t *testing.T) {
 			ctx := testutil.Context(t)
 			c := NewCompiler()
 			dst := stores.NewMem()
-			plan, err := c.Compile(ctx, dst, src, CompileTask{Module: tc.Module, Namespace: tc.Namespace})
+			plan, err := c.Compile(ctx, dst, src, CompileTask{Module: tc.Module, Deps: tc.Deps})
 			if tc.Err != nil {
 				require.ErrorIs(t, err, tc.Err)
 			} else {

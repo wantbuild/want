@@ -1,0 +1,7 @@
+local want = import "@want";
+
+{
+    "namespace": {
+        "want": want.blob(importstr "@want"),
+    },
+}

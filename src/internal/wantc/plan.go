@@ -34,8 +34,6 @@ type Target struct {
 	IsStatement bool `json:"is_statement"`
 	// If the Target is defined in a statement file, this will be the statement number
 	DefinedNum int `json:"defined_num"`
-	// IsExport is true when the file should be exported.
-	IsExport bool `json:"is_export"`
 }
 
 func (t Target) BoundingPrefix() string {

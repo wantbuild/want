@@ -1,8 +1,8 @@
 local want = import "@want";
 local nodejs = import "./nodejs.libsonnet";
-local linux = import "recipes/linux/linux.libsonnet";
-local oci = import "recipes/oci.libsonnet";
-local wassert = import "recipes/assert.libsonnet";
+local linux = import "linux/linux.libsonnet";
+local oci = import "oci.libsonnet";
+local wassert = import "assert.libsonnet";
 
 local testProg = want.blob(|||
     console.log("Hello World");

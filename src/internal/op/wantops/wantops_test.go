@@ -39,9 +39,9 @@ func TestPostGetCompileTask(t *testing.T) {
 	modRef, err := glfs.PostTreeSlice(ctx, s, nil)
 	require.NoError(t, err)
 	x := wantc.CompileTask{
-		Module:    *modRef,
-		Metadata:  map[string]any{"abc": "123"},
-		Namespace: wantc.Namespace{},
+		Module:   *modRef,
+		Metadata: map[string]any{"abc": "123"},
+		Deps:     map[wantc.ExprID]glfs.Ref{},
 	}
 	ref, err := PostCompileTask(ctx, s, x)
 	require.NoError(t, err)

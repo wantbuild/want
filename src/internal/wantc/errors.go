@@ -30,10 +30,12 @@ func (e ErrMissingDep) Error() string {
 	return fmt.Sprintf("module is missing dependency for %v", e.Name)
 }
 
-type ErrExtraDep struct {
-	Name string
+type ErrSubmoduleConflict struct {
+	DefinedIn  string
+	DefinedNum int
+	Submodule  string
 }
 
-func (e ErrExtraDep) Error() string {
-	return fmt.Sprintf("extra dependency %v is not needed", e.Name)
+func (e ErrSubmoduleConflict) Error() string {
+	return fmt.Sprintf("statement %s[%d] outputs to submodule %s", e.DefinedIn, e.DefinedNum, e.Submodule)
 }

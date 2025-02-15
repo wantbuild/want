@@ -1,7 +1,6 @@
 package wantc
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,7 +12,7 @@ import (
 
 // ExprRoot represents a Want expression tree to be evaluated in the build.
 // It will produce >= 1 node in the computation graph.
-type ExprRoot struct {
+type exprRoot struct {
 	spec wantcfg.Expr
 	path string
 
@@ -22,8 +21,8 @@ type ExprRoot struct {
 
 // newExpr creates an *ExprRoot from a spec.
 // If the spec specifies any literals they will be posted to the store.
-func (c *Compiler) parseExprRoot(ctx context.Context, cs *compileState, fqp FQPath) (*ExprRoot, error) {
-	vm := newJsonnetVM(cs.jsImporter, cs.buildCtx)
+func (c *Compiler) parseExprRoot(cc *compileCtx, fqp FQPath) (*exprRoot, error) {
+	vm := newJsonnetVM(cc.jsImporter, cc.buildCtx)
 	fqp.Path = strings.Trim(fqp.Path, "/")
 	jsonStr, err := vm.EvaluateFile(mkJsonnetPath(fqp))
 	if err != nil {
@@ -33,11 +32,11 @@ func (c *Compiler) parseExprRoot(ctx context.Context, cs *compileState, fqp FQPa
 	if err := json.Unmarshal([]byte(jsonStr), &spec); err != nil {
 		return nil, fmt.Errorf("error in stage file %q: %w", fqp.Path, err)
 	}
-	e, err := c.compileExpr(ctx, cs, fqp.Path, spec)
+	e, err := c.compileExpr(cc, fqp.Path, spec)
 	if err != nil {
 		return nil, err
 	}
-	return &ExprRoot{
+	return &exprRoot{
 		spec: spec,
 		path: fqp.Path,
 
@@ -45,19 +44,19 @@ func (c *Compiler) parseExprRoot(ctx context.Context, cs *compileState, fqp FQPa
 	}, nil
 }
 
-func (s *ExprRoot) Affects() stringsets.Set {
+func (s *exprRoot) Affects() stringsets.Set {
 	return stringsets.Union(stringsets.Unit(s.path), stringsets.Prefix(s.path+"/"))
 }
 
-func (s *ExprRoot) Needs() stringsets.Set {
+func (s *exprRoot) Needs() stringsets.Set {
 	return s.expr.Needs()
 }
 
-func (s *ExprRoot) String() string {
+func (s *exprRoot) String() string {
 	return fmt.Sprintf("Expr{%s}", s.path)
 }
 
-func (s *ExprRoot) Pretty(w io.Writer) string {
+func (s *exprRoot) Pretty(w io.Writer) string {
 	sb := strings.Builder{}
 	if err := s.PrettyPrint(&sb); err != nil {
 		panic(err)
@@ -65,10 +64,10 @@ func (s *ExprRoot) Pretty(w io.Writer) string {
 	return sb.String()
 }
 
-func (s *ExprRoot) PrettyPrint(w io.Writer) error {
+func (s *exprRoot) PrettyPrint(w io.Writer) error {
 	return s.expr.PrettyPrint(w)
 }
 
-func (s *ExprRoot) Path() string {
+func (s *exprRoot) Path() string {
 	return s.path
 }

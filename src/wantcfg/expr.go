@@ -14,18 +14,20 @@ type TreeEntry struct {
 	Value Expr        `json:"value"`
 }
 
-type Ref = glfs.Ref
-
 type Expr struct {
 	Blob      *string    `json:"blob,omitempty"`
 	Tree      Tree       `json:"tree,omitempty"`
-	Ref       *Ref       `json:"ref,omitempty"`
+	Ref       *glfs.Ref  `json:"ref,omitempty"`
 	Compute   *Compute   `json:"compute,omitempty"`
 	Selection *Selection `json:"selection,omitempty"`
 }
 
 func Blob(x string) Expr {
 	return Expr{Blob: &x}
+}
+
+func Literal(x glfs.Ref) Expr {
+	return Expr{Ref: &x}
 }
 
 func (e Expr) IsValue() bool {

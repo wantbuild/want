@@ -7,6 +7,7 @@ local want = import "@want";
   ignore: want.union([
       want.prefix("build/out"),
       want.unit(".git"),
-      want.prefix(".git/")
+      want.prefix(".git/"),
+      want.prefix("src/internal/op/qemuops/testcache"),
   ]),
 }

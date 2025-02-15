@@ -1,7 +1,6 @@
 package wantc
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
@@ -11,15 +10,15 @@ import (
 	"wantbuild.io/want/src/wantcfg"
 )
 
-type StmtSet struct {
+type stmtSet struct {
 	path  string
 	specs []wantcfg.Statement
 
-	stmts []Stmt
+	stmts []*putStmt
 }
 
-func (c *Compiler) parseStmtSet(ctx context.Context, cs *compileState, fqp FQPath) (*StmtSet, error) {
-	vm := newJsonnetVM(cs.jsImporter, cs.buildCtx)
+func (c *Compiler) parseStmtSet(cc *compileCtx, fqp FQPath) (*stmtSet, error) {
+	vm := newJsonnetVM(cc.jsImporter, cc.buildCtx)
 	jsonStr, err := vm.EvaluateFile(mkJsonnetPath(fqp))
 	if err != nil {
 		return nil, err
@@ -29,13 +28,13 @@ func (c *Compiler) parseStmtSet(ctx context.Context, cs *compileState, fqp FQPat
 		return nil, fmt.Errorf("error in stage file %s: %w", fqp.Path, err)
 	}
 
-	var stmts []Stmt
+	var stmts []*putStmt
 	for _, spec := range specs {
-		var stmt Stmt
+		var stmt *putStmt
 		switch {
 		case spec.Put != nil:
 			ks := SetFromQuery(fqp.Path, spec.Put.Dst)
-			e, err := c.compileExpr(ctx, cs, fqp.Path, spec.Put.Src)
+			e, err := c.compileExpr(cc, fqp.Path, spec.Put.Src)
 			if err != nil {
 				return nil, err
 			}
@@ -48,14 +47,14 @@ func (c *Compiler) parseStmtSet(ctx context.Context, cs *compileState, fqp FQPat
 		}
 		stmts = append(stmts, stmt)
 	}
-	return &StmtSet{
+	return &stmtSet{
 		path:  fqp.Path,
 		specs: specs,
 		stmts: stmts,
 	}, nil
 }
 
-func (sl *StmtSet) Needs() stringsets.Set {
+func (sl *stmtSet) Needs() stringsets.Set {
 	var ss []stringsets.Set
 	for _, spec := range sl.stmts {
 		ss = append(ss, spec.Needs())
@@ -63,7 +62,7 @@ func (sl *StmtSet) Needs() stringsets.Set {
 	return stringsets.Union(ss...)
 }
 
-func (sl *StmtSet) Affects() stringsets.Set {
+func (sl *stmtSet) Affects() stringsets.Set {
 	var ss []stringsets.Set
 	for _, spec := range sl.stmts {
 		ss = append(ss, spec.Affects())
@@ -71,21 +70,10 @@ func (sl *StmtSet) Affects() stringsets.Set {
 	return stringsets.Union(ss...)
 }
 
-type Stmt interface {
-	Affects() stringsets.Set
-	Needs() stringsets.Set
-	expr() Expr
-	setExpr(Expr)
-
-	isStmt()
-}
-
 type putStmt struct {
 	Dst stringsets.Set
 	Src Expr
 }
-
-func (*putStmt) isStmt() {}
 
 func (s *putStmt) Affects() stringsets.Set {
 	return s.Dst
@@ -100,28 +88,5 @@ func (s *putStmt) expr() Expr {
 }
 
 func (s *putStmt) setExpr(x Expr) {
-	s.Src = x
-}
-
-type exportStmt struct {
-	Dst stringsets.Set
-	Src Expr
-}
-
-func (*exportStmt) isStmt() {}
-
-func (s *exportStmt) Affects() stringsets.Set {
-	return s.Dst
-}
-
-func (s *exportStmt) Needs() stringsets.Set {
-	return s.Src.Needs()
-}
-
-func (s *exportStmt) expr() Expr {
-	return s.Src
-}
-
-func (s *exportStmt) setExpr(x Expr) {
 	s.Src = x
 }

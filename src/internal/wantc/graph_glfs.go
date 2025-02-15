@@ -37,38 +37,10 @@ func DeriveMerge(g *wantdag.Builder, layers []NodeID) NodeID {
 	return mustDerived(g, "glfs", glfsops.OpMerge, inputs)
 }
 
-func DerivePick(g *wantdag.Builder, x, path NodeID) wantdag.NodeID {
-	return mustDerived(g, "glfs", glfsops.OpPick, []wantdag.NodeInput{
-		{Name: "x", Node: x},
-		{Name: "path", Node: path},
-	})
-}
-
 func DerivePlace(g *wantdag.Builder, x, path NodeID) NodeID {
 	return mustDerived(g, "glfs", glfsops.OpPlace, []NodeInput{
 		{Name: "x", Node: x},
 		{Name: "path", Node: path},
-	})
-}
-
-func DeriveFilter(g *wantdag.Builder, x, filter NodeID) NodeID {
-	return mustDerived(g, "glfs", glfsops.OpFilterPathSet, []NodeInput{
-		{Name: "x", Node: x},
-		{Name: "filter", Node: filter},
-	})
-}
-
-func DeriveChmod(g *wantdag.Builder, x, path NodeID) NodeID {
-	return mustDerived(g, "glfs", glfsops.OpChmod, []NodeInput{
-		{Name: "path", Node: path},
-		{Name: "x", Node: x},
-	})
-}
-
-func DeriveDiff(g *wantdag.Builder, left, right NodeID) NodeID {
-	return mustDerived(g, "glfs", glfsops.OpDiff, []NodeInput{
-		{Name: "left", Node: left},
-		{Name: "right", Node: right},
 	})
 }
 

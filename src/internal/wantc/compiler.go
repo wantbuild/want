@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"maps"
 	"path"
 	"slices"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"wantbuild.io/want/src/internal/op/glfsops"
+	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/stringsets"
 	"wantbuild.io/want/src/internal/wantdag"
 	"wantbuild.io/want/src/wantcfg"
@@ -32,11 +32,6 @@ const (
 
 type Metadata = map[string]any
 
-func AddGitMetadata(buildCtx map[string]any, commitHash string, tags []string) {
-	buildCtx["gitCommitHash"] = commitHash
-	buildCtx["gitTags"] = tags
-}
-
 type Compiler struct {
 	glfs *glfs.Agent
 }
@@ -48,10 +43,9 @@ func NewCompiler() *Compiler {
 }
 
 type CompileTask struct {
-	Metadata  Metadata
-	Module    glfs.Ref
-	Deps      map[ModuleID]glfs.Ref
-	Namespace Namespace
+	Metadata Metadata
+	Module   glfs.Ref
+	Deps     map[ExprID]glfs.Ref
 }
 
 func (c *Compiler) Compile(ctx context.Context, dst cadata.Store, src cadata.Getter, ct CompileTask) (*Plan, error) {
@@ -62,25 +56,30 @@ func (c *Compiler) Compile(ctx context.Context, dst cadata.Store, src cadata.Get
 	if !isMod {
 		return nil, fmt.Errorf("not a want module")
 	}
-	return c.compileModule(ctx, dst, src, ct.Metadata, ct.Module, ct.Namespace, ct.Deps)
+	return c.compileModule(ctx, dst, src, ct.Metadata, ct.Module, ct.Deps)
 }
 
-// compileState holds the state for a single run of the compiler
-type compileState struct {
+// compileCtx holds the state for a single run of the compiler
+type compileCtx struct {
+	ctx      context.Context
 	src      cadata.Getter
 	dst      cadata.Store
 	buildCtx Metadata
 	ground   glfs.Ref
+	deps     map[ExprID]glfs.Ref
 
 	jsImporter   *jsImporter
 	vpMu         sync.Mutex
 	visitedPaths map[string]chan struct{}
 	vfsMu        sync.Mutex
 	vfs          *VFS
-	erMu         sync.Mutex
-	exprRoots    []*ExprRoot
-	ssMu         sync.Mutex
-	stmtSets     []*StmtSet
+
+	erMu      sync.Mutex
+	exprRoots []*exprRoot
+	ssMu      sync.Mutex
+	stmtSets  []*stmtSet
+	smMu      sync.Mutex
+	subMods   []submodule
 
 	knownMu  sync.Mutex
 	known    []glfs.TreeEntry
@@ -88,7 +87,7 @@ type compileState struct {
 	targets  []Target
 }
 
-func (cs *compileState) claimPath(p string) bool {
+func (cs *compileCtx) claimPath(p string) bool {
 	cs.vpMu.Lock()
 	defer cs.vpMu.Unlock()
 	_, exists := cs.visitedPaths[p]
@@ -100,7 +99,7 @@ func (cs *compileState) claimPath(p string) bool {
 	}
 }
 
-func (cs *compileState) awaitPath(ctx context.Context, p string) error {
+func (cs *compileCtx) awaitPath(ctx context.Context, p string) error {
 	cs.vpMu.Lock()
 	ch, exists := cs.visitedPaths[p]
 	if !exists {
@@ -115,112 +114,87 @@ func (cs *compileState) awaitPath(ctx context.Context, p string) error {
 	}
 }
 
-func (cs *compileState) donePath(p string) {
+func (cs *compileCtx) donePath(p string) {
 	cs.vpMu.Lock()
 	ch := cs.visitedPaths[p]
 	cs.vpMu.Unlock()
 	close(ch)
 }
 
-func (cs *compileState) appendExprRoot(er *ExprRoot) {
+func (cs *compileCtx) appendExprRoot(er *exprRoot) {
 	cs.erMu.Lock()
 	defer cs.erMu.Unlock()
 	cs.exprRoots = append(cs.exprRoots, er)
 }
 
-func (cs *compileState) appendStmtSet(ss *StmtSet) {
+func (cs *compileCtx) appendStmtSet(ss *stmtSet) {
 	cs.ssMu.Lock()
 	defer cs.ssMu.Unlock()
 	cs.stmtSets = append(cs.stmtSets, ss)
 }
 
-func (cs *compileState) acquireVFS() (*VFS, func()) {
+func (cc *compileCtx) appendSubmodule(sm submodule) {
+	cc.smMu.Lock()
+	defer cc.smMu.Unlock()
+	cc.subMods = append(cc.subMods, sm)
+}
+
+func (cs *compileCtx) acquireVFS() (*VFS, func()) {
 	cs.vfsMu.Lock()
 	return cs.vfs, cs.vfsMu.Unlock
 }
 
-func (c *Compiler) compileModule(ctx context.Context, dst cadata.Store, src cadata.Getter, metadata Metadata, ground glfs.Ref, ns Namespace, deps map[ModuleID]glfs.Ref) (*Plan, error) {
+func (c *Compiler) compileModule(ctx context.Context, dst cadata.Store, src cadata.Getter, metadata Metadata, ground glfs.Ref, deps map[ModuleID]glfs.Ref) (*Plan, error) {
 	cfg, err := GetModuleConfig(ctx, src, ground)
 	if err != nil {
 		return nil, err
 	}
-	// check namespace
-	for name := range cfg.Namespace {
-		if _, exists := ns[name]; !exists {
+	for name, expr := range cfg.Namespace {
+		eid := NewExprID(expr)
+		if _, exists := deps[eid]; !exists {
 			return nil, ErrMissingDep{Name: name}
 		}
 	}
-	for name := range ns {
-		if _, exists := cfg.Namespace[name]; !exists {
-			return nil, ErrExtraDep{Name: name}
-		}
+	jsCtx, err := newJsonnetCtx(ctx, src, ground, deps)
+	if err != nil {
+		return nil, err
 	}
-	deps = maps.Clone(deps)
-	if deps == nil {
-		deps = make(map[cadata.ID]glfs.Ref)
+	modIdx := map[ModuleID]glfs.Ref{}
+	for modRef := range jsCtx.AllModules() {
+		modIdx[NewModuleID(modRef)] = modRef
 	}
-	for _, ref := range ns {
-		if ref.Type != glfs.TypeTree {
-			deps[NewModuleID(ref)] = ref
-		}
-	}
-	if _, exists := deps[NewModuleID(ground)]; exists {
-		// This is a bug in the want.build Operation
-		return nil, fmt.Errorf("module deps must not contain the main module")
-	}
-	cs := &compileState{
-		src:          src,
-		dst:          dst,
-		buildCtx:     metadata,
-		ground:       ground,
+	cs := &compileCtx{
+		ctx:      ctx,
+		src:      src,
+		dst:      dst,
+		buildCtx: metadata,
+		ground:   ground,
+		deps:     deps,
+
 		vfs:          &VFS{},
 		visitedPaths: make(map[string]chan struct{}),
-		jsImporter: newImporter(func(modid ModuleID, k string) (ModuleID, error) {
-			if modid == ground.CID {
-				if dep, ok := ns[k]; ok {
-					return dep.CID, nil
-				} else {
-					return ModuleID{}, fmt.Errorf("%v not found in namespace", k)
-				}
+		jsImporter: newImporter(jsCtx, func(fqp FQPath) ([]byte, error) {
+			modRef, exists := modIdx[fqp.Module]
+			if !exists {
+				return nil, fmt.Errorf("cannot find module %v to import path %v", fqp.Module, fqp.Path)
 			}
-			// TODO: need to also resolve namespace entries in dependency modules
-			return ModuleID{}, fmt.Errorf("cannot resolve %v", modid)
-		},
-			func(fqp FQPath) ([]byte, error) {
-				modRef, exists := deps[fqp.ModuleID]
-				if !exists && fqp.ModuleID == NewModuleID(ground) {
-					modRef = ground
-				} else if !exists {
-					return nil, fmt.Errorf("cannot find module %v to import path %v", fqp.ModuleID, fqp.Path)
-				}
-				p := fqp.Path
-				if after, yes := strings.CutPrefix(p, "@"); yes {
-					parts := strings.SplitN(after, "/", 2)
-					modRef = ns[parts[0]]
-					if len(parts) > 1 {
-						p = parts[1]
-					} else {
-						p = ""
-					}
-				}
-				ref := &modRef
-				if p != "" {
-					ref, err = c.glfs.GetAtPath(ctx, src, *ref, p)
-					if err != nil {
-						return nil, err
-					}
-				}
-				return c.glfs.GetBlobBytes(ctx, src, *ref, MaxJsonnetFileSize)
-			}),
+			ref := &modRef
+			ref, err = c.glfs.GetAtPath(ctx, stores.Union{dst, src}, *ref, fqp.Path)
+			if err != nil {
+				return nil, err
+			}
+			return c.glfs.GetBlobBytes(ctx, stores.Union{dst, src}, *ref, MaxJsonnetFileSize)
+		}),
 	}
-	for _, f := range []func(context.Context, *compileState) error{
+	for _, f := range []func(cc *compileCtx) error{
 		c.addSourceFiles,
+		c.checkStmts,
 		c.detectCycles,
 		c.lowerSelections,
 		c.makeTargets,
 		c.makeKnown,
 	} {
-		if err := f(ctx, cs); err != nil {
+		if err := f(cs); err != nil {
 			return nil, err
 		}
 	}
@@ -230,135 +204,155 @@ func (c *Compiler) compileModule(ctx context.Context, dst cadata.Store, src cada
 	}, nil
 }
 
-func (c *Compiler) addSourceFiles(ctx context.Context, cs *compileState) error {
-	defer logStep(ctx, "adding source files")()
-	eg, _ := errgroup.WithContext(ctx)
-	if err := c.addSourceFile(ctx, cs, eg, "", 0o777, cs.ground); err != nil {
+func (c *Compiler) addSourceFiles(cc *compileCtx) error {
+	defer logStep(cc.ctx, "adding source files")()
+	eg, _ := errgroup.WithContext(cc.ctx)
+	if err := c.addSourceFile(cc, eg, "", 0o777, cc.ground); err != nil {
 		return err
 	}
 	return eg.Wait()
 }
 
-func (c *Compiler) addSourceFile(ctx context.Context, cs *compileState, eg *errgroup.Group, p string, mode fs.FileMode, ref glfs.Ref) error {
-	if gotIt := cs.claimPath(p); !gotIt {
-		return cs.awaitPath(ctx, p)
+func (c *Compiler) addSourceFile(cc *compileCtx, eg *errgroup.Group, p string, mode fs.FileMode, ref glfs.Ref) error {
+	if gotIt := cc.claimPath(p); !gotIt {
+		return cc.awaitPath(cc.ctx, p)
 	}
-	defer cs.donePath(p)
+	defer cc.donePath(p)
 	switch ref.Type {
 	case glfs.TypeTree:
-		tree, err := c.glfs.GetTreeSlice(ctx, cs.src, ref, 1e6)
+		tree, err := c.glfs.GetTreeSlice(cc.ctx, cc.src, ref, 1e6)
 		if err != nil {
 			return err
-		}
-		if p != "" {
-			if isMod, err := IsModule(ctx, cs.src, ref); err != nil {
-				return err
-			} else if isMod {
-				return fmt.Errorf("submodules not yet supported.  Found submodule at path %s", p)
-			}
 		}
 		for _, ent := range tree {
 			ent := ent
 			p2 := path.Join(p, ent.Name)
-			eg.Go(func() error {
-				return c.addSourceFile(ctx, cs, eg, p2, ent.FileMode, ent.Ref)
-			})
+			if isMod, err := IsModule(cc.ctx, cc.src, ent.Ref); err != nil {
+				return err
+			} else if isMod {
+				eg.Go(func() error {
+					return c.addSubmodule(cc, eg, p2, ent.FileMode, ent.Ref)
+				})
+			} else {
+				eg.Go(func() error {
+					return c.addSourceFile(cc, eg, p2, ent.FileMode, ent.Ref)
+				})
+			}
 		}
 
 	case glfs.TypeBlob:
 		ks := stringsets.Unit(p)
 		switch {
-		case p == "WANT":
-			// Drop the project configuration file from the build.
 		case IsExprFilePath(p):
-			return c.loadExpr(ctx, cs, p)
+			return c.loadExprFile(cc, p)
 		case IsStmtFilePath(p):
-			return c.loadStmt(ctx, cs, p)
+			return c.loadStmtFile(cc, p)
 		default:
-			if err := glfs.Sync(ctx, cs.dst, cs.src, ref); err != nil {
+			if err := glfs.Sync(cc.ctx, cc.dst, cc.src, ref); err != nil {
 				return err
 			}
-			cs.knownMu.Lock()
-			cs.known = append(cs.known, glfs.TreeEntry{
+			cc.knownMu.Lock()
+			cc.known = append(cc.known, glfs.TreeEntry{
 				Name:     p,
 				FileMode: mode,
 				Ref:      ref,
 			})
-			cs.knownMu.Unlock()
+			cc.knownMu.Unlock()
 		}
-		vfs, rel := cs.acquireVFS()
+		vfs, rel := cc.acquireVFS()
 		defer rel()
-		if !isExportAt(vfs, ks) {
-			return vfs.Add(VFSEntry{
-				K: ks,
-				V: &value{ref: ref},
-			})
-		}
+		return vfs.Add(VFSEntry{
+			K: ks,
+			V: &value{ref: ref},
+		})
 	}
 	return nil
 }
 
-func (c *Compiler) loadExpr(ctx context.Context, cs *compileState, p string) error {
-	fqp := FQPath{ModuleID: cs.ground.CID, Path: p}
-	er, err := c.parseExprRoot(ctx, cs, fqp)
+func (c *Compiler) addSubmodule(cc *compileCtx, eg *errgroup.Group, p string, mode fs.FileMode, modRef glfs.Ref) error {
+	sm := newSubmodule(p, modRef)
+	cc.appendSubmodule(sm)
+	return c.addSourceFile(cc, eg, p, mode, modRef)
+}
+
+func (c *Compiler) loadExprFile(cc *compileCtx, p string) error {
+	fqp := FQPath{Module: cc.ground.CID, Path: p}
+	er, err := c.parseExprRoot(cc, fqp)
 	if err != nil {
 		return err
 	}
 	ks := er.Affects()
-	vfs, rel := cs.acquireVFS()
+	vfs, rel := cc.acquireVFS()
 	defer rel()
 	if err := vfs.Add(VFSEntry{K: ks, V: er.expr, DefinedIn: fqp.Path}); err != nil {
 		panic(err)
 	}
-	cs.appendExprRoot(er)
+	cc.appendExprRoot(er)
 	return nil
 }
 
-func (c *Compiler) loadStmt(ctx context.Context, cs *compileState, p string) error {
-	fqp := FQPath{ModuleID: cs.ground.CID, Path: p}
-	ss, err := c.parseStmtSet(ctx, cs, fqp)
+func (c *Compiler) loadStmtFile(cc *compileCtx, p string) error {
+	fqp := FQPath{Module: cc.ground.CID, Path: p}
+	ss, err := c.parseStmtSet(cc, fqp)
 	if err != nil {
 		return err
 	}
 	for i, stmt := range ss.stmts {
 		ks := stmt.Affects()
-		allowed := stringsets.Prefix(parentPath(p) + "/")
+		allowed := stringsets.Prefix(strings.TrimLeft(parentPath(p)+"/", "/"))
 		if !stringsets.Subset(ks, allowed) {
 			return fmt.Errorf("statement files can only affect the immediate parent tree and below, but %s affects %v", p, ks)
 		}
-		vfs, rel := cs.acquireVFS()
-		// we can overwrite a single fact, but nothing else.
-		_, isExport := stmt.(*exportStmt)
-		if isExport && isFactAt(vfs, ks) {
-			cs.vfs.Delete(ks)
-		}
-		if err := vfs.Add(VFSEntry{K: ks, V: stmt.expr(), DefinedIn: p, IsExport: isExport}); err != nil {
+		vfs, rel := cc.acquireVFS()
+		if err := vfs.Add(VFSEntry{K: ks, V: stmt.expr(), DefinedIn: p}); err != nil {
 			rel()
 			return fmt.Errorf("statement %d in file %q, outputs to conflicted keyspace %w", i, p, err)
 		}
 		rel()
 	}
-	cs.appendStmtSet(ss)
+	cc.appendStmtSet(ss)
+	return nil
+}
+
+func (c *Compiler) checkStmts(cc *compileCtx) error {
+	defer logStep(cc.ctx, "checking statements")()
+	for _, ss := range cc.stmtSets {
+		for i, stmt := range ss.stmts {
+			for _, sm := range cc.subMods {
+				if strings.HasPrefix(ss.path, sm.p) {
+					continue // if they are in the same submodule, that's OK.
+				}
+				subModSet := stringsets.Prefix(sm.p)
+				if stringsets.Intersects(subModSet, stmt.Dst) {
+					return ErrSubmoduleConflict{
+						DefinedIn:  ss.path,
+						DefinedNum: i,
+						Submodule:  sm.p,
+					}
+				}
+			}
+		}
+	}
 	return nil
 }
 
 // lowerSelections turns all selections in all the expressions into compute and fact
-func (c *Compiler) lowerSelections(ctx context.Context, cs *compileState) error {
-	defer logStep(ctx, "lowering selections")()
+func (c *Compiler) lowerSelections(cc *compileCtx) error {
+	defer logStep(cc.ctx, "lowering selections")()
 	cache := make(map[[32]byte]Expr)
-	vfs, rel := cs.acquireVFS()
+	vfs, rel := cc.acquireVFS()
 	defer rel()
-	for i, er := range cs.exprRoots {
-		e2, err := c.replaceSelections(ctx, cs.dst, cache, vfs, er.expr)
+	for i, er := range cc.exprRoots {
+		e2, err := c.replaceSelections(cc.ctx, cc.dst, cache, vfs, er.expr)
 		if err != nil {
 			return err
 		}
-		cs.exprRoots[i].expr = e2
+		cc.exprRoots[i].expr = e2
 	}
-	for _, ss := range cs.stmtSets {
+	for _, ss := range cc.stmtSets {
 		for _, stmt := range ss.stmts {
 			e1 := stmt.expr()
-			e2, err := c.replaceSelections(ctx, cs.dst, cache, vfs, e1)
+			e2, err := c.replaceSelections(cc.ctx, cc.dst, cache, vfs, e1)
 			if err != nil {
 				return err
 			}
@@ -408,8 +402,8 @@ func (c *Compiler) replaceSelections(ctx context.Context, dst cadata.Store, cach
 	}
 }
 
-func (c *Compiler) detectCycles(ctx context.Context, cs *compileState) error {
-	defer logStep(ctx, "detecting cycles")()
+func (c *Compiler) detectCycles(cc *compileCtx) error {
+	defer logStep(cc.ctx, "detecting cycles")()
 	visited := make(map[string]struct{})
 	current := make(map[string]struct{})
 	var path []string
@@ -445,7 +439,7 @@ func (c *Compiler) detectCycles(ctx context.Context, cs *compileState) error {
 		path = append(path, x.String())
 		defer delete(current, x.String())
 		defer func() { path = path[:len(path)-1] }()
-		for _, ent := range cs.vfs.Get(x) {
+		for _, ent := range cc.vfs.Get(x) {
 			if !traverseExpr(ent.V) {
 				return false
 			}
@@ -460,14 +454,14 @@ func (c *Compiler) detectCycles(ctx context.Context, cs *compileState) error {
 		}
 		return nil
 	}
-	for _, er := range cs.exprRoots {
+	for _, er := range cc.exprRoots {
 		if !traverseExpr(er.expr) {
 			if err := check(); err != nil {
 				return err
 			}
 		}
 	}
-	for _, ss := range cs.stmtSets {
+	for _, ss := range cc.stmtSets {
 		for _, stmt := range ss.stmts {
 			if !traverseExpr(stmt.expr()) {
 				if err := check(); err != nil {
@@ -479,13 +473,13 @@ func (c *Compiler) detectCycles(ctx context.Context, cs *compileState) error {
 	return check()
 }
 
-func (c *Compiler) makeTargets(ctx context.Context, cs *compileState) error {
-	defer logStep(ctx, "making graph")()
+func (c *Compiler) makeTargets(cc *compileCtx) error {
+	defer logStep(cc.ctx, "making graph")()
 	var targets []Target
 
 	// ExprRoots
-	for _, er := range cs.exprRoots {
-		dag, err := c.makeGraphFromExpr(ctx, cs.dst, cs.src, er.expr, er.path)
+	for _, er := range cc.exprRoots {
+		dag, err := c.makeGraphFromExpr(cc.ctx, cc.dst, cc.src, er.expr, er.path)
 		if err != nil {
 			return err
 		}
@@ -499,15 +493,14 @@ func (c *Compiler) makeTargets(ctx context.Context, cs *compileState) error {
 	}
 
 	// StmtSets
-	for _, ss := range cs.stmtSets {
+	for _, ss := range cc.stmtSets {
 		for i, stmt := range ss.stmts {
 			aff := stmt.Affects()
 			placeAt := stringsets.BoundingPrefix(aff)
-			dag, err := c.makeGraphFromExpr(ctx, cs.dst, cs.src, stmt.expr(), placeAt)
+			dag, err := c.makeGraphFromExpr(cc.ctx, cc.dst, cc.src, stmt.expr(), placeAt)
 			if err != nil {
 				return err
 			}
-			_, isExport := stmt.(*exportStmt)
 			to := makePathSet(stmt.Affects())
 			targets = append(targets, Target{
 				To:   to,
@@ -517,17 +510,17 @@ func (c *Compiler) makeTargets(ctx context.Context, cs *compileState) error {
 				IsStatement: true,
 				DefinedIn:   ss.path,
 				DefinedNum:  i,
-				IsExport:    isExport,
 			})
 		}
 	}
+
 	slices.SortFunc(targets, func(a, b Target) int {
 		if a.DefinedIn != b.DefinedIn {
 			return strings.Compare(a.DefinedIn, b.DefinedIn)
 		}
 		return a.DefinedNum - b.DefinedNum
 	})
-	cs.targets = targets
+	cc.targets = targets
 	return nil
 }
 
@@ -543,20 +536,20 @@ func (c *Compiler) makeGraphFromExpr(ctx context.Context, dst cadata.Store, src 
 	return wantdag.PostDAG(ctx, dst, gb.Finish())
 }
 
-func (c *Compiler) makeKnown(ctx context.Context, cs *compileState) error {
-	cs.knownMu.Lock()
-	defer cs.knownMu.Unlock()
-	slices.SortFunc(cs.known, func(a, b glfs.TreeEntry) int {
+func (c *Compiler) makeKnown(cc *compileCtx) error {
+	cc.knownMu.Lock()
+	defer cc.knownMu.Unlock()
+	slices.SortFunc(cc.known, func(a, b glfs.TreeEntry) int {
 		return strings.Compare(a.Name, b.Name)
 	})
-	ref, err := c.glfs.PostTreeSlice(ctx, cs.dst, cs.known)
+	ref, err := c.glfs.PostTreeSlice(cc.ctx, cc.dst, cc.known)
 	if err != nil {
 		return err
 	}
-	if err := glfs.Sync(ctx, cs.dst, cs.src, *ref); err != nil {
+	if err := glfs.Sync(cc.ctx, cc.dst, cc.src, *ref); err != nil {
 		return err
 	}
-	cs.knownRef = ref
+	cc.knownRef = ref
 	return nil
 }
 
@@ -622,21 +615,16 @@ func parentPath(p string) string {
 	return glfs.CleanPath(strings.Join(parts[:len(parts)-1], "/"))
 }
 
-func isExportAt(vfs *VFS, ks stringsets.Set) bool {
-	ents := vfs.Get(ks)
-	return len(ents) == 1 && ents[0].IsExport
-}
-
-func isFactAt(vfs *VFS, ks stringsets.Set) bool {
-	ents := vfs.Get(ks)
-	if len(ents) == 1 {
-		_, ok := ents[0].V.(*value)
-		return ok
-	}
-	return false
-}
-
 func logStep(ctx context.Context, step string) func() {
 	logctx.Debugf(ctx, "%s: begin", step)
 	return func() { logctx.Debugf(ctx, "%s: done", step) }
+}
+
+type submodule struct {
+	p    string
+	root glfs.Ref
+}
+
+func newSubmodule(p string, root glfs.Ref) submodule {
+	return submodule{p: p, root: root}
 }

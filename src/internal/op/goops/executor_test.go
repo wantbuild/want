@@ -3,6 +3,7 @@ package goops
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -91,16 +92,22 @@ func TestTest2JSON(t *testing.T) {
 func setupTest(t testing.TB) (wantjob.Ctx, cadata.Store, *Executor) {
 	ctx := testutil.Context(t)
 	s := stores.NewMem()
-	installDir := t.TempDir()
+	installDir := filepath.Join(os.TempDir(), "want-test-goroot")
 
 	jsys := wantjob.NewMem(ctx, wantsetup.NewExecutor())
-	err := wantsetup.Install(ctx, jsys, installDir, InstallSnippet())
-	require.NoError(t, err)
+	if _, err := os.Stat(installDir); err != nil && !os.IsNotExist(err) {
+		require.NoError(t, err)
+	} else if err != nil {
+		t.Log("installing into", installDir)
+		require.NoError(t, os.MkdirAll(installDir, 0o755))
+		err := wantsetup.Install(ctx, jsys, installDir, InstallSnippet())
+		require.NoError(t, err)
+	}
 
-	e := NewExecutor(installDir)
 	newWriter := func(string) io.Writer {
 		return os.Stderr
 	}
+	e := NewExecutor(installDir)
 	return wantjob.Ctx{Context: ctx, Dst: s, System: jsys, Writer: newWriter}, s, e
 }
 

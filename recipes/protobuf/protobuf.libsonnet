@@ -1,7 +1,7 @@
 local want = import "@want";
-local linux = import "recipes/linux/linux.libsonnet";
-local alpine = import "recipes/alpine/alpine.libsonnet";
-local golang = import "recipes/golang/golang.libsonnet";
+local linux = import "linux/linux.libsonnet";
+local alpine = import "alpine/alpine.libsonnet";
+local golang = import "golang/golang.libsonnet";
 
 local dls = {
     "amd64-linux": want.importURL(

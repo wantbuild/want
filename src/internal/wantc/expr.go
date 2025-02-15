@@ -166,28 +166,28 @@ func (v *value) String() string {
 	return sb.String()
 }
 
-func (c *Compiler) compileExpr(ctx context.Context, cs *compileState, exprPath string, x wantcfg.Expr) (Expr, error) {
+func (c *Compiler) compileExpr(cc *compileCtx, exprPath string, x wantcfg.Expr) (Expr, error) {
 	switch {
 	case x.Blob != nil:
-		return c.compileBlob(ctx, cs.dst, *x.Blob)
+		return c.compileBlob(cc.ctx, cc.dst, *x.Blob)
 	case x.Tree != nil:
-		return c.compileTree(ctx, cs.dst, cs.src, x.Tree)
+		return c.compileTree(cc.ctx, cc.dst, cc.src, x.Tree)
 	case x.Ref != nil:
-		return c.compileRef(ctx, cs.dst, cs.src, *x.Ref)
+		return c.compileRef(cc.ctx, cc.dst, cc.src, *x.Ref)
 	case x.Compute != nil:
-		return c.compileCompute(ctx, cs, exprPath, *x.Compute)
+		return c.compileCompute(cc, exprPath, *x.Compute)
 	case x.Selection != nil:
 		if exprPath == "" {
 			return nil, errors.New("cannot use selections when compiling snippet expression")
 		}
-		return c.compileSelection(ctx, cs, exprPath, *x.Selection)
+		return c.compileSelection(cc, exprPath, *x.Selection)
 	default:
 		return nil, errors.Errorf("empty wantcfg.Expr at %s", exprPath)
 	}
 }
 
-func (c *Compiler) compileCompute(ctx context.Context, cs *compileState, exprPath string, x wantcfg.Compute) (Expr, error) {
-	inputs, err := c.compileInputs(ctx, cs, exprPath, x.Inputs)
+func (c *Compiler) compileCompute(cc *compileCtx, exprPath string, x wantcfg.Compute) (Expr, error) {
+	inputs, err := c.compileInputs(cc, exprPath, x.Inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +197,7 @@ func (c *Compiler) compileCompute(ctx context.Context, cs *compileState, exprPat
 	}, nil
 }
 
-func (c *Compiler) compileSelection(ctx context.Context, cs *compileState, exprPath string, x wantcfg.Selection) (Expr, error) {
+func (c *Compiler) compileSelection(cc *compileCtx, exprPath string, x wantcfg.Selection) (Expr, error) {
 	var moduleCID cadata.ID
 	if err := moduleCID.UnmarshalBase64([]byte(x.Source.Module)); err != nil {
 		return nil, fmt.Errorf("invalid source: %w", err)
@@ -211,7 +211,7 @@ func (c *Compiler) compileSelection(ctx context.Context, cs *compileState, exprP
 	pick := PathFrom(callerPath, x.Pick)
 
 	switch {
-	case cs.ground.CID == moduleCID && x.Source.Derived:
+	case cc.ground.CID == moduleCID && x.Source.Derived:
 		ks := SetFromQuery(callerPath, x.Query)
 		ks = stringsets.Subtract(ks, stringsets.Unit(callerPath))
 		ks = stringsets.Simplify(ks)
@@ -221,12 +221,12 @@ func (c *Compiler) compileSelection(ctx context.Context, cs *compileState, exprP
 			assertType: glfs.Type(x.AssertType),
 			allowEmpty: x.AllowEmpty,
 		}, nil
-	case cs.ground.CID == moduleCID:
+	case cc.ground.CID == moduleCID:
 		ks := SetFromQuery(callerPath, x.Query)
-		out, err := c.selectFacts(ctx, cs, ks, pick)
+		out, err := c.selectFacts(cc, ks, pick)
 		if err != nil {
 			if x.AllowEmpty && strings.Contains(err.Error(), "no entry at") {
-				emptyDirRef, err := glfs.PostTreeSlice(ctx, cs.dst, nil)
+				emptyDirRef, err := glfs.PostTreeSlice(cc.ctx, cc.dst, nil)
 				if err != nil {
 					return nil, err
 				}
@@ -288,7 +288,8 @@ func (c *Compiler) compileTree(ctx context.Context, dst cadata.Store, src cadata
 	return &value{ref: *ref}, nil
 }
 
-func (c *Compiler) compileRef(ctx context.Context, dst cadata.Store, src cadata.Getter, x wantcfg.Ref) (*value, error) {
+// compileRef compiles a Ref expression, which is essentially a noop, except for the check for referential integrity.
+func (c *Compiler) compileRef(ctx context.Context, dst cadata.Store, src cadata.Getter, x glfs.Ref) (*value, error) {
 	if err := c.glfs.WalkRefs(ctx, src, x, func(ref glfs.Ref) error {
 		yes, err := stores.ExistsOnGet(ctx, src, ref.CID)
 		if err != nil {
@@ -307,9 +308,9 @@ func (c *Compiler) compileRef(ctx context.Context, dst cadata.Store, src cadata.
 	return &value{ref: x}, nil
 }
 
-func (c *Compiler) compileInputs(ctx context.Context, cs *compileState, stagePath string, xs []wantcfg.Input) (ys []computeInput, err error) {
+func (c *Compiler) compileInputs(cc *compileCtx, stagePath string, xs []wantcfg.Input) (ys []computeInput, err error) {
 	for _, x := range xs {
-		n, err := c.compileExpr(ctx, cs, stagePath, x.From)
+		n, err := c.compileExpr(cc, stagePath, x.From)
 		if err != nil {
 			return nil, err
 		}
@@ -323,14 +324,14 @@ func (c *Compiler) compileInputs(ctx context.Context, cs *compileState, stagePat
 	return ys, nil
 }
 
-func (c *Compiler) selectFacts(ctx context.Context, cs *compileState, set stringsets.Set, pick string) (*value, error) {
-	ref, err := glfs.FilterPaths(ctx, cs.dst, cs.src, cs.ground, func(p string) bool {
+func (c *Compiler) selectFacts(cc *compileCtx, set stringsets.Set, pick string) (*value, error) {
+	ref, err := glfs.FilterPaths(cc.ctx, cc.dst, cc.src, cc.ground, func(p string) bool {
 		return set.Contains(p)
 	})
 	if err != nil {
 		return nil, err
 	}
-	ref, err = glfs.GetAtPath(ctx, cs.dst, *ref, pick)
+	ref, err = glfs.GetAtPath(cc.ctx, cc.dst, *ref, pick)
 	if err != nil {
 		return nil, err
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/blobcache/glfs"
 	"github.com/google/go-jsonnet"
 	"go.brendoncarroll.net/state/cadata"
+	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/wantcfg"
 )
 
@@ -18,12 +19,22 @@ func NewModuleID(x glfs.Ref) ModuleID {
 	return x.CID
 }
 
-type FQPath struct {
-	ModuleID ModuleID
-	Path     string
+type ExprID = cadata.ID
+
+func NewExprID(e wantcfg.Expr) ExprID {
+	data, err := json.Marshal(e)
+	if err != nil {
+		panic(err)
+	}
+	return stores.Hash(data)
 }
 
-type Namespace map[string]glfs.Ref
+type FQPath struct {
+	Module ModuleID
+	Path   string
+}
+
+// type Namespace map[string]glfs.Ref
 
 // IsModule returns true if x is valid Want Module.
 func IsModule(ctx context.Context, src cadata.Getter, x glfs.Ref) (bool, error) {

@@ -18,7 +18,6 @@ type PathSet struct {
 }
 
 func (ps PathSet) String() string {
-	// TODO: this is duplicated
 	switch {
 	case ps.Unit != nil:
 		return fmt.Sprintf("{%q}", *ps.Unit)
