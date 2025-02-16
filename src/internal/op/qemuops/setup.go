@@ -1,5 +1,3 @@
-//go:build (amd64 || arm64) && linux
-
 package qemuops
 
 import (

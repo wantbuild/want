@@ -6,6 +6,7 @@ local modSrc = want.selectDir(DERIVED, "./go_src.want");
 local platforms = [
     ["amd64", "linux"],
     ["arm64", "linux"],
+    ["arm64", "darwin"],
 ];
 
 std.map(function(x)
