@@ -484,7 +484,7 @@ func (c *Compiler) makeTargets(cc *compileCtx) error {
 			return err
 		}
 		targets = append(targets, Target{
-			To:   makePathSet(er.Affects()),
+			To:   stringsets.ToPathSet(er.Affects()),
 			DAG:  *dag,
 			Expr: er.spec,
 
@@ -501,7 +501,7 @@ func (c *Compiler) makeTargets(cc *compileCtx) error {
 			if err != nil {
 				return err
 			}
-			to := makePathSet(stmt.Affects())
+			to := stringsets.ToPathSet(stmt.Affects())
 			targets = append(targets, Target{
 				To:   to,
 				DAG:  *dag,

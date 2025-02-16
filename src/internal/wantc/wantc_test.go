@@ -24,7 +24,7 @@ func TestConvertSet(t *testing.T) {
 
 	for _, x := range inputs {
 		y := SetFromQuery("", x)
-		x2 := makePathSet(y)
+		x2 := stringsets.ToPathSet(y)
 		require.Equal(t, x, x2)
 	}
 }

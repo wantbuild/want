@@ -13,7 +13,7 @@ import (
 func PrettyExpr(w io.Writer, x wantcfg.Expr) error {
 	switch {
 	case x.Blob != nil:
-		fmt.Fprintf(w, "(blob %s)", *x.Blob)
+		fmt.Fprintf(w, "(blob)")
 	case x.Tree != nil:
 		return prettyTree(w, x.Tree)
 	case x.Ref != nil:
@@ -41,7 +41,7 @@ func prettyTree(w io.Writer, tree wantcfg.Tree) error {
 		}
 		fmt.Fprintf(w, "\n")
 	}
-	fmt.Fprintf(w, "}")
+	fmt.Fprintf(w, "}\n")
 	return nil
 }
 

@@ -1,8 +1,6 @@
 package stringsets
 
 import (
-	"fmt"
-
 	"go.brendoncarroll.net/exp/maybe"
 )
 
@@ -56,5 +54,5 @@ func (n Not) isDNF() bool {
 }
 
 func (n Not) String() string {
-	return fmt.Sprintf("!%v", n.X)
+	return ToPathSet(n).String()
 }

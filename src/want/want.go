@@ -101,9 +101,8 @@ func (sys *System) JobSystem() wantjob.System {
 	return sys.jobs
 }
 
-func (sys *System) Eval(ctx context.Context, db *sqlx.DB, repo *wantrepo.Repo, calledFrom string, expr []byte) (*glfs.Ref, cadata.Getter, error) {
+func (sys *System) EvalSnippet(ctx context.Context, repo *wantrepo.Repo, calledFrom string, expr []byte) (*glfs.Ref, cadata.Getter, error) {
 	s := stores.NewMem()
-
 	c := wantc.NewCompiler()
 	dag, err := c.CompileSnippet(ctx, s, s, expr)
 	if err != nil {

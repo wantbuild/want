@@ -114,3 +114,24 @@ func FromPathSet(q wantcfg.PathSet) Set {
 		return Empty{}
 	}
 }
+
+func ToPathSet(x Set) wantcfg.PathSet {
+	switch x := x.(type) {
+	case Unit:
+		return wantcfg.Unit(string(x))
+	case Prefix:
+		return wantcfg.Prefix(string(x))
+	case Suffix:
+		return wantcfg.Suffix(string(x))
+
+	case Not:
+		return wantcfg.Not(ToPathSet(x.X))
+
+	case And:
+		return wantcfg.Intersect(ToPathSet(x.L), ToPathSet(x.R))
+	case Or:
+		return wantcfg.Union(ToPathSet(x.L), ToPathSet(x.R))
+	default:
+		panic(x)
+	}
+}

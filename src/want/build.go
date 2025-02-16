@@ -7,9 +7,11 @@ import (
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"
+	"wantbuild.io/want/src/internal/op/dagops"
 	"wantbuild.io/want/src/internal/op/wantops"
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/wantc"
+	"wantbuild.io/want/src/internal/wantdag"
 	"wantbuild.io/want/src/internal/wantrepo"
 	"wantbuild.io/want/src/wantcfg"
 	"wantbuild.io/want/src/wantjob"
@@ -81,12 +83,41 @@ func (sys *System) Blame(ctx context.Context, repo *wantrepo.Repo) ([]Target, er
 	if err != nil {
 		return nil, err
 	}
+	jctx := wantjob.Ctx{Context: ctx, Dst: stores.NewMem(), System: sys.jobs}
+	deps, err := wantops.MakeDeps(jctx, srcStore, *srcRoot, func(x wantcfg.Expr) (*glfs.Ref, error) {
+		ref, store, err := sys.evalExpr(ctx, x)
+		if err != nil {
+			return nil, err
+		}
+		if err := glfstasks.FastSync(ctx, jctx.Dst, store, *ref); err != nil {
+			return nil, err
+		}
+		return ref, nil
+	})
+	if err != nil {
+		return nil, err
+	}
 	plan, _, err := wantops.DoCompile(ctx, sys.jobs, joinOpName("want", wantops.OpCompile), srcStore, wantc.CompileTask{
 		Module:   *srcRoot,
 		Metadata: repo.Metadata(),
+		Deps:     deps,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return plan.Targets, nil
+}
+
+func (sys *System) evalExpr(ctx context.Context, x wantcfg.Expr) (*glfs.Ref, cadata.Getter, error) {
+	s := stores.NewMem()
+	c := wantc.NewCompiler()
+	dag, err := c.CompileExpr(ctx, s, s, x)
+	if err != nil {
+		return nil, nil, err
+	}
+	dagRef, err := wantdag.PostDAG(ctx, s, dag)
+	if err != nil {
+		return nil, nil, err
+	}
+	return glfstasks.Do(ctx, sys.jobs, s, joinOpName("dag", dagops.OpExecLast), *dagRef)
 }

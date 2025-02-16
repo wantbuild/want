@@ -14,7 +14,7 @@ func (p Prefix) Contains(x string) bool {
 }
 
 func (p Prefix) String() string {
-	return string(p) + "*"
+	return ToPathSet(p).String()
 }
 
 func (p Prefix) intersects(x Set) maybe.Maybe[bool] {

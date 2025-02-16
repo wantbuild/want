@@ -1,7 +1,6 @@
 package stringsets
 
 import (
-	"fmt"
 	"reflect"
 
 	"go.brendoncarroll.net/exp/maybe"
@@ -38,7 +37,7 @@ func (a And) superset(x Set) maybe.Maybe[bool] {
 }
 
 func (a And) String() string {
-	return fmt.Sprintf("(%v && %v)", a.L, a.R)
+	return ToPathSet(a).String()
 }
 
 func (a And) simplify() (ret Set) {
@@ -137,7 +136,7 @@ func (o Or) superset(x Set) maybe.Maybe[bool] {
 }
 
 func (o Or) String() string {
-	return fmt.Sprintf("(%v || %v)", o.L, o.R)
+	return ToPathSet(o).String()
 }
 
 func (o Or) simplify() Set {

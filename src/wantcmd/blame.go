@@ -3,11 +3,9 @@ package wantcmd
 import (
 	"fmt"
 
-	"github.com/kr/text"
 	"go.brendoncarroll.net/star"
 
 	"wantbuild.io/want/src/internal/wantc"
-	"wantbuild.io/want/src/internal/wantfmt"
 )
 
 var blameCmd = star.Command{
@@ -38,12 +36,13 @@ var blameCmd = star.Command{
 			fmt.Fprintf(w, "%s\n", ss.String())
 
 			// value
-			w2 := text.NewIndentWriter(w, []byte("  "))
-			if err := wantfmt.PrettyExpr(w2, target.Expr); err != nil {
-				return err
+			if target.IsStatement {
+				fmt.Fprintf(w, "  RULE: %s[%d]\n", target.DefinedIn, target.DefinedNum)
+			} else {
+				fmt.Fprintf(w, "  RULE: %s\n", target.DefinedIn)
 			}
-			fmt.Fprintln(w)
+			fmt.Fprintf(w, "  DAG: %s\n", target.DAG.CID)
 		}
-		return c.StdOut.Flush()
+		return w.Flush()
 	},
 }

@@ -127,27 +127,6 @@ func queryEdges(vfs *VFS, ks stringsets.Set, pick string) []*edge {
 	return edges
 }
 
-func makePathSet(x stringsets.Set) wantcfg.PathSet {
-	switch x := x.(type) {
-	case stringsets.Unit:
-		return wantcfg.Unit(string(x))
-	case stringsets.Prefix:
-		return wantcfg.Prefix(string(x))
-	case stringsets.Suffix:
-		return wantcfg.Suffix(string(x))
-
-	case stringsets.Not:
-		return wantcfg.Not(makePathSet(x.X))
-
-	case stringsets.And:
-		return wantcfg.Intersect(makePathSet(x.L), makePathSet(x.R))
-	case stringsets.Or:
-		return wantcfg.Union(makePathSet(x.L), makePathSet(x.R))
-	default:
-		panic(x)
-	}
-}
-
 // SetFromQuery returns a string set for a query asked from from.
 func SetFromQuery(from string, q wantcfg.PathSet) stringsets.Set {
 	switch {

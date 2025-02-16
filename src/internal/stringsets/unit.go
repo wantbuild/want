@@ -11,7 +11,7 @@ func (k Unit) Contains(x string) bool {
 }
 
 func (k Unit) String() string {
-	return string(k)
+	return ToPathSet(k).String()
 }
 
 func (k Unit) intersects(x Set) maybe.Maybe[bool] {

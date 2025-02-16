@@ -128,7 +128,7 @@ func (f *selection) Needs() stringsets.Set {
 }
 
 func (s *selection) String() string {
-	return fmt.Sprintf("{%v, pick=%q, allowEmpty=%v}", makePathSet(s.set), s.pick, s.allowEmpty)
+	return fmt.Sprintf("{%v, pick=%q, allowEmpty=%v}", stringsets.ToPathSet(s.set), s.pick, s.allowEmpty)
 }
 
 func (s *selection) isExpr() {}

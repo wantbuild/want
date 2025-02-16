@@ -14,13 +14,13 @@ import (
 
 func (e *Executor) Build(jc wantjob.Ctx, src cadata.Getter, buildTask BuildTask) (*BuildResult, error) {
 	ctx := jc.Context
-	deps := make(map[wantc.ExprID]glfs.Ref)
-	eval := func(expr wantcfg.Expr) (*glfs.Ref, error) {
+	deps, err := MakeDeps(jc, src, buildTask.Main, func(expr wantcfg.Expr) (*glfs.Ref, error) {
 		return e.EvalExpr(jc, src, expr)
-	}
-	if err := dependencyClosure(ctx, src, buildTask.Main, deps, eval); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
+
 	jc.Infof("prepared %d dependencies", len(deps))
 	// plan
 	plan, planStore, err := DoCompile(ctx, jc.System, e.CompileOp, stores.Union{jc.Dst, src}, wantc.CompileTask{
@@ -94,4 +94,12 @@ func (e *Executor) Build(jc wantjob.Ctx, src cadata.Getter, buildTask BuildTask)
 		TargetResults: results,
 		Output:        outRef,
 	}, nil
+}
+
+func MakeDeps(jc wantjob.Ctx, src cadata.Getter, modRef glfs.Ref, eval func(wantcfg.Expr) (*glfs.Ref, error)) (map[wantc.ExprID]glfs.Ref, error) {
+	deps := make(map[wantc.ExprID]glfs.Ref)
+	if err := dependencyClosure(jc.Context, src, modRef, deps, eval); err != nil {
+		return nil, err
+	}
+	return deps, nil
 }
