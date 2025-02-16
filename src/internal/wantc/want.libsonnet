@@ -203,37 +203,6 @@ local qemu = {
         ])),
 };
 
-local golang = {
-    makeExec :: function(modSrc, modcache, main, goarch, goos)
-        local config = blob(std.manifestJsonEx({
-            "GOARCH": goarch,
-            "GOOS": goos,
-            "main": main,
-        }, ""));
-        compute("golang.makeExec", [
-            input("module", modSrc),
-            input("modcache", modcache),
-            input("config.json", config),
-        ]),
-    
-    modDownload :: function(x)
-        compute("golang.modDownload", [
-        input("", x),
-    ]),
-    makeTestExec :: function(modSrc, modcache, path, goarch, goos)
-        local config = blob(std.manifestJsonEx({
-            "GOARCH": goarch,
-            "GOOS": goos,
-            "Path": path,
-        }, ""));
-        compute("golang.makeTestExec", [
-            input("module", modSrc),
-            input("modcache", modcache),
-            input("config.json", config),
-        ],
-    ),
-};
-
 local wasm = {
     wasip1 :: function(memory, wasm, inp, args=[], env={})
         local config = blob(std.manifestJsonEx({
@@ -316,9 +285,6 @@ local wasm = {
 
     // QEMU
     qemu :: qemu,
-
-    // Golang
-    golang :: golang,
 
     // WASM
     wasm :: wasm,

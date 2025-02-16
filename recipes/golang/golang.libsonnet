@@ -1,6 +1,7 @@
 local want = import "@want";
 local linux = import "linux/linux.libsonnet";
 local alpine = import "alpine/alpine.libsonnet";
+local builtin = import "./builtin.libsonnet";
 
 local currentVersion = "1.23.4";
 
@@ -20,13 +21,13 @@ local dist(arch, os, version=currentVersion) =
 // pathSet matches files that end in .go plus go.mod and go.sum
 local pathSet = want.union([want.unit("go.mod"), want.unit("go.sum"), want.suffix(".go")]);
 
-local modDownload(modSrc) = want.golang.modDownload(
+local modDownload(modSrc) = builtin.modDownload(
     want.filter(modSrc, want.union([want.unit("go.mod"), want.unit("go.sum")]))
 );
 
-local makeExec(modSrc, main, goarch, goos) = want.golang.makeExec(modSrc, modDownload(modSrc), main, goarch, goos);
+local makeExec(modSrc, main, goarch, goos) = builtin.makeExec(modSrc, modDownload(modSrc), main, goarch, goos);
 
-local makeTestExec(modSrc, main, goarch, goos) = want.golang.makeTestExec(modSrc, modDownload(modSrc), main, goarch, goos);
+local makeTestExec(modSrc, main, goarch, goos) = builtin.makeTestExec(modSrc, modDownload(modSrc), main, goarch, goos);
 
 local wantGoExec = makeExec(
     want.selectDir(GROUND, ""),
