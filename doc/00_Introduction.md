@@ -10,7 +10,7 @@ Want knows about all the bits going into every computation, and there is no way 
 This allows Want to cache every computation in the build, and avoid repeated work.
 
 ## Why would I use Want?
-I've you've ever tried to get up and running with a new software project, you will have dealt with the problem of downloading all the tools that the project uses.
+If you've ever tried to get up and running with a new software project, you will have dealt with the problem of downloading all the tools that the project uses.
 
 Even for simple tasks like building the docs, or producing shippable executables, you may have to install several tools.  This requires developers to know about and understand tools which they will never work with themselves, to merely benefit from the output of a computation that others have set up.
 
