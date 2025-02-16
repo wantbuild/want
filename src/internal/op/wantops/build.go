@@ -1,6 +1,8 @@
 package wantops
 
 import (
+	"fmt"
+
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
 	"golang.org/x/sync/errgroup"
@@ -18,7 +20,7 @@ func (e *Executor) Build(jc wantjob.Ctx, src cadata.Getter, buildTask BuildTask)
 		return e.EvalExpr(jc, src, expr)
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("preparing dependencies: %w", err)
 	}
 
 	jc.Infof("prepared %d dependencies", len(deps))
@@ -98,7 +100,7 @@ func (e *Executor) Build(jc wantjob.Ctx, src cadata.Getter, buildTask BuildTask)
 
 func MakeDeps(jc wantjob.Ctx, src cadata.Getter, modRef glfs.Ref, eval func(wantcfg.Expr) (*glfs.Ref, error)) (map[wantc.ExprID]glfs.Ref, error) {
 	deps := make(map[wantc.ExprID]glfs.Ref)
-	if err := dependencyClosure(jc.Context, src, modRef, deps, eval); err != nil {
+	if err := dependencyClosure(jc.Context, stores.Union{jc.Dst, src}, modRef, deps, eval); err != nil {
 		return nil, err
 	}
 	return deps, nil
