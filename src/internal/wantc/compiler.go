@@ -22,6 +22,7 @@ import (
 	"wantbuild.io/want/src/internal/stringsets"
 	"wantbuild.io/want/src/internal/wantdag"
 	"wantbuild.io/want/src/wantcfg"
+	"wantbuild.io/want/src/wantjob"
 )
 
 const (
@@ -263,8 +264,9 @@ func (c *Compiler) addSourceFile(cc *compileCtx, eg *errgroup.Group, p string, m
 		vfs, rel := cc.acquireVFS()
 		defer rel()
 		return vfs.Add(VFSEntry{
-			K: ks,
-			V: &value{ref: ref},
+			K:       ks,
+			V:       &value{ref: ref},
+			PlaceAt: p,
 		})
 	}
 	return nil
@@ -285,7 +287,7 @@ func (c *Compiler) loadExprFile(cc *compileCtx, p string) error {
 	ks := er.Affects()
 	vfs, rel := cc.acquireVFS()
 	defer rel()
-	if err := vfs.Add(VFSEntry{K: ks, V: er.expr, DefinedIn: fqp.Path}); err != nil {
+	if err := vfs.Add(VFSEntry{K: ks, V: er.expr, PlaceAt: p, DefinedIn: fqp.Path}); err != nil {
 		panic(err)
 	}
 	cc.appendExprRoot(er)
@@ -343,8 +345,12 @@ func (c *Compiler) lowerSelections(cc *compileCtx) error {
 	cache := make(map[[32]byte]Expr)
 	vfs, rel := cc.acquireVFS()
 	defer rel()
+	// TODO: track per-module state
+	vfss := map[ModuleID]*VFS{
+		NewModuleID(cc.ground): vfs,
+	}
 	for i, er := range cc.exprRoots {
-		e2, err := c.replaceSelections(cc.ctx, cc.dst, cache, vfs, er.expr)
+		e2, err := c.replaceSelections(cc, cache, vfss, er.expr)
 		if err != nil {
 			return err
 		}
@@ -353,7 +359,7 @@ func (c *Compiler) lowerSelections(cc *compileCtx) error {
 	for _, ss := range cc.stmtSets {
 		for _, stmt := range ss.stmts {
 			e1 := stmt.expr()
-			e2, err := c.replaceSelections(cc.ctx, cc.dst, cache, vfs, e1)
+			e2, err := c.replaceSelections(cc, cache, vfss, e1)
 			if err != nil {
 				return err
 			}
@@ -363,7 +369,7 @@ func (c *Compiler) lowerSelections(cc *compileCtx) error {
 	return nil
 }
 
-func (c *Compiler) replaceSelections(ctx context.Context, dst cadata.Store, cache map[[32]byte]Expr, vfs *VFS, expr Expr) (ret Expr, retErr error) {
+func (c *Compiler) replaceSelections(cc *compileCtx, cache map[[32]byte]Expr, vfss map[ModuleID]*VFS, expr Expr) (ret Expr, retErr error) {
 	if y, exists := cache[expr.Key()]; exists {
 		return y, nil
 	}
@@ -376,7 +382,7 @@ func (c *Compiler) replaceSelections(ctx context.Context, dst cadata.Store, cach
 	case *compute:
 		var yInputs []computeInput
 		for _, input := range x.Inputs {
-			e2, err := c.replaceSelections(ctx, dst, cache, vfs, input.From)
+			e2, err := c.replaceSelections(cc, cache, vfss, input.From)
 			if err != nil {
 				return nil, err
 			}
@@ -391,11 +397,23 @@ func (c *Compiler) replaceSelections(ctx context.Context, dst cadata.Store, cach
 			Inputs: yInputs,
 		}, nil
 	case *selection:
-		e, err := c.query(ctx, dst, vfs, x.set, x.pick)
-		if err != nil {
-			return nil, err
+		vfs, exists := vfss[x.module]
+		if !exists {
+			return nil, fmt.Errorf("missing module for selection %v", x)
 		}
-		return c.replaceSelections(ctx, dst, cache, vfs, e)
+		var e Expr
+		if x.derived {
+			var err error
+			if e, err = c.query(cc.ctx, cc.dst, vfs, x.set); err != nil {
+				return nil, err
+			}
+		} else {
+			var err error
+			if e, err = c.selectGround(cc, x.module, x.set); err != nil {
+				return nil, err
+			}
+		}
+		return c.replaceSelections(cc, cache, vfss, e)
 	case *value:
 		return x, nil
 	default:
@@ -496,13 +514,15 @@ func (c *Compiler) makeTargets(cc *compileCtx) error {
 	// StmtSets
 	for _, ss := range cc.stmtSets {
 		for i, stmt := range ss.stmts {
-			aff := stmt.Affects()
-			placeAt := stringsets.BoundingPrefix(aff)
-			dag, err := c.makeGraphFromExpr(cc.ctx, cc.dst, cc.src, stmt.expr(), placeAt)
+			to := stringsets.ToPathSet(stmt.Affects())
+			expr, err := c.filterExpr(cc.ctx, cc.dst, stmt.expr(), to)
 			if err != nil {
 				return err
 			}
-			to := stringsets.ToPathSet(stmt.Affects())
+			dag, err := c.makeGraphFromExpr(cc.ctx, cc.dst, cc.src, expr, "")
+			if err != nil {
+				return err
+			}
 			targets = append(targets, Target{
 				To:   to,
 				DAG:  *dag,
@@ -555,13 +575,16 @@ func (c *Compiler) makeKnown(cc *compileCtx) error {
 }
 
 func (c *Compiler) pickExpr(ctx context.Context, dst cadata.Store, x Expr, p string) (Expr, error) {
+	if p == "" {
+		return x, nil
+	}
 	ref, err := c.glfs.PostBlob(ctx, dst, strings.NewReader(p))
 	if err != nil {
 		return nil, err
 	}
 	pathExpr := &value{ref: *ref}
 	return &compute{
-		Op: glfsops.OpPick,
+		Op: wantjob.OpName("glfs.") + glfsops.OpPick,
 		Inputs: []computeInput{
 			{To: "x", From: x},
 			{To: "path", From: pathExpr},
@@ -569,7 +592,7 @@ func (c *Compiler) pickExpr(ctx context.Context, dst cadata.Store, x Expr, p str
 	}, nil
 }
 
-func (c *Compiler) filterExpr(ctx context.Context, dst cadata.Store, x Expr, q wantcfg.PathSet) (Expr, error) {
+func (c *Compiler) filterExpr(ctx context.Context, dst cadata.PostExister, x Expr, q wantcfg.PathSet) (Expr, error) {
 	data, err := json.Marshal(q)
 	if err != nil {
 		return nil, err
@@ -580,7 +603,7 @@ func (c *Compiler) filterExpr(ctx context.Context, dst cadata.Store, x Expr, q w
 	}
 	filterExpr := &value{*ref}
 	return &compute{
-		Op: glfsops.OpFilterPathSet,
+		Op: wantjob.OpName("glfs.") + glfsops.OpFilterPathSet,
 		Inputs: []computeInput{
 			{To: "x", From: x},
 			{To: "filter", From: filterExpr},

@@ -13,10 +13,8 @@ e.g.
 local want = import "@want";
 
 [
-    want.put("./my-statement-output.txt, want.blob("foo"))
+    want.put(want.unit("./my-statement-output.txt"), want.blob("foo"))
 ]
 ```
 
 You can have as many statement files, and as many statements per file, as you *want*.
-
-Exports are run after the build succeeds, not during.

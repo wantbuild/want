@@ -63,8 +63,16 @@ func (v *VFS) nodePath(ks stringsets.Set) []string {
 }
 
 type VFSEntry struct {
-	K           stringsets.Set
-	V           Expr
+	// K is the path space occupied by this entry.
+	// It must not conflict with any other entries.
+	K stringsets.Set
+	// V is the value that occupies this space
+	// It should be a layer expression, meaning that it evaluates to module level paths.
+	V Expr
+	// PlaceAt is where V should be placed within the submodule.
+	// This should always be within the bounding prefix of K
+	PlaceAt string
+
 	IsSubmodule bool
 	DefinedIn   string
 	DefinedNum  int

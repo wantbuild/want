@@ -2,7 +2,7 @@ package wantc
 
 import (
 	"context"
-	"path"
+	"fmt"
 	"strings"
 
 	"github.com/blobcache/glfs"
@@ -15,116 +15,98 @@ import (
 	"wantbuild.io/want/src/wantjob"
 )
 
+// BoundingPrefix returns the longest prefix that supersets x
 func BoundingPrefix(x wantcfg.PathSet) string {
-	ss := SetFromQuery("", x)
-	return stringsets.BoundingPrefix(ss)
+	return stringsets.BoundingPrefix(stringsets.FromPathSet(x))
 }
 
+// Intersects returns true iff the 2 path sets intsersect
 func Intersects(a, b wantcfg.PathSet) bool {
-	return stringsets.Intersects(SetFromQuery("", a), SetFromQuery("", b))
+	return stringsets.Intersects(stringsets.FromPathSet(a), stringsets.FromPathSet(b))
 }
 
 // Select performs the selection logic on a known filesystem root.
 func Select(ctx context.Context, dst cadata.Store, src cadata.Getter, root glfs.Ref, q wantcfg.PathSet) (*glfs.Ref, error) {
-	strset := SetFromQuery("", q)
+	strset := stringsets.FromPathSet(q)
 	return glfs.FilterPaths(ctx, dst, src, root, func(p string) bool {
 		return strset.Contains(p)
 	})
 }
 
-func (c *Compiler) query(ctx context.Context, dst cadata.Store, vfs *VFS, ks stringsets.Set, pick string) (Expr, error) {
-	edges := queryEdges(vfs, ks, pick)
-	ni, err := c.flattenEdges(ctx, dst, edges)
+func (c *Compiler) query(ctx context.Context, dst cadata.PostExister, vfs *VFS, ks stringsets.Set) (Expr, error) {
+	vents := vfs.Get(ks)
+	q := stringsets.ToPathSet(ks)
+	var layers []Expr
+	for _, vent := range vents {
+		layer, err := c.placeAt(ctx, dst, vent.V, vent.PlaceAt)
+		if err != nil {
+			return nil, err
+		}
+		layer, err = c.filterExpr(ctx, dst, layer, q)
+		if err != nil {
+			return nil, err
+		}
+		layers = append(layers, layer)
+	}
+	return c.merge(layers)
+}
+
+func (c *Compiler) placeAt(ctx context.Context, dst cadata.PostExister, x Expr, p string) (Expr, error) {
+	if p == "" {
+		return x, nil
+	}
+	pathRef, err := c.glfs.PostBlob(ctx, dst, strings.NewReader(p))
 	if err != nil {
 		return nil, err
 	}
 	return &compute{
-		Op:     wantjob.OpName("glfs.") + glfsops.OpPassthrough,
-		Inputs: ni,
+		Op: wantjob.OpName("glfs." + glfsops.OpPlace),
+		Inputs: []computeInput{
+			{To: "x", From: x},
+			{To: "path", From: &value{*pathRef}},
+		},
 	}, nil
 }
 
-// flattenEdges takes a slice of Edges and produces an input set for input to a node.
-// It will create any necessary intermediary nodes for metadata operations.
-func (c *Compiler) flattenEdges(ctx context.Context, dst cadata.Store, xs []*edge) ([]computeInput, error) {
-	var ys []computeInput
-	for _, x := range xs {
-		y := x.Expr
-		if x.Subpath != "" {
-			var err error
-			y, err = c.pickExpr(ctx, dst, y, x.Subpath)
-			if err != nil {
-				return nil, err
-			}
-		}
-		// Filter
-		if x.Filter != nil {
-			var err error
-			y, err = c.filterExpr(ctx, dst, y, *x.Filter)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		ys = append(ys, computeInput{
-			To:   x.Key,
-			From: y,
+func (c *Compiler) merge(layers []Expr) (Expr, error) {
+	var inputs []computeInput
+	for i, layer := range layers {
+		inputs = append(inputs, computeInput{
+			To:   fmt.Sprintf("%08x", i),
 			Mode: 0o777,
+			From: layer,
 		})
 	}
-	return ys, nil
+	return &compute{
+		Op:     wantjob.OpName("glfs.") + glfsops.OpMerge,
+		Inputs: inputs,
+	}, nil
 }
 
-// An Edge represents an expression plus a transformation
-// Applied to that expression
-type edge struct {
-	Key string
-
-	Expr    Expr
-	Subpath string
-	Filter  *wantcfg.PathSet
-}
-
-// select_ returns a list of edges that populate the ks region of gs
-// note: select can return 0 edges, but that should produce an error during planning.
-func queryEdges(vfs *VFS, ks stringsets.Set, pick string) []*edge {
-	if stringsets.Equals(ks, stringsets.Empty{}) {
-		return nil
-	}
-	edges := []*edge{}
-
-	ents := vfs.Get(ks)
-	for _, ent := range ents {
-		ks2 := ent.K
-		bp2 := stringsets.BoundingPrefix(ks2)
-
-		var subpath string
-		var key string
-		if strings.HasPrefix(pick, bp2) {
-			subpath = strings.Trim(pick[len(bp2):], "/")
-		} else {
-			key = strings.Trim(bp2[len(pick):], "/")
-		}
-
-		switch ex := ent.V.(type) {
-		case *selection:
-			edges2 := queryEdges(vfs, ex.set, pick)
-			for _, e := range edges2 {
-				e.Key = path.Join(key, e.Key)
-				edges = append(edges, e)
+func (c *Compiler) selectGround(cc *compileCtx, modID ModuleID, set stringsets.Set) (*value, error) {
+	var modRef *glfs.Ref
+	if modID == cc.ground.CID {
+		modRef = &cc.ground
+	} else {
+		for _, sm := range cc.subMods {
+			if NewModuleID(sm.root) == modID {
+				modRef = &sm.root
+				break
 			}
-		default:
-			ed := &edge{
-				Key: key,
-
-				Expr:    ex,
-				Subpath: subpath,
-				Filter:  nil,
-			}
-			edges = append(edges, ed)
 		}
 	}
-	return edges
+
+	// TODO: look for the matching module
+	if modRef == nil {
+		return nil, fmt.Errorf("could not select from GROUND for module %v", modID)
+	}
+	ref, err := glfs.FilterPaths(cc.ctx, cc.dst, cc.src, cc.ground, func(p string) bool {
+		return set.Contains(p)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &value{ref: *ref}, nil
 }
 
 // SetFromQuery returns a string set for a query asked from from.

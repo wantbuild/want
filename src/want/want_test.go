@@ -48,16 +48,16 @@ func TestEvalNoRepo(t *testing.T) {
 		},
 		{
 			Name: "tree/empty",
-			I:    `want.tree({})`,
+			I:    `want.tree([])`,
 			O:    testutil.PostTree(t, s, nil),
 		},
 		{
 			Name: "tree/3blobs",
-			I: `want.tree({
-				"k1": want.treeEntry("0644", want.blob("v1")),
-				"k2": want.treeEntry("0644", want.blob("v2")),
-				"k3": want.treeEntry("0644", want.blob("v3")),
-			})`,
+			I: `want.tree([
+				want.treeEntry("k1", "0644", want.blob("v1")),
+				want.treeEntry("k2", "0644", want.blob("v2")),
+				want.treeEntry("k3", "0644", want.blob("v3")),
+			])`,
 			O: testutil.PostTree(t, s, []glfs.TreeEntry{
 				{Name: "k1", FileMode: 0o644, Ref: testutil.PostBlob(t, s, []byte("v1"))},
 				{Name: "k2", FileMode: 0o644, Ref: testutil.PostBlob(t, s, []byte("v2"))},
@@ -68,7 +68,7 @@ func TestEvalNoRepo(t *testing.T) {
 			Name: "pass3",
 			I: `want.pass([
 				want.input("a.txt", want.blob("foo")),
-				want.input("b.d",  want.tree({})),
+				want.input("b.d",  want.tree()),
 				want.input("c.txt", want.blob("bar")),
 			])`,
 			O: testutil.PostTree(t, s, []glfs.TreeEntry{

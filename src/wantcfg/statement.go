@@ -14,7 +14,11 @@ func (s Statement) Expr() Expr {
 }
 
 type Put struct {
+	// Dst is the PathSet this statement occupies within the module.
+	// Only these paths will be taken from Src.
 	Dst PathSet `json:"dst"`
-	Src Expr    `json:"src"`
-	// TODO: Add Place here instead of inferring bounding prefix?
+	// Src should evaluate to an expression for the root of the module.
+	Src Expr `json:"src"`
+	// Place will wrap Src in place operation for the given path
+	Place string `json:"place,omitempty"`
 }

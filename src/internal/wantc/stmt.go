@@ -38,6 +38,9 @@ func (c *Compiler) parseStmtSet(cc *compileCtx, fqp FQPath) (*stmtSet, error) {
 			if err != nil {
 				return nil, err
 			}
+			if e, err = c.placeAt(cc.ctx, cc.dst, e, PathFrom(fqp.Path, spec.Put.Place)); err != nil {
+				return nil, err
+			}
 			stmt = &putStmt{
 				Dst: ks,
 				Src: e,

@@ -104,10 +104,17 @@ func (c *compute) String() string {
 func (c compute) isExpr() {}
 
 type selection struct {
-	set        stringsets.Set
-	pick       string
-	assertType glfs.Type
-	allowEmpty bool
+	module  ModuleID
+	derived bool
+	set     stringsets.Set
+}
+
+func newSelection(modID ModuleID, derived bool, set stringsets.Set) *selection {
+	return &selection{
+		module:  modID,
+		derived: derived,
+		set:     set,
+	}
 }
 
 func (s *selection) PrettyPrint(w io.Writer) error {
@@ -118,9 +125,6 @@ func (s *selection) PrettyPrint(w io.Writer) error {
 func (s *selection) Key() [32]byte {
 	var x []byte
 	x = append(x, []byte(s.set.String())...)
-	x = fmt.Appendf(x, "pick=%q", s.pick)
-	x = fmt.Appendf(x, "assertType=%q", s.assertType)
-	x = fmt.Appendf(x, "allowEmpty=%v", s.allowEmpty)
 	return blake3.Sum256(x)
 }
 
@@ -129,7 +133,7 @@ func (f *selection) Needs() stringsets.Set {
 }
 
 func (s *selection) String() string {
-	return fmt.Sprintf("{%v, pick=%q, allowEmpty=%v}", stringsets.ToPathSet(s.set), s.pick, s.allowEmpty)
+	return fmt.Sprintf("(select %v)", stringsets.ToPathSet(s.set))
 }
 
 func (s *selection) isExpr() {}
@@ -209,36 +213,30 @@ func (c *Compiler) compileSelection(cc *compileCtx, exprPath string, x wantcfg.S
 		return nil, fmt.Errorf("selection in file %q has empty callerPath", exprPath)
 	}
 	callerPath = glfs.CleanPath(callerPath)
-	pick := PathFrom(callerPath, x.Pick)
 
-	switch {
-	case cc.ground.CID == moduleCID && x.Source.Derived:
-		ks := SetFromQuery(callerPath, x.Query)
-		ks = stringsets.Subtract(ks, stringsets.Unit(callerPath))
-		ks = stringsets.Simplify(ks)
-		return &selection{
-			set:        ks,
-			pick:       pick,
-			assertType: glfs.Type(x.AssertType),
-			allowEmpty: x.AllowEmpty,
-		}, nil
-	case cc.ground.CID == moduleCID:
-		ks := SetFromQuery(callerPath, x.Query)
-		out, err := c.selectFacts(cc, ks, pick)
-		if err != nil {
-			if x.AllowEmpty && strings.Contains(err.Error(), "no entry at") {
-				emptyDirRef, err := glfs.PostTreeSlice(cc.ctx, cc.dst, nil)
-				if err != nil {
-					return nil, err
-				}
-				return &value{ref: *emptyDirRef}, nil
-			}
-			return nil, fmt.Errorf("selection in file %q: %w", exprPath, err)
+	ks := SetFromQuery(callerPath, x.Query)
+	var sel *selection
+	if x.Source.Derived {
+		if IsExprFilePath(callerPath) {
+			ks = stringsets.Subtract(ks, stringsets.Union(
+				stringsets.Unit(callerPath),
+				stringsets.Prefix(callerPath+"/")),
+			)
 		}
-		return out, nil
-	default:
-		return nil, errors.Errorf("selection %v in %s invalid source: %v", x, exprPath, x.Source)
+		ks = stringsets.Simplify(ks)
+		if stringsets.Equals(ks, stringsets.Empty{}) {
+			return nil, fmt.Errorf("selection %v is the empty set", ks)
+		}
+		sel = newSelection(moduleCID, true, ks)
+	} else {
+		ks := SetFromQuery(callerPath, x.Query)
+		ks = stringsets.Simplify(ks)
+		if stringsets.Equals(ks, stringsets.Empty{}) {
+			return nil, fmt.Errorf("selection %v is the empty set", ks)
+		}
+		sel = newSelection(moduleCID, false, ks)
 	}
+	return c.pickExpr(cc.ctx, cc.dst, sel, PathFrom(callerPath, x.Pick))
 }
 
 func (c *Compiler) compileBlob(ctx context.Context, dst cadata.Store, content string) (*value, error) {
@@ -250,35 +248,35 @@ func (c *Compiler) compileBlob(ctx context.Context, dst cadata.Store, content st
 }
 
 // compileTree writes a tree defined by dst to
-func (c *Compiler) compileTree(ctx context.Context, dst cadata.Store, src cadata.Getter, m map[string]wantcfg.TreeEntry) (*value, error) {
+func (c *Compiler) compileTree(ctx context.Context, dst cadata.Store, src cadata.Getter, cfgEnts []wantcfg.TreeEntry) (*value, error) {
 	var ents []glfs.TreeEntry
-	for k, ent := range m {
+	for _, cfgEnt := range cfgEnts {
 		var ref glfs.Ref
 		switch {
-		case ent.Value.Blob != nil:
-			expr, err := c.compileBlob(ctx, dst, *ent.Value.Blob)
+		case cfgEnt.Value.Blob != nil:
+			expr, err := c.compileBlob(ctx, dst, *cfgEnt.Value.Blob)
 			if err != nil {
 				return nil, err
 			}
 			ref = expr.ref
-		case ent.Value.Tree != nil:
-			expr, err := c.compileTree(ctx, dst, src, ent.Value.Tree)
+		case cfgEnt.Value.Tree != nil:
+			expr, err := c.compileTree(ctx, dst, src, cfgEnt.Value.Tree)
 			if err != nil {
 				return nil, err
 			}
 			ref = expr.ref
-		case ent.Value.Ref != nil:
-			expr, err := c.compileRef(ctx, dst, src, *ent.Value.Ref)
+		case cfgEnt.Value.Ref != nil:
+			expr, err := c.compileRef(ctx, dst, src, *cfgEnt.Value.Ref)
 			if err != nil {
 				return nil, err
 			}
 			ref = expr.ref
 		default:
-			return nil, fmt.Errorf("tree literals can only contain blobs and trees: HAVE %v", ent.Value)
+			return nil, fmt.Errorf("tree literals can only contain blobs and trees: HAVE %v", cfgEnt.Value)
 		}
 		ents = append(ents, glfs.TreeEntry{
-			Name:     k,
-			FileMode: ent.Mode,
+			Name:     cfgEnt.Name,
+			FileMode: cfgEnt.Mode,
 			Ref:      ref,
 		})
 	}
@@ -323,20 +321,6 @@ func (c *Compiler) compileInputs(cc *compileCtx, stagePath string, xs []wantcfg.
 		ys = append(ys, y)
 	}
 	return ys, nil
-}
-
-func (c *Compiler) selectFacts(cc *compileCtx, set stringsets.Set, pick string) (*value, error) {
-	ref, err := glfs.FilterPaths(cc.ctx, cc.dst, cc.src, cc.ground, func(p string) bool {
-		return set.Contains(p)
-	})
-	if err != nil {
-		return nil, err
-	}
-	ref, err = glfs.GetAtPath(cc.ctx, cc.dst, *ref, pick)
-	if err != nil {
-		return nil, err
-	}
-	return &value{ref: *ref}, nil
 }
 
 func maxToLen(ins []computeInput) (max int) {

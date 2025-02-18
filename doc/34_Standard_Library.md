@@ -81,11 +81,11 @@ Evaluates to a filesystem containing paths in q, with data from src.
 
 ### `selectFile(src: Source, p: String): Expr`
 This is a convenience function for selecting files.
-It is equivalent to selecting `unit(p)`.
+It is equivalent to selecting `unit(p)` and then calling `pick` to extract the file.
 
 ### `selectDir(src: Source, p: String): Expr`
 This is a convenience function for selecting directories.
-It is equivalent to selecting `union([unit(p), prefix(p)])`.
+It is equivalent to selecting `union([unit(p), prefix(p)])`. and then calling `pick` to extract the directory.
 
 ## Compute
 These functions allow computations to be specified
@@ -177,4 +177,13 @@ want.importOCIImage(
 Statements can only be used in a statement file (ending in `.wants`)
 
 ### `put(dst: PathSet, x: Expr): Stmt`
-Creates a target occupying `dst` in the build output, which will be populated with the evaluation of `x`.
+Creates a target occupying `dst` in the build output.
+The contents of dst will be taken by copying the paths from the evaluation of `x`.
+
+### `putFile(dst: String, x: Expr): Stmt`
+Creates a target, which will be a single path `dst` in the build output.
+It will be populated by the evaluation of `x`, which must evaluate to a file.
+
+### `putDir(dst: String, x: Expr): Stmt`
+Creates a target occupying `prefix(dst)` in the build output.
+It will be populated by the evaluationg of `x`.

@@ -1,7 +1,5 @@
 local want = import "@want";
 
-local bzImage = want.selectFile(GROUND, "./bzImage");
-
 local bzImage = want.importURL(
     url = "https://github.com/wantbuild/qemu-static/releases/download/v0.1.0/bzImage",
     algo = "SHA256",

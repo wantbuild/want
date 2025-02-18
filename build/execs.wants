@@ -13,5 +13,6 @@ std.map(function(x)
     local goarch = x[0];
     local goos = x[1];
     local exec = golang.makeExec(modSrc, "cmd/want", goarch, goos);
-    want.put(want.unit("./out/want_" + goarch + "_" + goos), exec)
+    local dst = "./out/want_" + goarch + "_" + goos;
+    want.putFile(dst, exec)
 , platforms)

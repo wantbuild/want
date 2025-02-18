@@ -59,7 +59,7 @@ local goCmd(modSrc, cmd, basefs, kernel) =
         want.input("/initscript", initscript),
         want.input("/gomodcache", modDownload(modSrc)),
         want.input("/input", modSrc),
-        want.input("/output", want.tree({})),
+        want.input("/output", want.tree()),
     ]);
     linux.runVM(1, 4e9, kernel, rootfs, init="/bin/sh", args=["/initscript"], output=want.prefix("output"));
 
@@ -68,7 +68,7 @@ local goTest(modSrc, basefs=alpine.rootfs(alpine.ARCH_AMD64), kernel=defaultKern
     goCmd(modSrc, cmd, basefs, kernel);
 
 local defaultBaseFS = want.tree({
-    "tmp": want.treeEntry("777", want.tree({})),
+    "tmp": want.treeEntry("777", want.tree([])),
 });
 
 local runTests(modSrc, basefs=defaultBaseFS, kernel=defaultKernel, ignore=[]) =

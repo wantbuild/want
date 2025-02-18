@@ -28,16 +28,17 @@ local blob(contents) = {
     blob: contents,
 };
 
-local treeEntry(mode, value) = {
+local treeEntry(name, mode, value) = {
     __type__: "treeEntry",
+    name: name,
     mode: std.parseOctal(mode),
     value: value,
 };
 
 // tree evaluates to a tree literal
-local tree(m) = {
+local tree(ents=[]) = {
     __type__: "expr",
-    tree: m
+    tree: std.map(assertType("treeEntry"), ents),
 };
 
 // Path Sets
@@ -53,20 +54,19 @@ local subtract(l, r) = intersect([l, not(r)]);
 local dirPath(p) = if p == "" then prefix("") else union([unit(p), prefix(p + "/")]);
 
 // Select
-local select(source, query, pick="", allowEmpty=false) = {
+local select(source, query, pick="") = {
     __type__: "expr",
     selection: {
         source: assertType("source")(source),
         query: assertType("pathSet")(query),
         pick: pick,
-        allowEmpty: allowEmpty,
     }
 };
 
 // selectDir evaluates to the directory at p in the specified source.
 // selectDir fails if p is a file.
 // if orEmpty is true, then an empty tree will be used when p does not exist.
-local selectDir(source, p) = select(source, dirPath(p), pick=p);
+local selectDir(source, p) = select(source, prefix(p + "/"), pick=p);
 
 // selectFile evaluates to the file at p in the specified source.
 // selectFile fails if p is a directory.
@@ -84,13 +84,20 @@ local merge(vals) =
 local pass(inputs) = compute("glfs.pass", inputs);
 
 // Statements
-local put(dst, src) = {
+local put(dst, src, place="") = {
     __type__: "stmt",
     put: {
         dst: assertType("pathSet")(dst),
         src: assertType("expr")(src),
+        place: place,
     },
 };
+
+// putFile places the result of src at a single path dst.
+local putFile(dst, src) = put(unit(dst), src, place=dst);
+
+// putDir places the result of src at the prefix dst
+local putDir(dst, src) = put(prefix(dst), src, place=dst);
 
 // Built-Ins
 
@@ -261,6 +268,8 @@ local wasm = {
 
     // Statements
     put :: put,
+    putFile :: putFile,
+    putDir :: putDir,
 
     // GLFS
     pick :: pick,

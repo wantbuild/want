@@ -81,9 +81,9 @@ func TestSnippets(t *testing.T) {
 			want.blob("hello world")
 		`},
 		{`local want = import "@want";
-			want.tree({
-				"k1": want.treeEntry("0644", want.blob("hello")),
-			})
+			want.tree([
+				want.treeEntry("k1", "0644", want.blob("hello")),
+			])
 		`},
 	}
 	for i, tc := range tcs {
@@ -183,6 +183,25 @@ func TestCompile(t *testing.T) {
 						"want": want.blob(importstr "@want"),
 					},
 				}`,
+			}),
+			Deps: map[ExprID]glfs.Ref{
+				NewExprID(wantcfg.Expr{Blob: ptrTo(LibWant())}): testutil.PostBlob(t, src, []byte(LibWant())),
+			},
+		},
+		{
+			Name: "select",
+			Module: testutil.PostFSStr(t, src, map[string]string{
+				"WANT": `local want = import "@want";
+				{
+					"namespace": {
+						"want": want.blob(importstr "@want"),
+					},
+				}`,
+				"yes/yes.txt": `111`,
+				"no/no.txt":   `222`,
+				"a/b.want": `local want = import "@want";
+				want.select(DERIVED, want.prefix("yes/"))	
+				`,
 			}),
 			Deps: map[ExprID]glfs.Ref{
 				NewExprID(wantcfg.Expr{Blob: ptrTo(LibWant())}): testutil.PostBlob(t, src, []byte(LibWant())),

@@ -7,9 +7,10 @@ import (
 	"github.com/blobcache/glfs"
 )
 
-type Tree = map[string]TreeEntry
+type Tree = []TreeEntry
 
 type TreeEntry struct {
+	Name  string      `json:"name"`
 	Mode  fs.FileMode `json:"mode"`
 	Value Expr        `json:"value"`
 }
@@ -70,10 +71,12 @@ type Source struct {
 }
 
 type Selection struct {
-	Source Source  `json:"source"`
-	Query  PathSet `json:"query"`
-	Pick   string  `json:"pick"`
+	// Source is the domain to query.
+	// It must be either GROUND or DERIVED.
+	Source Source `json:"source"`
+	// Query is a PathSet which will be used to filter Source.
+	Query PathSet `json:"query"`
 
-	AllowEmpty bool   `json:"allowEmpty"`
-	AssertType string `json:"assertType,omitempty"`
+	// Pick will apply a glfs.Pick operation after Query has been applied to Source
+	Pick string `json:"pick,omitempty"`
 }

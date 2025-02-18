@@ -51,7 +51,7 @@ local compileGo(src) =
         want.input("/root/bin/protoc-gen-go", protocGenGo, mode="777"),
         want.input("/root/bin/protoc-gen-go-grpc", protocGenGoGrpc, mode="777"),
         want.input("/input", src),
-        want.input("/output", want.tree({})),
+        want.input("/output", want.tree()),
     ]);
     linux.runVM(1, 1e9, kernel=kernel, rootfs=root, init="/sbin/init", args=["/initscript"], output=want.prefix("output"));
 
