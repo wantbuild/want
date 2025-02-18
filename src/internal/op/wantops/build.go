@@ -46,29 +46,31 @@ func (e *Executor) Build(jc wantjob.Ctx, src cadata.Getter, buildTask BuildTask)
 	var errorsOccured bool
 	results := make([]wantjob.Result, len(dags))
 	src2 := stores.Union{src, jc.Dst, planStore}
-	eg := errgroup.Group{}
-	for i := range dags {
-		i := i
-		eg.Go(func() error {
-			defer jc.InfoSpan("build " + targets[i].DefinedIn)()
-			res, dagStore, err := wantjob.Do(ctx, jc.System, src2, wantjob.Task{
-				Op:    e.DAGExecOp,
-				Input: glfstasks.MarshalGLFSRef(dags[i]),
-			})
-			if err != nil {
-				return err
-			}
-			errorsOccured = errorsOccured || res.ErrCode > 0
-			if ref, err := glfstasks.ParseGLFSRef(res.Data); err == nil {
-				if err := glfstasks.FastSync(ctx, jc.Dst, dagStore, *ref); err != nil {
+	if err := func() error {
+		eg, ctx := errgroup.WithContext(jc.Context)
+		for i := range dags {
+			i := i
+			eg.Go(func() error {
+				defer jc.InfoSpan("build " + targets[i].DefinedIn)()
+				res, dagStore, err := wantjob.Do(ctx, jc.System, src2, wantjob.Task{
+					Op:    e.DAGExecOp,
+					Input: glfstasks.MarshalGLFSRef(dags[i]),
+				})
+				if err != nil {
 					return err
 				}
-			}
-			results[i] = *res
-			return nil
-		})
-	}
-	if err := eg.Wait(); err != nil {
+				errorsOccured = errorsOccured || res.ErrCode > 0
+				if ref, err := glfstasks.ParseGLFSRef(res.Data); err == nil {
+					if err := glfstasks.FastSync(ctx, jc.Dst, dagStore, *ref); err != nil {
+						return err
+					}
+				}
+				results[i] = *res
+				return nil
+			})
+		}
+		return eg.Wait()
+	}(); err != nil {
 		return nil, err
 	}
 

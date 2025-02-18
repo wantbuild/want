@@ -27,7 +27,7 @@ func ParallelExecLast(jc wantjob.Ctx, src cadata.Getter, x DAG) (*wantjob.Result
 		needCount[i] += int32(len(n.Inputs))
 	}
 
-	eg := errgroup.Group{}
+	eg, ctx := errgroup.WithContext(jc.Context)
 	var worker func(NodeID) error
 	worker = func(id NodeID) error {
 		node := x[id]
@@ -38,11 +38,11 @@ func ParallelExecLast(jc wantjob.Ctx, src cadata.Getter, x DAG) (*wantjob.Result
 			outRef = node.Value
 			results[id] = *glfstasks.Success(*node.Value)
 		case node.IsDerived():
-			inputRef, err := PrepareInput(jc.Context, jc.Dst, union, node.Inputs, resolve)
+			inputRef, err := PrepareInput(ctx, jc.Dst, union, node.Inputs, resolve)
 			if err != nil {
 				return err
 			}
-			res, outSrc, err := wantjob.Do(jc.Context, jc.System, union, wantjob.Task{
+			res, outSrc, err := wantjob.Do(ctx, jc.System, union, wantjob.Task{
 				Op:    node.Op,
 				Input: glfstasks.MarshalGLFSRef(*inputRef),
 			})
@@ -59,7 +59,7 @@ func ParallelExecLast(jc wantjob.Ctx, src cadata.Getter, x DAG) (*wantjob.Result
 			results[id] = *res
 		}
 		if outRef != nil {
-			if err := glfstasks.FastSync(jc.Context, jc.Dst, union, *outRef); err != nil {
+			if err := glfstasks.FastSync(ctx, jc.Dst, union, *outRef); err != nil {
 				return err
 			}
 		}

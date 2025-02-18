@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -13,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/kr/text"
 	"go.brendoncarroll.net/exp/singleflight"
 	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/stdctx/logctx"
@@ -21,7 +19,6 @@ import (
 	"go.uber.org/zap"
 
 	"wantbuild.io/want/src/internal/dbutil"
-	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/wantdb"
 	"wantbuild.io/want/src/wantjob"
 )
@@ -188,20 +185,16 @@ func (j *job) cancel() error {
 	panic("cancel not implemented")
 }
 
-func (j *job) finish(ctx context.Context, res wantjob.Result) error {
+func (j *job) finish(ctx context.Context, res wantjob.Result) {
 	for k, w := range j.logWriters {
 		if err := w.Close(); err != nil {
 			logctx.Error(ctx, "closing log writer", zap.Any("job", j.id), zap.String("topic", k), zap.Error(err))
 		}
 		delete(j.logWriters, k)
 	}
-	if err := j.sys.finishJob(ctx, j, res); err != nil {
-		return err
-	}
 	j.result = &res
 	j.endAt = tai64.Now()
 	close(j.done)
-	return nil
 }
 
 func (j *job) viewResult() (*wantjob.Result, cadata.Getter, error) {
@@ -403,7 +396,12 @@ func (s *jobSystem) maybeEnqueue(jstate *job, dbJob *wantjob.Job) {
 	}
 }
 
-func (s *jobSystem) process(x *job) error {
+func (s *jobSystem) process(x *job) (retErr error) {
+	defer func() {
+		if retErr != nil {
+			x.finish(s.bgCtx, *wantjob.Result_ErrInternal(retErr))
+		}
+	}()
 	taskID := x.task.ID()
 	var original bool
 	res, err := s.og.Do(taskID, func() (wantjob.Result, error) {
@@ -421,8 +419,11 @@ func (s *jobSystem) process(x *job) error {
 		} else {
 			res = *wantjob.Success(out)
 		}
-		if err := x.finish(s.bgCtx, res); err != nil {
-			return res, err
+		// we have to complete the job in the database here because down below
+		// we do a Pull, and there needs to be a completed job to pull from.
+		// without this, there is a race that can cause errors.
+		if err := s.finishJob(s.bgCtx, x.id, res); err != nil {
+			return *wantjob.Result_ErrInternal(err), nil
 		}
 		return res, nil
 	})
@@ -435,33 +436,20 @@ func (s *jobSystem) process(x *job) error {
 		if err := x.dst.(*wantdb.DBStore).Pull(s.bgCtx, res.Data); err != nil {
 			return err
 		}
-		return x.finish(s.bgCtx, res)
-	}
-	return nil
-}
-
-func (s *jobSystem) finishJob(ctx context.Context, j *job, res wantjob.Result) error {
-	if s.verifyGLFS {
-		if err := s.checkGLFS(ctx, j.dst, res); err != nil {
-			log.Println("SPAWNED AT:\n", text.Indent(string(j.stackTrace), "\t"))
-			return fmt.Errorf("job=%v op=%v left invalid store: %w", j.id, j.task.Op, err)
-		}
-	}
-	return dbutil.DoTx(ctx, s.db, func(tx *sqlx.Tx) error {
-		return wantdb.FinishJob(tx, j.id, res)
-	})
-}
-
-func (sys *jobSystem) checkGLFS(ctx context.Context, s cadata.Store, res wantjob.Result) error {
-	if res.ErrCode > 0 {
-		return nil
-	}
-	if ref, err := glfstasks.ParseGLFSRef(res.Data); err == nil {
-		if err := glfstasks.Check(ctx, s, *ref); err != nil {
+		if err := s.finishJob(s.bgCtx, x.id, res); err != nil {
 			return err
 		}
 	}
+
+	x.finish(s.bgCtx, res)
 	return nil
+}
+
+// finishJob finishes the job in the database
+func (s *jobSystem) finishJob(ctx context.Context, jobid wantjob.JobID, res wantjob.Result) error {
+	return dbutil.DoTx(ctx, s.db, func(tx *sqlx.Tx) error {
+		return wantdb.FinishJob(tx, jobid, res)
+	})
 }
 
 func (s *jobSystem) openLogFile(id wantjob.JobID, topic string) (*os.File, error) {

@@ -65,8 +65,10 @@ func (ec ErrCode) String() string {
 		return "TIMEOUT"
 	case CANCELLED:
 		return "CANCELLED"
-	case EXEC_FAILURE:
-		return "EXECUTION_FAILURE"
+	case EXEC_ERROR:
+		return "EXECUTION_ERROR"
+	case INTERNAL_ERROR:
+		return "INTERNAL_ERROR"
 	default:
 		return strconv.Itoa(int(ec))
 	}
@@ -74,13 +76,16 @@ func (ec ErrCode) String() string {
 
 const (
 	// OK means the job completed successfully
-	OK ErrCode = iota
+	OK ErrCode = 0
 	// TIMEOUT means the system lost contact with the job or it was taking too long
-	TIMEOUT
+	TIMEOUT = 1
 	// CANCELLED means the job was cancelled before it could complete
-	CANCELLED
-	// EXEC_FAILURE is an execution error
-	EXEC_FAILURE
+	CANCELLED = 2
+
+	// EXEC_ERROR is an execution error, directly related to performing the task.
+	EXEC_ERROR = 4
+	// INTERNAL_ERROR is a system failure, unrelated to the task.
+	INTERNAL_ERROR = 5
 )
 
 // Result is produced by finished jobs.
@@ -95,7 +100,11 @@ func Success(data []byte) *Result {
 }
 
 func Result_ErrExec(err error) *Result {
-	return &Result{ErrCode: EXEC_FAILURE, Data: []byte(err.Error())}
+	return &Result{ErrCode: EXEC_ERROR, Data: []byte(err.Error())}
+}
+
+func Result_ErrInternal(err error) *Result {
+	return &Result{ErrCode: INTERNAL_ERROR, Data: []byte(err.Error())}
 }
 
 func (r *Result) Err() error {

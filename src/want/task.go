@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 
 	"go.brendoncarroll.net/state/cadata"
 
@@ -23,9 +22,10 @@ import (
 type executorFactory = func(jc wantjob.Ctx) (wantjob.Executor, error)
 
 type executor struct {
-	mu    sync.RWMutex
 	execs map[wantjob.OpName]wantjob.Executor
 	setup map[wantjob.OpName]executorFactory
+
+	setupOg onceGroup[string, wantjob.Executor]
 }
 
 type QEMUConfig = qemuops.Config
@@ -76,22 +76,24 @@ func newExecutor(cfg ExecutorConfig) *executor {
 
 func (e *executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task) ([]byte, error) {
 	parts := strings.SplitN(string(task.Op), ".", 2)
-	e.mu.RLock()
-	e2, exists := e.execs[wantjob.OpName(parts[0])]
-	e.mu.RUnlock()
+	execName := wantjob.OpName(parts[0])
+
+	e2, exists := e.execs[execName]
 	if !exists {
-		setup, exists := e.setup[wantjob.OpName(parts[0])]
-		if !exists {
-			return nil, wantjob.ErrOpNotFound{Op: task.Op}
+		var err error
+		if e2, err = e.setupOg.Do(parts[0], func() (wantjob.Executor, error) {
+			setup, exists := e.setup[execName]
+			if !exists {
+				return nil, wantjob.ErrOpNotFound{Op: task.Op}
+			}
+			exec, err := setup(jc)
+			if err != nil {
+				return nil, fmt.Errorf("setting up exec for %v: %w", task.Op, err)
+			}
+			return exec, nil
+		}); err != nil {
+			return nil, err
 		}
-		exec, err := setup(jc)
-		if err != nil {
-			return nil, fmt.Errorf("setting up exec for %v: %w", task.Op, err)
-		}
-		e.mu.Lock()
-		e.execs[wantjob.OpName(parts[0])] = exec
-		e.mu.Unlock()
-		e2 = exec
 	}
 	return e2.Execute(jc, src, wantjob.Task{
 		Op:    wantjob.OpName(parts[1]),
