@@ -1,7 +1,9 @@
 package wantdb
 
 import (
+	"maps"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/jmoiron/sqlx"
@@ -10,6 +12,27 @@ import (
 	"wantbuild.io/want/src/internal/testutil"
 	"wantbuild.io/want/src/wantjob"
 )
+
+func TestOptions(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	defer db.Close()
+
+	opts := map[string]string{
+		"foreign_keys": "1",
+		"synchronous":  "2",
+		"journal_mode": "wal",
+	}
+	ks := slices.Collect(maps.Keys(opts))
+	slices.Sort(ks)
+	for _, k := range ks {
+		expected := opts[k]
+		var ret string
+		require.NoError(t, db.Get(&ret, `PRAGMA `+k))
+		t.Log(k, ret)
+		require.Equal(t, ret, expected)
+	}
+}
 
 func TestSetup(t *testing.T) {
 	ctx := testutil.Context(t)

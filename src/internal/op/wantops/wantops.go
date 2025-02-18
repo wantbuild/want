@@ -101,7 +101,7 @@ func (e Executor) CompileSnippet(ctx context.Context, dst cadata.Store, s cadata
 func DoCompile(ctx context.Context, sys wantjob.System, compileOp wantjob.OpName, src cadata.Getter, ct wantc.CompileTask) (*wantc.Plan, cadata.Getter, error) {
 	scratch := stores.NewMem()
 	for _, ref := range ct.Deps {
-		if err := glfs.Sync(ctx, scratch, src, ref); err != nil {
+		if err := glfstasks.FastSync(ctx, scratch, src, ref); err != nil {
 			return nil, nil, err
 		}
 	}

@@ -11,6 +11,7 @@ import (
 	"go.brendoncarroll.net/exp/streams"
 	"go.brendoncarroll.net/state/cadata"
 
+	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/stringsets"
 	"wantbuild.io/want/src/wantcfg"
 )
@@ -81,7 +82,7 @@ func SyncPlan(ctx context.Context, dst cadata.PostExister, src cadata.Getter, pl
 		}
 	}
 	for ref := range allRefs {
-		if err := glfs.Sync(ctx, dst, src, ref); err != nil {
+		if err := glfstasks.FastSync(ctx, dst, src, ref); err != nil {
 			return err
 		}
 	}

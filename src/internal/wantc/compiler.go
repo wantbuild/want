@@ -16,6 +16,7 @@ import (
 	"go.brendoncarroll.net/stdctx/logctx"
 	"golang.org/x/sync/errgroup"
 
+	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/op/glfsops"
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/stringsets"
@@ -248,7 +249,7 @@ func (c *Compiler) addSourceFile(cc *compileCtx, eg *errgroup.Group, p string, m
 		case IsStmtFilePath(p):
 			return c.loadStmtFile(cc, p)
 		default:
-			if err := glfs.Sync(cc.ctx, cc.dst, cc.src, ref); err != nil {
+			if err := glfstasks.FastSync(cc.ctx, cc.dst, cc.src, ref); err != nil {
 				return err
 			}
 			cc.knownMu.Lock()
@@ -546,7 +547,7 @@ func (c *Compiler) makeKnown(cc *compileCtx) error {
 	if err != nil {
 		return err
 	}
-	if err := glfs.Sync(cc.ctx, cc.dst, cc.src, *ref); err != nil {
+	if err := glfstasks.FastSync(cc.ctx, cc.dst, cc.src, *ref); err != nil {
 		return err
 	}
 	cc.knownRef = ref

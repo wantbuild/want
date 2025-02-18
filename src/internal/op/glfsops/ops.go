@@ -12,6 +12,7 @@ import (
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
+	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/stringsets"
 	"wantbuild.io/want/src/internal/wantdag"
 	"wantbuild.io/want/src/wantcfg"
@@ -100,7 +101,7 @@ func Place(ctx context.Context, dst cadata.PostExister, src cadata.Getter, input
 	if err != nil {
 		return nil, fmt.Errorf("place: while reading path %w", err)
 	}
-	if err := glfs.Sync(ctx, dst, src, xent.Ref); err != nil {
+	if err := glfstasks.FastSync(ctx, dst, src, xent.Ref); err != nil {
 		return nil, err
 	}
 	return glfs.PostTreeSlice(ctx, dst, []glfs.TreeEntry{
@@ -109,7 +110,7 @@ func Place(ctx context.Context, dst cadata.PostExister, src cadata.Getter, input
 }
 
 func Passthrough(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inputRef glfs.Ref) (*glfs.Ref, error) {
-	if err := glfs.Sync(ctx, dst, src, inputRef); err != nil {
+	if err := glfstasks.FastSync(ctx, dst, src, inputRef); err != nil {
 		return nil, err
 	}
 	return &inputRef, nil

@@ -9,6 +9,8 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"go.brendoncarroll.net/state/cadata"
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 
 	"wantbuild.io/want/src/internal/dbutil"
 	"wantbuild.io/want/src/internal/stores"
@@ -33,24 +35,19 @@ func (s *DBStore) Post(ctx context.Context, data []byte) (cadata.ID, error) {
 
 func (s *DBStore) Get(ctx context.Context, id cadata.ID, buf []byte) (int, error) {
 	return dbutil.ROTx1(ctx, s.db, func(tx *sqlx.Tx) (int, error) {
-		return GetBlob(tx, s.id, id, buf)
+		return GetBlob(tx, 0, id, buf)
 	})
 }
 
 func (s *DBStore) Exists(ctx context.Context, id cadata.ID) (bool, error) {
 	return dbutil.ROTx1(ctx, s.db, func(tx *sqlx.Tx) (bool, error) {
-		return storeContains(tx, s.id, id)
+		return storeContains(tx, 0, id)
 	})
 }
 
 func (s *DBStore) Add(ctx context.Context, id cadata.ID) error {
 	return dbutil.DoTx(ctx, s.db, func(tx *sqlx.Tx) error {
-		if exists, err := blobExists(tx, id); err != nil {
-			return err
-		} else if !exists {
-			return cadata.ErrNotFound{Key: id}
-		}
-		return storeAdd(tx, s.id, id)
+		return AddBlob(tx, s.id, id)
 	})
 }
 
@@ -190,7 +187,7 @@ func PostBlob(tx *sqlx.Tx, sid StoreID, data []byte) (cadata.ID, error) {
 			return cadata.ID{}, err
 		}
 	}
-	if err := storeAdd(tx, sid, id); err != nil {
+	if err := AddBlob(tx, sid, id); err != nil {
 		return cadata.ID{}, err
 	}
 	return id, nil
@@ -198,9 +195,15 @@ func PostBlob(tx *sqlx.Tx, sid StoreID, data []byte) (cadata.ID, error) {
 
 func GetBlob(tx *sqlx.Tx, sid StoreID, id cadata.ID, buf []byte) (int, error) {
 	var data []byte
-	if err := tx.Get(&data, `SELECT blobs.data FROM blobs
+	var err error
+	if sid == 0 {
+		err = tx.Get(&data, `SELECT blobs.data FROM blobs WHERE id = ?`, id)
+	} else {
+		err = tx.Get(&data, `SELECT blobs.data FROM blobs
 		JOIN store_blobs sb ON sb.blob_id = blobs.id
-		WHERE store_id = ? AND blob_id = ?`, sid, id); err != nil {
+		WHERE store_id = ? AND blob_id = ?`, sid, id)
+	}
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, cadata.ErrNotFound{Key: id}
 		}
@@ -213,12 +216,19 @@ func GetBlob(tx *sqlx.Tx, sid StoreID, id cadata.ID, buf []byte) (int, error) {
 }
 
 func AddBlob(tx *sqlx.Tx, sid StoreID, id cadata.ID) error {
-	if exists, err := blobExists(tx, id); err != nil {
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO store_blobs (store_id, blob_id) VALUES (?, ?)`, sid, id); err != nil {
+		sqlerr := &sqlite.Error{}
+		if errors.As(err, &sqlerr) {
+			if sqlerr.Code() == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY {
+				return cadata.ErrNotFound{Key: id}
+			}
+		}
 		return err
-	} else if !exists {
-		return cadata.ErrNotFound{Key: id}
 	}
-	return storeAdd(tx, sid, id)
+	if _, err := tx.Exec(`UPDATE blobs SET rc = rc + CHANGES() WHERE id = ?`, id); err != nil {
+		return err
+	}
+	return nil
 }
 
 func DeleteBlob(tx *sqlx.Tx, sid StoreID, id cadata.ID) error {
@@ -250,22 +260,13 @@ func CopyAll(tx *sqlx.Tx, src, dst StoreID) error {
 
 func storeContains(tx *sqlx.Tx, sid StoreID, id cadata.ID) (bool, error) {
 	var exists bool
-	err := tx.Get(&exists, `SELECT EXISTS (SELECT 1 FROM store_blobs WHERE store_id = ? AND blob_id = ?)`, sid, id)
+	var err error
+	if sid == 0 {
+		err = tx.Get(&exists, `SELECT EXISTS (SELECT 1 FROM blobs WHERE id = ?)`, id)
+	} else {
+		err = tx.Get(&exists, `SELECT EXISTS (SELECT 1 FROM store_blobs WHERE store_id = ? AND blob_id = ?)`, sid, id)
+	}
 	return exists, err
-}
-
-func storeAdd(tx *sqlx.Tx, sid StoreID, id cadata.ID) error {
-	yes, err := storeContains(tx, sid, id)
-	if err != nil {
-		return err
-	}
-	if !yes {
-		if _, err := tx.Exec(`INSERT INTO store_blobs (store_id, blob_id) VALUES (?, ?)`, sid, id); err != nil {
-			return err
-		}
-		return incrBlobRC(tx, id)
-	}
-	return nil
 }
 
 func storeRemove(tx *sqlx.Tx, sid StoreID, id cadata.ID) error {
@@ -297,11 +298,6 @@ func insertBlob(tx *sqlx.Tx, id cadata.ID, data []byte) error {
 
 func dropBlob(tx *sqlx.Tx, id cadata.ID) error {
 	_, err := tx.Exec(`DELETE FROM blobs WHERE id = ?`, id)
-	return err
-}
-
-func incrBlobRC(tx *sqlx.Tx, id cadata.ID) error {
-	_, err := tx.Exec(`UPDATE blobs SET rc = rc + 1 WHERE id = ?`, id)
 	return err
 }
 

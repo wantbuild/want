@@ -9,6 +9,7 @@ import (
 	"github.com/blobcache/glfs"
 	"go.brendoncarroll.net/exp/streams"
 	"go.brendoncarroll.net/state/cadata"
+	"golang.org/x/sync/errgroup"
 
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/wantdb"
@@ -67,6 +68,9 @@ func Success(x glfs.Ref) *wantjob.Result {
 }
 
 func FastSync(ctx context.Context, dst cadata.PostExister, src cadata.Getter, root glfs.Ref) error {
+	if exists, err := dst.Exists(ctx, root.CID); err == nil && exists {
+		return nil
+	}
 	rootData := MarshalGLFSRef(root)
 	var err error
 	switch dst := dst.(type) {
@@ -78,7 +82,25 @@ func FastSync(ctx context.Context, dst cadata.PostExister, src cadata.Getter, ro
 		return glfs.Sync(ctx, dst, src, root)
 	}
 	if errors.Is(err, wantdb.ErrPullNoMatch) {
-		return glfs.Sync(ctx, dst, src, root)
+		if root.Type == glfs.TypeTree {
+			ents, err := glfs.GetTreeSlice(ctx, src, root, 1e6)
+			if err != nil {
+				return err
+			}
+			eg := errgroup.Group{}
+			for _, ent := range ents {
+				ent := ent
+				eg.Go(func() error {
+					return FastSync(ctx, dst, src, ent.Ref)
+				})
+			}
+			if err := eg.Wait(); err != nil {
+				return err
+			}
+			return cadata.Copy(ctx, dst, src, root.CID)
+		} else {
+			return glfs.Sync(ctx, dst, src, root)
+		}
 	}
 	return err
 }

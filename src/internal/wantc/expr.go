@@ -15,6 +15,7 @@ import (
 	"go.brendoncarroll.net/state/cadata"
 	"lukechampine.com/blake3"
 
+	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/stringsets"
 	"wantbuild.io/want/src/internal/wantdag"
@@ -302,7 +303,7 @@ func (c *Compiler) compileRef(ctx context.Context, dst cadata.Store, src cadata.
 	}); err != nil {
 		return nil, err
 	}
-	if err := glfs.Sync(ctx, dst, src, x); err != nil {
+	if err := glfstasks.FastSync(ctx, dst, src, x); err != nil {
 		return nil, err
 	}
 	return &value{ref: x}, nil
