@@ -31,7 +31,7 @@ type Executor struct {
 	DAGExecOp wantjob.OpName
 }
 
-func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]byte, error) {
+func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) wantjob.Result {
 	ctx := jc.Context
 	switch x.Op {
 	case OpBuild:
@@ -65,7 +65,7 @@ func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]
 			return e.CompileSnippet(ctx, jc.Dst, src, x)
 		})
 	default:
-		return nil, wantjob.NewErrUnknownOperator(x.Op)
+		return *wantjob.Result_ErrExec(wantjob.NewErrUnknownOperator(x.Op))
 	}
 }
 

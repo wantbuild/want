@@ -214,11 +214,10 @@ func (js *job) isDone() bool {
 }
 
 type jobSystem struct {
-	db         *sqlx.DB
-	logDir     string
-	verifyGLFS bool
-	exec       wantjob.Executor
-	og         onceGroup[wantjob.TaskID, wantjob.Result]
+	db     *sqlx.DB
+	logDir string
+	exec   wantjob.Executor
+	og     onceGroup[wantjob.TaskID, wantjob.Result]
 
 	bgCtx context.Context
 	cf    context.CancelFunc
@@ -233,10 +232,9 @@ type jobSystem struct {
 func newJobSystem(db *sqlx.DB, logDir string, exec wantjob.Executor, numWorkers int) *jobSystem {
 	bgCtx, cf := context.WithCancel(context.Background())
 	s := &jobSystem{
-		db:         db,
-		logDir:     logDir,
-		exec:       exec,
-		verifyGLFS: false,
+		db:     db,
+		logDir: logDir,
+		exec:   exec,
 
 		bgCtx: bgCtx,
 		cf:    cf,
@@ -412,13 +410,8 @@ func (s *jobSystem) process(x *job) (retErr error) {
 			System:  x,
 			Writer:  x.Writer,
 		}
-		out, err := s.exec.Execute(jc, x.src, x.task)
-		var res wantjob.Result
-		if err != nil {
-			res = *wantjob.Result_ErrExec(err)
-		} else {
-			res = *wantjob.Success(out)
-		}
+		res := s.exec.Execute(jc, x.src, x.task)
+
 		// we have to complete the job in the database here because down below
 		// we do a Pull, and there needs to be a completed job to pull from.
 		// without this, there is a race that can cause errors.

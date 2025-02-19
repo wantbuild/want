@@ -13,7 +13,7 @@ var _ wantjob.Executor = Executor{}
 
 type Executor struct{}
 
-func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]byte, error) {
+func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) wantjob.Result {
 	ctx := jc.Context
 	switch x.Op {
 	case OpAll:
@@ -32,6 +32,6 @@ func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]
 			return ref, nil
 		})
 	default:
-		return nil, wantjob.NewErrUnknownOperator(x.Op)
+		return *wantjob.Result_ErrExec(wantjob.NewErrUnknownOperator(x.Op))
 	}
 }

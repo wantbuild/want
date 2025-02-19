@@ -49,7 +49,7 @@ func NewExecutor(cfg Config) *Executor {
 	}
 }
 
-func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task) ([]byte, error) {
+func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task) wantjob.Result {
 	ctx := jc.Context
 	switch task.Op {
 	case OpAmd64MicroVM:
@@ -69,7 +69,7 @@ func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task)
 		})
 
 	default:
-		return nil, wantjob.NewErrUnknownOperator(task.Op)
+		return *wantjob.Result_ErrExec(wantjob.NewErrUnknownOperator(task.Op))
 	}
 }
 

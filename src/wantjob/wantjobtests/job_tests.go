@@ -12,12 +12,11 @@ import (
 )
 
 func TestJobs(t *testing.T, mksys func(t testing.TB, exec wantjob.Executor) wantjob.System) {
-
 	t.Run("Do", func(t *testing.T) {
 		ctx := testutil.Context(t)
 		sys := mksys(t, wantjob.BasicExecutor{
-			"toUpper": func(jc wantjob.Ctx, src cadata.Getter, data []byte) ([]byte, error) {
-				return []byte(strings.ToUpper(string(data))), nil
+			"toUpper": func(jc wantjob.Ctx, src cadata.Getter, data []byte) wantjob.Result {
+				return *wantjob.Success(wantjob.Schema_NoRefs, []byte(strings.ToUpper(string(data))))
 			},
 		})
 		res, _, err := wantjob.Do(ctx, sys, stores.NewVoid(), wantjob.Task{Op: "toUpper", Input: []byte("hello")})

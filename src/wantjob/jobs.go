@@ -96,8 +96,8 @@ type Result struct {
 	Schema  Schema  `json:"sch"`
 }
 
-func Success(data []byte) *Result {
-	return &Result{Data: data}
+func Success(schema Schema, data []byte) *Result {
+	return &Result{Schema: schema, Data: data}
 }
 
 func Result_ErrExec(err error) *Result {
@@ -114,14 +114,6 @@ func (r *Result) Err() error {
 	}
 	return fmt.Errorf("job failed errcode=%v data=%s", r.ErrCode, r.Data)
 }
-
-type Schema string
-
-const (
-	Schema_None   = ""
-	Schema_NoRefs = "norefs"
-	Schema_GLFS   = "glfs"
-)
 
 type JobInfo struct {
 	ID JobID
@@ -161,7 +153,7 @@ type System interface {
 	ViewResult(ctx context.Context, idx Idx) (*Result, cadata.Getter, error)
 	// Delete makes the Job inaccessbile and frees any resources it is consuming.
 	// Delete will also cancel the Job if it is running, although this transitory state will
-	// be visible to the caller of Delete.
+	// not be visible to the caller of Delete.
 	Delete(ctx context.Context, idx Idx) error
 }
 

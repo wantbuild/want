@@ -42,10 +42,10 @@ func NewExecutor(installDir string) *Executor {
 	}
 }
 
-func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task) ([]byte, error) {
+func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task) wantjob.Result {
 	ctx := jc.Context
 	if err := e.buildSem.Acquire(ctx, 1); err != nil {
-		return nil, err
+		return *wantjob.Result_ErrInternal(err)
 	}
 	defer e.buildSem.Release(1)
 	switch task.Op {
@@ -70,7 +70,7 @@ func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task)
 			return e.ModDownload(jc, src, x)
 		})
 	default:
-		return nil, wantjob.NewErrUnknownOperator(task.Op)
+		return *wantjob.Result_ErrExec(wantjob.NewErrUnknownOperator(task.Op))
 	}
 }
 

@@ -56,12 +56,8 @@ func (j *memJob) Spawn(ctx context.Context, src cadata.Getter, task Task) (Idx, 
 				return text.NewIndentWriter(os.Stderr, []byte(prefix))
 			},
 		}
-		out, err := j.exec.Execute(jc, src, task)
-		if err != nil {
-			child.res = Result_ErrExec(err)
-		} else {
-			child.res = Success(out)
-		}
+		res := j.exec.Execute(jc, src, task)
+		child.res = &res
 		child.doneOnce.Do(func() {
 			close(child.done)
 		})

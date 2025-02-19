@@ -34,16 +34,18 @@ func Do(ctx context.Context, sys wantjob.System, src cadata.Getter, op wantjob.O
 	return ref, dst, nil
 }
 
-func Exec(x []byte, fn func(x glfs.Ref) (*glfs.Ref, error)) ([]byte, error) {
+func Exec(x []byte, fn func(x glfs.Ref) (*glfs.Ref, error)) wantjob.Result {
 	in, err := ParseGLFSRef(x)
 	if err != nil {
-		return nil, err
+		return *wantjob.Result_ErrExec(err)
 	}
 	out, err := fn(*in)
-	if out != nil {
-		return MarshalGLFSRef(*out), err
-	} else {
-		return nil, err
+	if err != nil {
+		return *wantjob.Result_ErrInternal(err)
+	}
+	return wantjob.Result{
+		Schema: wantjob.Schema_GLFS,
+		Data:   MarshalGLFSRef(*out),
 	}
 }
 

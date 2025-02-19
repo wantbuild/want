@@ -29,7 +29,7 @@ func NewExecutor() *Executor {
 	return &Executor{ag: glfs.NewAgent()}
 }
 
-func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([]byte, error) {
+func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) wantjob.Result {
 	ctx := jc.Context
 	switch x.Op {
 	case OpWASIp1:
@@ -49,6 +49,6 @@ func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) ([
 			return e.ExecNativeGLFS(jc, src, *task)
 		})
 	default:
-		return nil, wantjob.NewErrUnknownOperator(x.Op)
+		return *wantjob.Result_ErrExec(wantjob.NewErrUnknownOperator(x.Op))
 	}
 }

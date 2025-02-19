@@ -31,20 +31,18 @@ func TestJobStores(t *testing.T) {
 	db := wantdb.NewMemory()
 	require.NoError(t, wantdb.Setup(ctx, db))
 	exec := wantjob.BasicExecutor{
-		"op1": func(jc wantjob.Ctx, src cadata.Getter, x []byte) ([]byte, error) {
-			ctx := jc.Context
-			// generate some data in a tree which will need to be synced.
-			m := map[string]glfs.Ref{}
-			for _, k := range []string{"a", "b", "c"} {
-				ref, err := glfs.PostBlob(ctx, jc.Dst, strings.NewReader(strings.Repeat(k, 100)))
-				require.NoError(t, err)
-				m[k] = *ref
-			}
-			ref, err := glfs.PostTreeMap(ctx, jc.Dst, m)
-			if err != nil {
-				return nil, err
-			}
-			return glfstasks.MarshalGLFSRef(*ref), nil
+		"op1": func(jc wantjob.Ctx, src cadata.Getter, x []byte) wantjob.Result {
+			return glfstasks.Exec(x, func(x glfs.Ref) (*glfs.Ref, error) {
+				ctx := jc.Context
+				// generate some data in a tree which will need to be synced.
+				m := map[string]glfs.Ref{}
+				for _, k := range []string{"a", "b", "c"} {
+					ref, err := glfs.PostBlob(ctx, jc.Dst, strings.NewReader(strings.Repeat(k, 100)))
+					require.NoError(t, err)
+					m[k] = *ref
+				}
+				return glfs.PostTreeMap(ctx, jc.Dst, m)
+			})
 		},
 	}
 	logDir := t.TempDir()
@@ -52,7 +50,7 @@ func TestJobStores(t *testing.T) {
 	defer jsys.Shutdown()
 
 	s := stores.NewMem()
-	idx, err := jsys.Spawn(ctx, s, wantjob.Task{Op: "op1"})
+	idx, err := jsys.Spawn(ctx, s, wantjob.Task{Op: "op1", Input: []byte("{}")})
 	require.NoError(t, err)
 	require.NoError(t, jsys.Await(ctx, idx))
 

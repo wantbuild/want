@@ -31,7 +31,7 @@ func NewExecutor() *Executor {
 	return &Executor{hc: http.DefaultClient}
 }
 
-func (e *Executor) Execute(jc wantjob.Ctx, s cadata.Getter, x wantjob.Task) ([]byte, error) {
+func (e *Executor) Execute(jc wantjob.Ctx, s cadata.Getter, x wantjob.Task) wantjob.Result {
 	ctx := jc.Context
 
 	switch x.Op {
@@ -76,7 +76,7 @@ func (e *Executor) Execute(jc wantjob.Ctx, s cadata.Getter, x wantjob.Task) ([]b
 			return e.ImportOCIImage(jc, s, *spec)
 		})
 	default:
-		return nil, wantjob.NewErrUnknownOperator(x.Op)
+		return *wantjob.Result_ErrExec(wantjob.NewErrUnknownOperator(x.Op))
 	}
 }
 

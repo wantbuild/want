@@ -74,7 +74,7 @@ func newExecutor(cfg ExecutorConfig) *executor {
 	}
 }
 
-func (e *executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task) ([]byte, error) {
+func (e *executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task) wantjob.Result {
 	parts := strings.SplitN(string(task.Op), ".", 2)
 	execName := wantjob.OpName(parts[0])
 
@@ -92,7 +92,7 @@ func (e *executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task)
 			}
 			return exec, nil
 		}); err != nil {
-			return nil, err
+			return *wantjob.Result_ErrInternal(err)
 		}
 	}
 	return e2.Execute(jc, src, wantjob.Task{
