@@ -93,6 +93,7 @@ const (
 type Result struct {
 	ErrCode ErrCode `json:"ec"`
 	Data    []byte  `json:"d"`
+	Schema  Schema  `json:"sch"`
 }
 
 func Success(data []byte) *Result {
@@ -113,6 +114,14 @@ func (r *Result) Err() error {
 	}
 	return fmt.Errorf("job failed errcode=%v data=%s", r.ErrCode, r.Data)
 }
+
+type Schema string
+
+const (
+	Schema_None   = ""
+	Schema_NoRefs = "norefs"
+	Schema_GLFS   = "glfs"
+)
 
 type JobInfo struct {
 	ID JobID

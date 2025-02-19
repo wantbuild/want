@@ -22,16 +22,20 @@ var importRepoCmd = star.Command{
 		if err != nil {
 			return err
 		}
-		srcid, err := wbs.Import(ctx, repo)
+		afid, err := wbs.Import(ctx, repo)
 		if err != nil {
 			return err
 		}
 		dur := time.Since(startTime)
-		root, s, err := wbs.AccessSource(ctx, srcid)
+		af, err := wbs.ViewArtifact(ctx, *afid)
 		if err != nil {
 			return err
 		}
-		if err := printTreeRec(ctx, s, c.StdOut, *root); err != nil {
+		root, err := af.GLFS()
+		if err != nil {
+			return err
+		}
+		if err := printTreeRec(ctx, af.Store, c.StdOut, *root); err != nil {
 			return err
 		}
 		fmt.Fprintf(c.StdErr, "%v\n", dur)

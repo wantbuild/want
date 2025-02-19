@@ -16,11 +16,11 @@ CREATE TABLE store_blobs (
 
 ) STRICT, WITHOUT ROWID;
 
-CREATE TABLE sources (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+CREATE TABLE artifacts (
+    id BLOB PRIMARY KEY,
+    sch TEXT NOT NULL,
     store_id INT NOT NULL REFERENCES stores(id),
-    root TEXT NOT NULL,
-    repo_dir TEXT,
+    root BLOB NOT NULL,
     created_at BLOB NOT NULL
 ) STRICT;
 

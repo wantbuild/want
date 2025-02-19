@@ -8,6 +8,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/require"
+
 	"wantbuild.io/want/src/internal/dbutil"
 	"wantbuild.io/want/src/internal/testutil"
 	"wantbuild.io/want/src/wantjob"

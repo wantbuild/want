@@ -58,16 +58,20 @@ func Build(ctx context.Context, jobs wantjob.System, src cadata.Getter, bt Build
 }
 
 func (sys *System) Build(ctx context.Context, repo *wantrepo.Repo, query wantcfg.PathSet) (*BuildResult, error) {
-	srcid, err := sys.Import(ctx, repo)
+	afid, err := sys.Import(ctx, repo)
 	if err != nil {
 		return nil, err
 	}
-	srcRoot, srcStore, err := sys.AccessSource(ctx, srcid)
+	af, err := sys.ViewArtifact(ctx, *afid)
 	if err != nil {
 		return nil, err
 	}
-	return Build(ctx, sys.jobs, srcStore, BuildTask{
-		Main:     *srcRoot,
+	root, err := af.GLFS()
+	if err != nil {
+		return nil, err
+	}
+	return Build(ctx, sys.jobs, af.Store, BuildTask{
+		Main:     *root,
 		Metadata: repo.Metadata(),
 		Query:    query,
 	})
@@ -75,16 +79,20 @@ func (sys *System) Build(ctx context.Context, repo *wantrepo.Repo, query wantcfg
 
 // Blame lists the build targets
 func (sys *System) Blame(ctx context.Context, repo *wantrepo.Repo) ([]Target, error) {
-	srcid, err := sys.Import(ctx, repo)
+	afid, err := sys.Import(ctx, repo)
 	if err != nil {
 		return nil, err
 	}
-	srcRoot, srcStore, err := sys.AccessSource(ctx, srcid)
+	af, err := sys.ViewArtifact(ctx, *afid)
+	if err != nil {
+		return nil, err
+	}
+	root, err := af.GLFS()
 	if err != nil {
 		return nil, err
 	}
 	jctx := wantjob.Ctx{Context: ctx, Dst: stores.NewMem(), System: sys.jobs}
-	deps, err := wantops.MakeDeps(jctx, srcStore, *srcRoot, func(x wantcfg.Expr) (*glfs.Ref, error) {
+	deps, err := wantops.MakeDeps(jctx, af.Store, *root, func(x wantcfg.Expr) (*glfs.Ref, error) {
 		ref, store, err := sys.evalExpr(ctx, x)
 		if err != nil {
 			return nil, err
@@ -97,8 +105,8 @@ func (sys *System) Blame(ctx context.Context, repo *wantrepo.Repo) ([]Target, er
 	if err != nil {
 		return nil, err
 	}
-	plan, _, err := wantops.DoCompile(ctx, sys.jobs, joinOpName("want", wantops.OpCompile), srcStore, wantc.CompileTask{
-		Module:   *srcRoot,
+	plan, _, err := wantops.DoCompile(ctx, sys.jobs, joinOpName("want", wantops.OpCompile), af.Store, wantc.CompileTask{
+		Module:   *root,
 		Metadata: repo.Metadata(),
 		Deps:     deps,
 	})
