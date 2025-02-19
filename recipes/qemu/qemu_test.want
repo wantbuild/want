@@ -1,5 +1,6 @@
 local want = import "@want";
-local wassert = import "./assert.libsonnet";
+local qemu = import "qemu/qemu.libsonnet";
+local wassert = import "assert.libsonnet";
 local linux = import "linux/linux.libsonnet";
 local alpine = import "alpine/alpine.libsonnet";
 
@@ -18,12 +19,12 @@ local rootfs = want.pass([
 local kargs = "console=hvc0 reboot=t panic=-1 rootfstype=virtiofs root=myfs rw init=/bin/sh initscript";
 
 wassert.pathExists(
-    want.qemu.amd64_microvm(1, 1e9, kernel,
+    qemu.amd64_microvm(1, 1e9, kernel,
         initrd=null, kargs=kargs,
         virtiofs={
-            "myfs": want.qemu.virtiofs(root=rootfs, writeable=true),
+            "myfs": qemu.virtiofs(root=rootfs, writeable=true),
         },
-        output=want.qemu.virtiofs_output("myfs", want.prefix(""))
+        output=qemu.output_virtiofs("myfs", want.prefix(""))
     ),
     "success.txt"
 )

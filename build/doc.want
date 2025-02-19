@@ -38,7 +38,7 @@ local summaryMd = want.blob(|||
         - [Module Files](31_Module_Files.md)
         - [Expression Files](32_Expression_Files.md)
         - [Statement Files](33_Statement_Files.md)
-        - [Standard Library](34_Standard_Library.md)
+        - [Core Library](34_Core_Library.md)
 |||);
 
 local rootfs = want.pass([

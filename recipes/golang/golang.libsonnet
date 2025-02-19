@@ -1,4 +1,5 @@
 local want = import "@want";
+local wasm = import "wasm/wasm.libsonnet";
 local linux = import "linux/linux.libsonnet";
 local alpine = import "alpine/alpine.libsonnet";
 local builtin = import "./builtin.libsonnet";
@@ -83,7 +84,7 @@ local runTests(modSrc, basefs=defaultBaseFS, kernel=defaultKernel, ignore=[]) =
         want.input("basefs", basefs),
         want.input("kernel", kernel),
     ]);
-    want.wasm.nativeGLFS(1e9, wantGoExec, task, ["", "runTests"]);
+    wasm.nativeGLFS(1e9, wantGoExec, task, ["", "runTests"]);
 
 {
     dist :: dist,

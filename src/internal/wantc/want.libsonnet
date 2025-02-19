@@ -183,58 +183,6 @@ local evalSnippet(snip) =
     local output = compute("graph.eval", [input("", graph)]);
     compute("graph.pickLastValue", [input("", output)]);
 
-local qemu = {
-    virtiofs :: function(root, writeable)
-        {root: root, "writeable": writeable},
-
-    virtiofs_output :: function(fsid, q)
-        {"virtiofs": {"id": fsid, "query": q}},
-
-    amd64_microvm :: function(cores, memory, kernel, kargs, initrd, virtiofs, output)
-        // TODO: remove root from virtiofs configs
-        local config = blob(std.manifestJsonEx({
-            "cores": cores,
-            "memory": memory,
-            "kernel_args": kargs,
-            "virtiofs": virtiofs,
-            "output": output,
-        }, ""));
-        local virtiofsTree = compute("glfs.pass",
-            std.map(function(k) input(k, virtiofs[k].root), std.objectFields(virtiofs))
-        );
-        compute("qemu.amd64_microvm", std.flattenArrays([
-            [input("virtiofs", virtiofsTree)],
-            [input("kernel", kernel)],
-            if initrd != null then [input("initrd", initrd)] else [],
-            [input("vm.json", config)],
-        ])),
-};
-
-local wasm = {
-    wasip1 :: function(memory, wasm, inp, args=[], env={})
-        local config = blob(std.manifestJsonEx({
-            args: args,
-            env: env,
-            memory: memory,
-        }, ""));
-        compute("wasm.wasip1", [
-            input("program", wasm),
-            input("input", inp),
-            input("config.json", config)
-        ]),
-    nativeGLFS :: function(memory, wasm, inp, args=[], env={})
-        local config = blob(std.manifestJsonEx({
-            args: args,
-            env: env,
-            memory: memory,
-        }, ""));
-        compute("wasm.nativeGLFS", [
-            input("program", wasm),
-            input("input", inp),
-            input("config.json", config)
-        ]),
-};
-
 {
     // Literal
 
@@ -290,11 +238,5 @@ local wasm = {
     unpack :: unpack,
 
     // Want
-    evalSnippet :: evalSnippet,
-
-    // QEMU
-    qemu :: qemu,
-
-    // WASM
-    wasm :: wasm,
+    evalSnippet :: evalSnippet, 
 }

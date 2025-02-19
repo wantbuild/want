@@ -1,4 +1,5 @@
 local want = import "@want";
+local qemu = import "qemu/qemu.libsonnet";
 
 local bzImage = want.importURL(
     url = "https://github.com/wantbuild/qemu-static/releases/download/v0.1.0/bzImage",
@@ -14,15 +15,15 @@ local dumbInit = want.importURL(
 
 local runVM(cores, memory, kernel, rootfs, init="/sbin/init", args=[], output=want.prefix("")) =
     local virtiofs = {
-        "myfs": want.qemu.virtiofs(root=rootfs, writeable=true),
+        "myfs": qemu.virtiofs(root=rootfs, writeable=true),
     };
 
     local kargs = "console=hvc0 reboot=t panic=-1 rootfstype=virtiofs root=myfs rw init=%s " % [init] + std.join(" ", args);
-    want.qemu.amd64_microvm(cores, memory, kernel,
+    qemu.amd64_microvm(cores, memory, kernel,
         initrd = null,
         kargs = kargs,
         virtiofs = virtiofs,
-        output = want.qemu.virtiofs_output("myfs", output),
+        output = qemu.output_virtiofs("myfs", output),
     );
 
 {

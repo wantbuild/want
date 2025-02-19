@@ -1,6 +1,6 @@
-# Want Standard Library
+# Want Core Library
 
-The want standard library is available in Module files (`WANT`) as `@want`.
+The Want Core library is available in Module files (`WANT`) as `@want`.
 
 e.g.
 ```jsonnet
@@ -15,14 +15,18 @@ These functions specify an output directly, without any further computation.
 ### `blob(contents: String): Expr`
 Evaluates to a Blob literal.
 
-### `treeEntry(mode: String, e Expr): TreeEntry`
+### `treeEntry(name: String, mode: String, e Expr): TreeEntry`
 Specifies an entry in a Tree.
+- `name` is the name within the tree.
+- `mode` is parsed as an octal number.
+- `e` is the contents of the entry.
+
 This is just UNIX permission bits attached to a Filesystem Expr.  It is not a valid Filesystem expression on its own.
 
-### `tree(ents: Map[String, TreeEntry]): Expr`
+### `tree(ents: List[TreeEntry]): Expr`
 Evaluates to a Tree literal.
 
-> NOTE: All elements of a tree must be known.  To assemble a tree see `pass`
+> NOTE: All elements of a tree must be known.  To assemble a tree during the build see `pass`
 
 ## Path Sets
 These functions specify sets of Paths, which are used in several places in the API.
@@ -46,7 +50,9 @@ The paths in common between all the sets in `xs`. i.e in `xs[0]` and `xs[1]` and
 The paths which are in any of the sets in `xs`. i.e. in `xs[0]` or `xs[1]` or `xs[2]`, etc...
 
 ### `subtract(l: PathSet, r: PathSet): PathSet`
-A convenience function which is equivalent to `intersect([l, not(r)])`
+A convenience function which is equivalent to `intersect([l, not(r)])`.
+- `l` is the left side of a subtraction expression `l - r`
+- `r` is the right side of an subtraction expression `l - r`
 
 ## Selections
 Selections are Exprs which refer to build inputs or outputs.
@@ -70,7 +76,7 @@ Selections have the potential to produce cycles because it is possible to expres
 Want will return an error quickly when a cycle is detected.
 There is no risk of launching an infinite circular process.
 
-Selecting from `GROUND` never produces a cycle.  It is the state of Module as-is, before any build steps have been computed.
+Selecting from `GROUND` never produces a cycle.  `GROUND` is the state of Module as-is, before any build steps have been computed.
 
 Selecting from `DERIVED` can produce cycles, because it depends on the build output.
 An expression which makes a selection can only be computed after expressions which output to that selection.
@@ -85,7 +91,7 @@ It is equivalent to selecting `unit(p)` and then calling `pick` to extract the f
 
 ### `selectDir(src: Source, p: String): Expr`
 This is a convenience function for selecting directories.
-It is equivalent to selecting `union([unit(p), prefix(p)])`. and then calling `pick` to extract the directory.
+It is equivalent to selecting `union([unit(p), prefix(p + "/")])`. and then calling `pick` to extract the directory.
 
 ## Compute
 These functions allow computations to be specified
@@ -100,6 +106,10 @@ An operation identified by `op` will be performed on the inputs provided.
 The inputs will also be computed if the have not been already.
 
 These are the core functions in Want that everything is based on.
+
+### `pass(inputs: List[Inputs]): Expr`
+Short for "passthrough".
+This performs no additional computation other than assembling the inputs into a single directory, which is done for all computations.
 
 ## Git-Like Filesystem
 Want represents all data in a format called the *Git-Like Filesystem* or *GLFS* for short.  Primitive operations on the GLFS Refs are essential.
@@ -139,8 +149,8 @@ If the actual hash does not match `hash`, then the import will fail.
 Transforms are applied after the hash check.
 
 **Hash Algorithms**
-- `SHA256`, `SHA2-256`
-- `SHA512`, `SHA2-512`
+- `SHA2-256`, `SHA256` 
+- `SHA2-512`, `SHA512` 
 - `SHA3-256`
 - `BLAKE2b-256`
 - `BLAKE3-256`
@@ -155,12 +165,6 @@ Transforms are applied after the hash check.
 ### `importGit(repoUrl: String, commitHash: String): Expr`
 Imports the Git Tree from the Commit identified by `commitHash`.
 
-### `unpack(x: Expr, transforms: []String): String`
-Unpack isn't a real import, but it uses the transform functionality from the import system.
-It takes an existing filesystem expression and applies the transforms in order to return the output.
-
-`unpack` supports the same transforms as `importURL`
-
 ### `importOCI(url: String, algo: String, hash: String): Expr`
 Imports an [Open Container Initiative](https://opencontainers.org/) ([Docker](https://www.docker.com)) Image.
 
@@ -173,6 +177,12 @@ want.importOCIImage(
 )
 ```
 
+### `unpack(x: Expr, transforms: []String): String`
+Unpack isn't a real import, it doesn't use the network, but it uses the transform functionality from the import system.
+It takes an existing filesystem expression and applies the transforms in order to return the output.
+
+`unpack` supports the same transforms as `importURL`
+
 ## Statements
 Statements can only be used in a statement file (ending in `.wants`)
 
@@ -183,7 +193,10 @@ The contents of dst will be taken by copying the paths from the evaluation of `x
 ### `putFile(dst: String, x: Expr): Stmt`
 Creates a target, which will be a single path `dst` in the build output.
 It will be populated by the evaluation of `x`, which must evaluate to a file.
+It is equivalent to `put(unit(dst), place(x, dst))`
 
 ### `putDir(dst: String, x: Expr): Stmt`
 Creates a target occupying `prefix(dst)` in the build output.
-It will be populated by the evaluationg of `x`.
+It will be populated by the evaluation of `x`.
+It is equivalent to `put(union([unit(dst), prefix(dst + "/")]), place(x, dst)`.
+
