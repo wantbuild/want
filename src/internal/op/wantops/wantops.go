@@ -131,7 +131,7 @@ func (e Executor) EvalExpr(jc wantjob.Ctx, src cadata.Getter, expr wantcfg.Expr)
 	if err != nil {
 		return nil, err
 	}
-	outRef, outGet, err := glfstasks.Do(ctx, jc.System, jc.Dst, e.DAGExecOp, *dagRef)
+	outRef, outGet, err := glfstasks.Do(ctx, maskJobs{System: jc.System}, jc.Dst, e.DAGExecOp, *dagRef)
 	if err != nil {
 		return nil, err
 	}
