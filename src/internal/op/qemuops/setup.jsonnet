@@ -8,16 +8,16 @@ local qbootRom = want.importURL(
 
 local virtiofsds = { 
     "amd64-linux": want.importURL(
-        url = "https://london.mirror.pkgbuild.com/extra/os/x86_64/virtiofsd-1.13.1-1-x86_64.pkg.tar.zst",
+        url = "https://gitlab.com/virtio-fs/virtiofsd/-/jobs/9064502624/artifacts/download?file_type=archive",
 		algo="SHA256",
-        hash="17a56fd4392a8a752c18d05e7c0f8895440eab974f5557c4b3c22d5e5df2f1af",
-		transforms=["unzstd", "untar"],
+        hash="af5e48ca2b6a5e6ef46b061e32e1f66517cfb5ef9f499ee2fe73846246359e62",
+		transforms=["unzip"],
     ),
 };
 
 local virtiofsd(arch, os) =
     local key = arch + "-" + os;
-    want.pick(virtiofsds[key], "usr/lib/virtiofsd");
+    want.pick(virtiofsds[key], "target/x86_64-unknown-linux-musl/release/virtiofsd");
 
 local qemuSystem_X86_64s = { 
     "amd64-linux": want.importURL(
