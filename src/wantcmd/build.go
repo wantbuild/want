@@ -208,11 +208,19 @@ var exportZipCmd = star.Command{
 
 var exportRepoCmd = star.Command{
 	Metadata: star.Metadata{Short: "export build targets to local repo"},
-	Pos:      []star.IParam{pathsParam},
-	Flags:    []star.IParam{},
+	Flags:    []star.IParam{unitPathSetParam, prefixPathSetParam, suffixPathSetParam},
 	F: func(c star.Context) error {
 		ctx := c.Context
-		q := mkBuildQuery(pathsParam.LoadAll(c)...)
+
+		var psets []wantcfg.PathSet
+		psets = append(psets, unitPathSetParam.LoadAll(c)...)
+		psets = append(psets, prefixPathSetParam.LoadAll(c)...)
+		psets = append(psets, suffixPathSetParam.LoadAll(c)...)
+		if len(psets) == 0 {
+			return fmt.Errorf("must provide a path set")
+		}
+		q := wantcfg.Union(psets...)
+
 		repo, err := openRepo()
 		if err != nil {
 			return err
@@ -287,6 +295,30 @@ var outParam = star.Param[*os.File]{
 	Name: "out",
 	Parse: func(s string) (*os.File, error) {
 		return os.OpenFile(s, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	},
+}
+
+var unitPathSetParam = star.Param[wantcfg.PathSet]{
+	Name:     "unit",
+	Repeated: true,
+	Parse: func(s string) (wantcfg.PathSet, error) {
+		return wantcfg.Unit(s), nil
+	},
+}
+
+var prefixPathSetParam = star.Param[wantcfg.PathSet]{
+	Name:     "prefix",
+	Repeated: true,
+	Parse: func(s string) (wantcfg.PathSet, error) {
+		return wantcfg.Prefix(s), nil
+	},
+}
+
+var suffixPathSetParam = star.Param[wantcfg.PathSet]{
+	Name:     "suffix",
+	Repeated: true,
+	Parse: func(s string) (wantcfg.PathSet, error) {
+		return wantcfg.Suffix(s), nil
 	},
 }
 
