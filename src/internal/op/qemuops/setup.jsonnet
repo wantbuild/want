@@ -8,9 +8,9 @@ local qbootRom = want.importURL(
 
 local virtiofsds = { 
     "amd64-linux": want.pick(want.importURL(
-        url = "https://gitlab.com/virtio-fs/virtiofsd/-/jobs/9064502624/artifacts/download?file_type=archive",
+        url = "https://github.com/wantbuild/qemu-static/releases/download/v0.1.0/virtiofsd-c0f7439d_amd64_linux.zip",
 		algo="SHA256",
-        hash="af5e48ca2b6a5e6ef46b061e32e1f66517cfb5ef9f499ee2fe73846246359e62",
+        hash="124acbe163b1dfe62fcfde96b7145f0b6046521ec836fc6134f6a9cde0c2e170",
 		transforms=["unzip"],
     ), "target/x86_64-unknown-linux-musl/release/virtiofsd"),
 };

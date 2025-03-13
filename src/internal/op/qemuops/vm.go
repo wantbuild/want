@@ -56,7 +56,7 @@ func (e *Executor) newVM(jc wantjob.Ctx, dir string, vmcfg vmConfig) *vm {
 		add := func(xs ...string) {
 			args = append(args, xs...)
 		}
-		if runtime.GOOS == "linux" {
+		if runtime.GOOS == "linux" && kvmIsAvailable() {
 			add("-enable-kvm")
 			if runtime.GOARCH == "amd64" {
 				add("-cpu", "host")
@@ -273,4 +273,9 @@ func sortedKeys[V any](m map[string]V) iter.Seq2[string, V] {
 			}
 		}
 	}
+}
+
+func kvmIsAvailable() bool {
+	_, err := os.Stat("/dev/kvm")
+	return err == nil
 }
