@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"

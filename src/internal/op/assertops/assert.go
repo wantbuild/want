@@ -8,7 +8,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"go.brendoncarroll.net/exp/streams"
 	"go.brendoncarroll.net/state/cadata"
 )

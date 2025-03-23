@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"strings"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"wantbuild.io/want/src/wantjob"
 )
 

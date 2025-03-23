@@ -3,7 +3,7 @@ package glfsgit
 import (
 	"context"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/storage"

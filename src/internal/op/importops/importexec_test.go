@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 

@@ -3,7 +3,7 @@ package wantdag
 import (
 	"sync/atomic"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state/cadata"
 	"golang.org/x/sync/errgroup"
 

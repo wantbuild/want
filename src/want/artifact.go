@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"github.com/jmoiron/sqlx"
 	"go.brendoncarroll.net/state/cadata"
 

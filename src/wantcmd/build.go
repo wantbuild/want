@@ -9,8 +9,8 @@ import (
 	"path"
 	"time"
 
-	"github.com/blobcache/glfs"
-	"github.com/blobcache/glfs/glfsiofs"
+	"blobcache.io/glfs"
+	"blobcache.io/glfs/glfsiofs"
 	"github.com/pkg/errors"
 	"go.brendoncarroll.net/exp/slices2"
 	"go.brendoncarroll.net/star"

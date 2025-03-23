@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/blobcache/glfs"
-	"github.com/blobcache/glfs/glfsiofs"
+	"blobcache.io/glfs"
+	"blobcache.io/glfs/glfsiofs"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 	"go.brendoncarroll.net/state/cadata"

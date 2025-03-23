@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfsport"

@@ -3,7 +3,7 @@ package goops
 import (
 	"bytes"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/wantjob"

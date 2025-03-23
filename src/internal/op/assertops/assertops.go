@@ -1,7 +1,7 @@
 package assertops
 
 import (
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/wantjob"

@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"github.com/kr/text"
 	"github.com/pkg/errors"
 	"go.brendoncarroll.net/state/cadata"

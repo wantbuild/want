@@ -3,7 +3,7 @@ package wantops
 import (
 	"testing"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"github.com/stretchr/testify/require"
 
 	"wantbuild.io/want/src/internal/stores"

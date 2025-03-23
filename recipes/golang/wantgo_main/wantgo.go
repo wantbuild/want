@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/recipes/golang/wantgo"

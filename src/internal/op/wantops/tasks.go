@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/src/internal/wantc"
 	"wantbuild.io/want/src/internal/wantdag"

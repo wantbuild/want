@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 )
 
 type Tree = []TreeEntry

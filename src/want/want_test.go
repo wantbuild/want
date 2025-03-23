@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 

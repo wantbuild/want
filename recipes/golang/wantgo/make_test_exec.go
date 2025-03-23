@@ -10,7 +10,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state/cadata"
 )
 

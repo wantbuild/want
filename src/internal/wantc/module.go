@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"path"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"github.com/google/go-jsonnet"
 	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/src/internal/stores"

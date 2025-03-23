@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state/cadata"
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/sumdb/dirhash"

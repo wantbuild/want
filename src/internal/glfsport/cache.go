@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state"
 	"go.brendoncarroll.net/state/kv"
 )

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"github.com/google/go-jsonnet"
 	"go.brendoncarroll.net/state/cadata"
 )

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/stdctx/logctx"
 	"golang.org/x/sync/semaphore"

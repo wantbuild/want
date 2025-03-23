@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/blobcache/glfs"
-	"github.com/blobcache/glfs/glfstar"
+	"blobcache.io/glfs"
+	"blobcache.io/glfs/glfstar"
 	"github.com/google/go-containerregistry/pkg/authn"
 	crname "github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"

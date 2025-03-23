@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blobcache/glfs"
-	"github.com/blobcache/glfs/glfstar"
+	"blobcache.io/glfs"
+	"blobcache.io/glfs/glfstar"
 	"github.com/stretchr/testify/require"
 	"go.brendoncarroll.net/state/cadata"
 )

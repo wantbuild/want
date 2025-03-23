@@ -20,9 +20,9 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/blobcache/glfs"
-	"github.com/blobcache/glfs/glfstar"
-	"github.com/blobcache/glfs/glfszip"
+	"blobcache.io/glfs"
+	"blobcache.io/glfs/glfstar"
+	"blobcache.io/glfs/glfszip"
 	"github.com/klauspost/compress/zstd"
 	"github.com/pkg/errors"
 	"github.com/ulikunitz/xz"

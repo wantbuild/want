@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/src/internal/glfsport"
 	"wantbuild.io/want/src/internal/stringsets"

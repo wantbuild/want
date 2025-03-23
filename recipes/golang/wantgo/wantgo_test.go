@@ -8,7 +8,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"github.com/kr/text"
 	"github.com/stretchr/testify/require"
 	"go.brendoncarroll.net/state/cadata"

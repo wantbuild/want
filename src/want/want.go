@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"github.com/jmoiron/sqlx"
 	"github.com/pbnjay/memory"
 	"go.brendoncarroll.net/state/cadata"

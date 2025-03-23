@@ -3,7 +3,7 @@ module wantbuild.io/want
 go 1.23.4
 
 require (
-	github.com/blobcache/glfs v0.0.0-20250207031631-193fa2b641e7
+	blobcache.io/glfs v0.0.0-20250323202827-2452859b076a
 	github.com/cavaliergopher/cpio v1.0.1
 	github.com/go-git/go-git/v5 v5.13.1
 	github.com/google/go-containerregistry v0.20.2
@@ -49,7 +49,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect

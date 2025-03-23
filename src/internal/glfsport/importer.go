@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state"
 	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/state/kv"

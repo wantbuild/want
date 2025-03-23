@@ -8,7 +8,7 @@ import (
 	"io/fs"
 	"path"
 
-	"github.com/blobcache/glfs"
+	"blobcache.io/glfs"
 	"github.com/cavaliergopher/cpio"
 	"go.brendoncarroll.net/state/cadata"
 )
