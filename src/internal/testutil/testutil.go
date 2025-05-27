@@ -2,7 +2,10 @@ package testutil
 
 import (
 	"context"
+	"net"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 type testKey struct {
@@ -34,4 +37,13 @@ func Context(t testing.TB) context.Context {
 		ctxs[k] = ctx
 	}
 	return ctx
+}
+
+func Listen(t testing.TB) net.Listener {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, lis.Close())
+	})
+	return lis
 }
