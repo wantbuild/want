@@ -13,6 +13,7 @@ local virtiofsds = {
         hash="124acbe163b1dfe62fcfde96b7145f0b6046521ec836fc6134f6a9cde0c2e170",
 		transforms=["unzip"],
     ), "target/x86_64-unknown-linux-musl/release/virtiofsd"),
+    "arm64-darwin": want.blob(""),
 };
 
 local virtiofsd(arch, os) =
@@ -29,7 +30,11 @@ local qemuSystem_X86_64s = {
 
 local qemuSystem_X86_64(arch, os) =
     local key = arch + "-" + os;
-    qemuSystem_X86_64s[key];
+    if os == "darwin" then
+        want.blob('#!/bin/sh
+        exec qemu-system-x86_64 "$@"')
+    else
+        qemuSystem_X86_64s[key];
 
 want.pass([
    	want.input("share/qboot.rom", qbootRom),

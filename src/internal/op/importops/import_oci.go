@@ -9,7 +9,6 @@ import (
 
 	"blobcache.io/glfs"
 	"blobcache.io/glfs/glfstar"
-	"github.com/google/go-containerregistry/pkg/authn"
 	crname "github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
@@ -43,7 +42,7 @@ func (e *Executor) ImportOCIImage(jc wantjob.Ctx, s cadata.Getter, task ImportOC
 	if err != nil {
 		return nil, err
 	}
-	img, err := remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	img, err := remote.Image(ref)
 	if err != nil {
 		return nil, fmt.Errorf("reading image failed: %w", err)
 	}
@@ -73,7 +72,7 @@ func (e *Executor) ImportOCIManifest(ctx context.Context, _ *wantjob.Ctx, s cada
 		return nil, err
 	}
 	// Create an anonymous (unauthenticated) client
-	img, err := remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	img, err := remote.Image(ref)
 	if err != nil {
 		return nil, fmt.Errorf("reading image failed: %w", err)
 	}
@@ -97,7 +96,7 @@ func (e *Executor) ImportOCILayer(jc *wantjob.Ctx, dst cadata.Store, s cadata.Ge
 	if err != nil {
 		return nil, err
 	}
-	layer, err := remote.Layer(dig, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	layer, err := remote.Layer(dig)
 	if err != nil {
 		return nil, err
 	}

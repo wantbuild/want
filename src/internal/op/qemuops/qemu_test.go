@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"blobcache.io/glfs"
@@ -81,7 +82,7 @@ func TestConfigArgs(t *testing.T) {
 
 func TestInstall(t *testing.T) {
 	ctx := testutil.Context(t)
-	t.SkipNow()
+	//t.SkipNow()
 
 	outDir := t.TempDir()
 	jsys := wantjob.NewMem(ctx, wantsetup.NewExecutor())
@@ -146,6 +147,10 @@ func TestMicroVM(t *testing.T) {
 	for i, tc := range tcs {
 		tc := tc
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			if runtime.GOOS == "darwin" && tc.Task.VirtioFS != nil {
+				t.SkipNow()
+			}
+
 			out, err := e.amd64MicroVM(jc, s, tc.Task)
 			t.Log(out)
 			if tc.Err != nil {
