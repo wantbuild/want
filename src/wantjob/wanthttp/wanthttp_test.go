@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"wantbuild.io/want/src/internal/streammux"
 	"wantbuild.io/want/src/internal/testutil"
 	"wantbuild.io/want/src/wantjob"
 	"wantbuild.io/want/src/wantjob/wantjobtests"
@@ -24,6 +25,22 @@ func TestJobs(t *testing.T) {
 		u := "http://" + lis.Addr().String()
 		t.Logf("wanthttp server: %s", u)
 		return NewClient(nil, u)
+	})
+}
+
+func TestJobsOnPipe(t *testing.T) {
+	wantjobtests.TestJobs(t, func(t testing.TB, exec wantjob.Executor) wantjob.System {
+		ctx := testutil.Context(t)
+		p1, p2 := net.Pipe()
+		go func() {
+			lis := &streammux.Listener{Mux: streammux.New(p1), Context: ctx}
+			srv := NewServer(wantjob.NewMem(ctx, exec))
+			if err := http.Serve(lis, srv); err != nil && !errors.Is(err, net.ErrClosed) {
+				t.Logf("http.Serve: %v", err)
+			}
+		}()
+		m2 := streammux.New(p2)
+		return NewClient(&http.Client{Transport: streammux.NewRoundTripper(m2)}, "")
 	})
 }
 
