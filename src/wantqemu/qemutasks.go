@@ -20,10 +20,11 @@ type MicroVMTask struct {
 	Memory uint64
 
 	// Kernel is the linux kernel image used to boot the VM.
-	Kernel     glfs.Ref
-	KernelArgs string
-	Initrd     *glfs.Ref
-	VirtioFS   map[string]VirtioFSSpec
+	Kernel      glfs.Ref
+	KernelArgs  string
+	Initrd      *glfs.Ref
+	SerialPorts []SerialSpec
+	VirtioFS    map[string]VirtioFSSpec
 
 	Output Output
 }
@@ -36,6 +37,11 @@ func (t MicroVMTask) Validate() error {
 		}
 	}
 	return nil
+}
+
+type SerialSpec struct {
+	WantHTTP *struct{} `json:"wanthttp,omitempty"`
+	Console  *struct{} `jaon:"console,omitempty"`
 }
 
 type VirtioFSSpec struct {
@@ -53,7 +59,8 @@ type VirtioFSOutput struct {
 
 type Output struct {
 	// VirtioFS will read the output from a virtiofs filesystem
-	VirtioFS *VirtioFSOutput `json:"virtiofs,omitempty"`
+	VirtioFS  *VirtioFSOutput `json:"virtiofs,omitempty"`
+	JobOutput *struct{}       `json:"job,omitempty"`
 }
 
 func GrabVirtioFS(fsid string, q wantcfg.PathSet) Output {
@@ -62,11 +69,12 @@ func GrabVirtioFS(fsid string, q wantcfg.PathSet) Output {
 
 // microVMConfig is the config file for a MicroVMTask
 type microVMConfig struct {
-	Cores      uint32                  `json:"cores"`
-	Memory     uint64                  `json:"memory"`
-	KernelArgs string                  `json:"kernel_args"`
-	VirtioFS   map[string]VirtioFSSpec `json:"virtiofs"`
-	Output     Output                  `json:"output"`
+	Cores       uint32                  `json:"cores"`
+	Memory      uint64                  `json:"memory"`
+	KernelArgs  string                  `json:"kernel_args"`
+	SerialPorts []SerialSpec            `json:"serial_ports"`
+	VirtioFS    map[string]VirtioFSSpec `json:"virtiofs"`
+	Output      Output                  `json:"output"`
 }
 
 func PostMicroVMTask(ctx context.Context, s cadata.PostExister, x MicroVMTask) (*glfs.Ref, error) {

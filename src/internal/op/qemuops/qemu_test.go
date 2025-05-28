@@ -94,6 +94,7 @@ func TestMicroVM(t *testing.T) {
 
 	kernelRef := testutil.PostBlob(t, s, loadKernel(t))
 	helloRef := testutil.PostLinuxAmd64(t, s, "./testdata/helloworld")
+	writeToSerialRef := testutil.PostLinuxAmd64(t, s, "./testdata/writetoserial")
 	// emptyTree := testutil.PostFSStr(t, s, nil)
 	kargs := kernelArgs{
 		Console:        "hvc0",
@@ -116,6 +117,9 @@ func TestMicroVM(t *testing.T) {
 				Memory:     1024 * 1e6,
 				Kernel:     kernelRef,
 				KernelArgs: kargs.VirtioFSRoot("vfs1").String(),
+				SerialPorts: []wantqemu.SerialSpec{
+					{Console: &struct{}{}},
+				},
 				VirtioFS: map[string]wantqemu.VirtioFSSpec{
 					"vfs1": {
 						Root: testutil.PostTree(t, s, []glfs.TreeEntry{
@@ -137,11 +141,33 @@ func TestMicroVM(t *testing.T) {
 				Memory:     1024 * 1e6,
 				Kernel:     kernelRef,
 				KernelArgs: "panic=-1 console=hvc0 reboot=t",
+				SerialPorts: []wantqemu.SerialSpec{
+					{Console: &struct{}{}},
+				},
 				Initrd: ptr(testutil.PostTree(t, s, []glfs.TreeEntry{
 					{Name: "init", FileMode: 0o777, Ref: helloRef},
 				})),
 			},
 			Err: ErrInvalidOutputSpec{},
+		},
+		{
+			Task: MicroVMTask{
+				Cores:      1,
+				Memory:     1024 * 1e6,
+				Kernel:     kernelRef,
+				KernelArgs: "panic=-1 console=hvc0 reboot=t",
+				Initrd: ptr(testutil.PostTree(t, s, []glfs.TreeEntry{
+					{Name: "init", FileMode: 0o777, Ref: writeToSerialRef},
+				})),
+				SerialPorts: []wantqemu.SerialSpec{
+					{Console: &struct{}{}},
+					{WantHTTP: &struct{}{}},
+				},
+				Output: wantqemu.Output{
+					JobOutput: &struct{}{},
+				},
+			},
+			Output: ptr(testutil.PostBlob(t, s, []byte("hello world"))),
 		},
 	}
 	for i, tc := range tcs {
