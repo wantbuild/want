@@ -15,7 +15,7 @@ import (
 	"wantbuild.io/want/src/wantjob"
 )
 
-var _ wantjob.System = &HTTPClient{}
+var _ wantjob.System = &Client{}
 
 type (
 	Idx    = wantjob.Idx
@@ -24,19 +24,19 @@ type (
 	Task   = wantjob.Task
 )
 
-type HTTPClient struct {
+type Client struct {
 	hc  *http.Client
 	url string
 }
 
-func NewClient(hc *http.Client, u string) *HTTPClient {
+func NewClient(hc *http.Client, u string) *Client {
 	if hc == nil {
 		hc = http.DefaultClient
 	}
-	return &HTTPClient{hc: hc, url: u}
+	return &Client{hc: hc, url: u}
 }
 
-func (c *HTTPClient) Await(ctx context.Context, idx Idx) error {
+func (c *Client) Await(ctx context.Context, idx Idx) error {
 	var resp AwaitJobResp
 	if err := c.doJSON(ctx, http.MethodPost, "/jobs.Await", AwaitJobReq{Idx: idx}, &resp); err != nil {
 		return err
@@ -44,7 +44,7 @@ func (c *HTTPClient) Await(ctx context.Context, idx Idx) error {
 	return nil
 }
 
-func (c *HTTPClient) Cancel(ctx context.Context, idx Idx) error {
+func (c *Client) Cancel(ctx context.Context, idx Idx) error {
 	var resp CancelJobResp
 	if err := c.doJSON(ctx, http.MethodPost, "/jobs.Cancel", CancelJobReq{Idx: idx}, &resp); err != nil {
 		return err
@@ -52,11 +52,11 @@ func (c *HTTPClient) Cancel(ctx context.Context, idx Idx) error {
 	return nil
 }
 
-func (c *HTTPClient) Delete(ctx context.Context, idx Idx) error {
+func (c *Client) Delete(ctx context.Context, idx Idx) error {
 	return c.doJSON(ctx, http.MethodPost, "/jobs.Delete", DeleteJobReq{Idx: idx}, &DeleteJobResp{})
 }
 
-func (c *HTTPClient) Inspect(ctx context.Context, idx Idx) (*Job, error) {
+func (c *Client) Inspect(ctx context.Context, idx Idx) (*Job, error) {
 	var resp InspectJobResp
 	if err := c.doJSON(ctx, http.MethodPost, "/jobs.Inspect", InspectJobReq{Idx: idx}, &resp); err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func (c *HTTPClient) Inspect(ctx context.Context, idx Idx) (*Job, error) {
 	return &resp.Job, nil
 }
 
-func (c *HTTPClient) List(ctx context.Context) ([]Idx, error) {
+func (c *Client) List(ctx context.Context) ([]Idx, error) {
 	var resp ListJobsResp
 	if err := c.doJSON(ctx, http.MethodPost, "/jobs.List", ListJobsReq{}, &resp); err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func (c *HTTPClient) List(ctx context.Context) ([]Idx, error) {
 	return resp.Idxs, nil
 }
 
-func (c *HTTPClient) Spawn(ctx context.Context, src cadata.Getter, task Task) (Idx, error) {
+func (c *Client) Spawn(ctx context.Context, src cadata.Getter, task Task) (Idx, error) {
 	var resp SpawnResp
 	if err := c.doJSON(ctx, http.MethodPost, "/jobs.Spawn", SpawnReq{Task: task}, &resp); err != nil {
 		return 0, err
@@ -80,7 +80,7 @@ func (c *HTTPClient) Spawn(ctx context.Context, src cadata.Getter, task Task) (I
 	return resp.Idx, nil
 }
 
-func (c *HTTPClient) ViewResult(ctx context.Context, idx Idx) (*Result, cadata.Getter, error) {
+func (c *Client) ViewResult(ctx context.Context, idx Idx) (*Result, cadata.Getter, error) {
 	req := ViewResultReq{Idx: idx}
 	var resp ViewResultResp
 	if err := c.doJSON(ctx, http.MethodPost, "/jobs.ViewResult", req, &resp); err != nil {
@@ -89,7 +89,7 @@ func (c *HTTPClient) ViewResult(ctx context.Context, idx Idx) (*Result, cadata.G
 	return &resp.Result, c.Store(resp.StoreID), nil
 }
 
-func (c *HTTPClient) doJSON(ctx context.Context, method, p string, req, resp any) error {
+func (c *Client) doJSON(ctx context.Context, method, p string, req, resp any) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return err
@@ -104,13 +104,14 @@ func (c *HTTPClient) doJSON(ctx context.Context, method, p string, req, resp any
 	return json.Unmarshal(respBody, resp)
 }
 
-func (c *HTTPClient) do(ctx context.Context, method, p string, reqBody []byte) (int, []byte, error) {
+func (c *Client) do(ctx context.Context, method, p string, reqBody []byte) (int, []byte, error) {
 	u := strings.TrimRight(c.url, "/") + "/" + strings.TrimLeft(p, "/")
 	req, err := http.NewRequestWithContext(ctx, method, u, bytes.NewReader(reqBody))
 	if err != nil {
 		return 0, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		return 0, nil, err
@@ -122,14 +123,30 @@ func (c *HTTPClient) do(ctx context.Context, method, p string, reqBody []byte) (
 	return resp.StatusCode, respBody, nil
 }
 
-func (c *HTTPClient) Store(sid int) *Store {
+func (c *Client) Store(sid int) *Store {
 	return &Store{hc: c, sid: sid}
+}
+
+func (c *Client) GetTask(ctx context.Context) (*Task, error) {
+	var resp GetTaskResp
+	if err := c.doJSON(ctx, http.MethodPost, "/task", GetTaskReq{}, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Task, nil
+}
+
+func (c *Client) SetResult(ctx context.Context, result Result) error {
+	var resp SetResultResp
+	if err := c.doJSON(ctx, http.MethodPost, "/result", SetResultReq{Result: result}, &resp); err != nil {
+		return err
+	}
+	return nil
 }
 
 var _ cadata.Store = &Store{}
 
 type Store struct {
-	hc  *HTTPClient
+	hc  *Client
 	sid int
 }
 

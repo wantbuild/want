@@ -1,3 +1,4 @@
+// package wanthttp implements an HTTP API for the wantjob system.
 package wanthttp
 
 import (
@@ -54,6 +55,18 @@ type ListJobsReq struct{}
 type ListJobsResp struct {
 	Idxs []wantjob.Idx `json:"idxs"`
 }
+
+type GetTaskReq struct{}
+
+type GetTaskResp struct {
+	Task *Task `json:"task"`
+}
+
+type SetResultReq struct {
+	Result wantjob.Result `json:"result"`
+}
+
+type SetResultResp struct{}
 
 type PostReq struct {
 	Data []byte `json:"data"`

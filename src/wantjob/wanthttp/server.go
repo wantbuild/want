@@ -16,12 +16,14 @@ import (
 )
 
 type Server struct {
-	sys wantjob.System
+	sys  wantjob.System
+	task *Task
 
 	wstore cadata.Store
 
 	mu           sync.Mutex
 	resultStores map[Idx]cadata.Getter
+	result       *Result
 }
 
 func NewServer(sys wantjob.System) *Server {
@@ -41,6 +43,36 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleJob(w, r)
 		return
 	}
+
+	switch r.URL.Path {
+	case "/task":
+		handleRequest(w, r, func(ctx context.Context, req GetTaskReq) (*GetTaskResp, error) {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			return &GetTaskResp{Task: s.task}, nil
+		})
+	case "/result":
+		handleRequest(w, r, func(ctx context.Context, req SetResultReq) (*SetResultResp, error) {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			s.result = &req.Result
+			return &SetResultResp{}, nil
+		})
+	default:
+		http.Error(w, "not found", http.StatusNotFound)
+	}
+}
+
+func (s *Server) GetResult() *Result {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.result
+}
+
+func (s *Server) SetTask(task *Task) {
+	s.mu.Lock()
+	s.task = task
+	s.mu.Unlock()
 }
 
 func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
