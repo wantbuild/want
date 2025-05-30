@@ -7,6 +7,7 @@ import (
 
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/testutil"
+	"wantbuild.io/want/src/wantjob"
 )
 
 func TestPostGetMicroVMTask(t *testing.T) {
@@ -17,6 +18,10 @@ func TestPostGetMicroVMTask(t *testing.T) {
 		Cores:  1,
 		Memory: 1024 * 1e6,
 		Kernel: testutil.PostBlob(t, s, []byte("kernel bytes")),
+		SerialPorts: []SerialSpec{
+			{Console: &struct{}{}},
+			{WantHTTP: &struct{}{}},
+		},
 		VirtioFS: map[string]VirtioFSSpec{
 			"fs1": {
 				Writeable: true,
@@ -26,6 +31,14 @@ func TestPostGetMicroVMTask(t *testing.T) {
 					"c": []byte("3"),
 				}),
 			},
+		},
+
+		Input: Input{
+			Schema: wantjob.Schema_NoRefs,
+			Root:   []byte("hello world"),
+		},
+		Output: Output{
+			JobOutput: &struct{}{},
 		},
 	}
 

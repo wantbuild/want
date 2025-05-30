@@ -64,7 +64,7 @@ func (e *Executor) Build(jc wantjob.Ctx, src cadata.Getter, buildTask BuildTask)
 					return err
 				}
 				errorsOccured = errorsOccured || res.ErrCode > 0
-				if ref, err := glfstasks.ParseGLFSRef(res.Data); err == nil {
+				if ref, err := glfstasks.ParseGLFSRef(res.Root); err == nil {
 					if err := glfstasks.FastSync(ctx, jc.Dst, dagStore, *ref); err != nil {
 						return err
 					}
@@ -84,7 +84,7 @@ func (e *Executor) Build(jc wantjob.Ctx, src cadata.Getter, buildTask BuildTask)
 	}
 	layers := []glfs.Ref{*groundRef}
 	for i := range targets {
-		if ref, err := glfstasks.ParseGLFSRef(results[i].Data); err == nil {
+		if ref, err := glfstasks.ParseGLFSRef(results[i].Root); err == nil {
 			layers = append(layers, *ref)
 		}
 	}

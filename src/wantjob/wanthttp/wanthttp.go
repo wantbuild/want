@@ -2,10 +2,17 @@
 package wanthttp
 
 import (
+	"math"
+
 	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/wantjob"
 )
+
+// CurrentStore is the store for the current job.
+const CurrentStore = StoreID(math.MaxUint32)
+
+type StoreID uint32
 
 type SpawnReq struct {
 	Task wantjob.Task `json:"task"`
@@ -41,7 +48,7 @@ type ViewResultReq struct {
 
 type ViewResultResp struct {
 	Result  wantjob.Result `json:"result"`
-	StoreID int            `json:"store_id"`
+	StoreID StoreID        `json:"store_id"`
 }
 
 type DeleteJobReq struct {
@@ -54,12 +61,6 @@ type ListJobsReq struct{}
 
 type ListJobsResp struct {
 	Idxs []wantjob.Idx `json:"idxs"`
-}
-
-type GetTaskReq struct{}
-
-type GetTaskResp struct {
-	Task *Task `json:"task"`
 }
 
 type SetResultReq struct {

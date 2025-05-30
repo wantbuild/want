@@ -33,7 +33,8 @@ type QEMUConfig = qemuops.Config
 type ExecutorConfig struct {
 	QEMU QEMUConfig
 
-	GoDir string
+	GoRoot  string
+	GoState string
 }
 
 func NewExecutor(cfg ExecutorConfig) wantjob.Executor {
@@ -65,10 +66,13 @@ func newExecutor(cfg ExecutorConfig) *executor {
 				return qemuops.NewExecutor(cfg.QEMU), nil
 			},
 			"golang": func(jc wantjob.Ctx) (wantjob.Executor, error) {
-				if err := install(jc, goops.InstallSnippet(), cfg.GoDir); err != nil {
+				if err := install(jc, goops.InstallSnippet(), cfg.GoRoot); err != nil {
 					return nil, err
 				}
-				return goops.NewExecutor(cfg.GoDir), nil
+				if err := os.MkdirAll(cfg.GoState, 0o755); err != nil {
+					return nil, err
+				}
+				return goops.NewExecutor(cfg.GoRoot, cfg.GoState), nil
 			},
 		},
 	}

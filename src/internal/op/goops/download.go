@@ -38,7 +38,7 @@ func (e *Executor) ModDownload(jc wantjob.Ctx, s cadata.Getter, x glfs.Ref) (*gl
 		GOOS:       runtime.GOARCH,
 		GOARCH:     runtime.GOOS,
 		GOPROXY:    "direct",
-		GOMODCACHE: filepath.Join(e.installDir, "gomodcache"),
+		GOMODCACHE: filepath.Join(e.scratchDir, "gomodcache"),
 	}, "mod", "download", "-x")
 	cmd1.Dir = filepath.Join(dir, "in")
 	cmd1.Stdout = jc.Writer("stdout")
@@ -55,7 +55,7 @@ func (e *Executor) ModDownload(jc wantjob.Ctx, s cadata.Getter, x glfs.Ref) (*gl
 		GOARCH: runtime.GOOS,
 
 		GOMODCACHE: filepath.Join(dir, "modcache"),
-		GOPROXY:    fmt.Sprintf("file:///%s", filepath.Join(e.installDir, "gomodcache", "cache", "download")),
+		GOPROXY:    fmt.Sprintf("file:///%s", filepath.Join(e.scratchDir, "gomodcache", "cache", "download")),
 	}, "mod", "download", "-x")
 	cmd2.Dir = filepath.Join(dir, "in")
 	cmd2.Stdout = jc.Writer("stdout")

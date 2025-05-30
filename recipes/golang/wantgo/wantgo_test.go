@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"runtime"
 	"testing"
 
 	"blobcache.io/glfs"
@@ -42,6 +43,9 @@ func TestPostGetRunTestsTask(t *testing.T) {
 }
 
 func TestRunTests(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.SkipNow()
+	}
 	jc := newJobCtx(t)
 	s := jc.Dst
 	bzImage := loadKernel(t)

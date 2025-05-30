@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 
@@ -123,16 +124,19 @@ func (c *Client) do(ctx context.Context, method, p string, reqBody []byte) (int,
 	return resp.StatusCode, respBody, nil
 }
 
-func (c *Client) Store(sid int) *Store {
+func (c *Client) Store(sid StoreID) *Store {
 	return &Store{hc: c, sid: sid}
 }
 
-func (c *Client) GetTask(ctx context.Context) (*Task, error) {
-	var resp GetTaskResp
-	if err := c.doJSON(ctx, http.MethodPost, "/task", GetTaskReq{}, &resp); err != nil {
-		return nil, err
+func (c *Client) GetInput(ctx context.Context) ([]byte, cadata.Getter, error) {
+	status, respBody, err := c.do(ctx, http.MethodPost, "/input", nil)
+	if err != nil {
+		return nil, nil, err
 	}
-	return resp.Task, nil
+	if status != http.StatusOK {
+		return nil, nil, fmt.Errorf("status %d", status)
+	}
+	return respBody, c.Store(math.MaxUint32), nil
 }
 
 func (c *Client) SetResult(ctx context.Context, result Result) error {
@@ -147,7 +151,7 @@ var _ cadata.Store = &Store{}
 
 type Store struct {
 	hc  *Client
-	sid int
+	sid StoreID
 }
 
 func (s *Store) Post(ctx context.Context, data []byte) (cadata.ID, error) {

@@ -22,7 +22,6 @@ func TestJobs(t *testing.T, mksys func(t testing.TB, exec wantjob.Executor) want
 		res, _, err := wantjob.Do(ctx, sys, stores.NewVoid(), wantjob.Task{Op: "toUpper", Input: []byte("hello")})
 		require.NoError(t, err)
 		require.NoError(t, res.Err())
-		require.Equal(t, "HELLO", string(res.Data))
+		require.Equal(t, "HELLO", string(res.Root))
 	})
-
 }

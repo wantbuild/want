@@ -66,7 +66,7 @@ func createJob(tx *sqlx.Tx, task wantjob.Task) (int64, error) {
 		return 0, err
 	}
 	if cacheHit {
-		if err := finishJobAtRow(tx, rowid, wantjob.Result{Data: data}); err != nil {
+		if err := finishJobAtRow(tx, rowid, wantjob.Result{Root: data}); err != nil {
 			return 0, err
 		}
 	}
@@ -99,7 +99,7 @@ func finishJobAtRow(tx *sqlx.Tx, rowid int64, res wantjob.Result) error {
 	now := tai64.Now()
 	_, err := tx.Exec(`UPDATE jobs
 		SET state = 3, errcode = ?, res_data = ?, end_at = ?
-		WHERE state != 3 AND rowid = ?`, res.ErrCode, res.Data, now.Marshal(), rowid)
+		WHERE state != 3 AND rowid = ?`, res.ErrCode, res.Root, now.Marshal(), rowid)
 	return err
 }
 
@@ -158,7 +158,7 @@ func mkJobFromRow(row jobRow) (*wantjob.Job, error) {
 	if row.State == wantjob.DONE {
 		result = &wantjob.Result{
 			ErrCode: wantjob.ErrCode(row.ErrCode.V),
-			Data:    row.ResultData,
+			Root:    row.ResultData,
 		}
 		ea, err := tai64.ParseN(row.EndAt)
 		if err != nil {
@@ -200,7 +200,7 @@ func ViewResult(tx *sqlx.Tx, jobid wantjob.JobID) (*wantjob.Result, StoreID, err
 	if row.State != wantjob.DONE {
 		return nil, 0, fmt.Errorf("ViewResult called on job in state %v", row.State)
 	}
-	return &wantjob.Result{Data: row.ResultData, ErrCode: row.ErrCode.V}, row.StoreID, nil
+	return &wantjob.Result{Root: row.ResultData, ErrCode: row.ErrCode.V}, row.StoreID, nil
 }
 
 func ListJobInfos(tx *sqlx.Tx, parent wantjob.JobID) ([]*wantjob.JobInfo, error) {

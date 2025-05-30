@@ -6,11 +6,16 @@ local virtiofs(root, writeable) =
 local output_virtiofs(fsid, q) = 
     {"virtiofs": {"id": fsid, "query": q}};
 
-local amd64_microvm(cores, memory, kernel, kargs, initrd=null, virtiofs={}, output=null) =
+local serialport_console() = {"console": {}};
+
+local serialport_wanthttp() = {"wanthttp": {}};
+
+local amd64_microvm(cores, memory, kernel, kargs, initrd=null, serial_ports=[serialport_console()], virtiofs={}, output=null) =
     local config = want.blob(std.manifestJsonEx({
         "cores": cores,
         "memory": memory,
         "kernel_args": kargs,
+        "serial_ports": serial_ports,
         "virtiofs": virtiofs,
         "output": output,
     }, ""));

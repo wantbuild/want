@@ -16,7 +16,7 @@ import (
 )
 
 func TestMakeExec(t *testing.T) {
-	jc, s, e := setupTest(t)
+	jc, s, e := setupTest(t, true)
 	ref, err := e.MakeExec(jc, s, MakeExecTask{
 		Module: testutil.PostFS(t, s, map[string][]byte{
 			"go.mod": []byte("module test-module"),
@@ -37,7 +37,7 @@ func TestMakeExec(t *testing.T) {
 }
 
 func TestMakeTestExec(t *testing.T) {
-	jc, s, e := setupTest(t)
+	jc, s, e := setupTest(t, true)
 	ref, err := e.MakeTestExec(jc, s, MakeTestExecTask{
 		Module: testutil.PostFS(t, s, map[string][]byte{
 			"go.mod": []byte("module test-module"),
@@ -65,7 +65,7 @@ func TestMakeTestExec(t *testing.T) {
 }
 
 func TestTest2JSON(t *testing.T) {
-	jc, s, e := setupTest(t)
+	jc, s, e := setupTest(t, true)
 	input := testutil.PostBlob(t, s, []byte(`=== RUN   TestMakeExec
 	| go [build -v -o /tmp/TestMakeExec3398608698/001/makeExec-1910584065/out -trimpath -ldflags -s -w -buildid= -buildvcs=false]
 	| src/internal/goarch
@@ -89,7 +89,7 @@ func TestTest2JSON(t *testing.T) {
 	testutil.PrintFS(t, s, *out)
 }
 
-func setupTest(t testing.TB) (wantjob.Ctx, cadata.Store, *Executor) {
+func setupTest(t testing.TB, useExisting bool) (wantjob.Ctx, cadata.Store, *Executor) {
 	ctx := testutil.Context(t)
 	s := stores.NewMem()
 	installDir := filepath.Join(os.TempDir(), "want-test-goroot")
@@ -97,25 +97,28 @@ func setupTest(t testing.TB) (wantjob.Ctx, cadata.Store, *Executor) {
 	jsys := wantjob.NewMem(ctx, wantsetup.NewExecutor())
 	if _, err := os.Stat(installDir); err != nil && !os.IsNotExist(err) {
 		require.NoError(t, err)
-	} else if err != nil {
+	} else if err != nil || !useExisting {
 		t.Log("installing into", installDir)
+		require.NoError(t, os.RemoveAll(installDir))
 		require.NoError(t, os.MkdirAll(installDir, 0o755))
 		err := wantsetup.Install(ctx, jsys, installDir, InstallSnippet())
 		require.NoError(t, err)
+	} else {
+		t.Log("using existing goroot", installDir)
 	}
 
 	newWriter := func(string) io.Writer {
 		return os.Stderr
 	}
-	e := NewExecutor(installDir)
+	e := NewExecutor(installDir, filepath.Join(os.TempDir(), "want-test-scratch"))
 	return wantjob.Ctx{Context: ctx, Dst: s, System: jsys, Writer: newWriter}, s, e
 }
 
 func TestSetup(t *testing.T) {
 	t.Log(InstallSnippet())
-	_, _, e := setupTest(t)
+	_, _, e := setupTest(t, false)
 
-	ents, err := os.ReadDir(e.installDir)
+	ents, err := os.ReadDir(e.goRoot)
 	require.NoError(t, err)
 	t.Log(ents)
 }

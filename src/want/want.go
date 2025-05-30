@@ -52,7 +52,11 @@ func (s *System) logDir() string {
 	return filepath.Join(s.stateDir, "log")
 }
 
-func (s *System) goDir() string {
+func (s *System) goRoot() string {
+	return filepath.Join(s.stateDir, "goroot")
+}
+
+func (s *System) goState() string {
 	return filepath.Join(s.stateDir, "go")
 }
 
@@ -71,7 +75,8 @@ func (s *System) Init(ctx context.Context) error {
 			InstallDir: s.qemuDir(),
 			MemLimit:   int64(memory.TotalMemory()) / 2 * 3,
 		},
-		GoDir: s.goDir(),
+		GoRoot:  s.goRoot(),
+		GoState: s.goState(),
 	})
 	s.jobs = newJobSystem(s.db, s.logDir(), exec, numWorkers)
 	return nil

@@ -91,28 +91,28 @@ const (
 // Result is produced by finished jobs.
 // Jobs will also have results when cancelled or timed out, with the situation reflected in the ErrCode
 type Result struct {
-	ErrCode ErrCode `json:"ec"`
-	Data    []byte  `json:"d"`
-	Schema  Schema  `json:"sch"`
+	ErrCode ErrCode `json:"errcode"`
+	Root    []byte  `json:"root"`
+	Schema  Schema  `json:"schema"`
 }
 
 func Success(schema Schema, data []byte) *Result {
-	return &Result{Schema: schema, Data: data}
+	return &Result{Schema: schema, Root: data}
 }
 
 func Result_ErrExec(err error) *Result {
-	return &Result{ErrCode: EXEC_ERROR, Data: []byte(err.Error())}
+	return &Result{ErrCode: EXEC_ERROR, Root: []byte(err.Error())}
 }
 
 func Result_ErrInternal(err error) *Result {
-	return &Result{ErrCode: INTERNAL_ERROR, Data: []byte(err.Error())}
+	return &Result{ErrCode: INTERNAL_ERROR, Root: []byte(err.Error())}
 }
 
 func (r *Result) Err() error {
 	if r.ErrCode == 0 {
 		return nil
 	}
-	return fmt.Errorf("job failed errcode=%v data=%s", r.ErrCode, r.Data)
+	return fmt.Errorf("job failed errcode=%v data=%s", r.ErrCode, r.Root)
 }
 
 type JobInfo struct {

@@ -31,13 +31,15 @@ const (
 var _ wantjob.Executor = &Executor{}
 
 type Executor struct {
-	installDir string
+	goRoot     string
+	scratchDir string
 	buildSem   *semaphore.Weighted
 }
 
-func NewExecutor(installDir string) *Executor {
+func NewExecutor(goRoot string, scratchDir string) *Executor {
 	return &Executor{
-		installDir: installDir,
+		goRoot:     goRoot,
+		scratchDir: scratchDir,
 		buildSem:   semaphore.NewWeighted(int64(runtime.GOMAXPROCS(0))),
 	}
 }
@@ -82,7 +84,7 @@ type goConfig struct {
 }
 
 func (e *Executor) newCommand(ctx context.Context, cfg goConfig, args ...string) *exec.Cmd {
-	goRoot := e.installDir
+	goRoot := e.goRoot
 	cmd := exec.CommandContext(ctx, filepath.Join(goRoot, "bin", "go"), args...)
 	cmd.Env = []string{
 		"PATH=/usr/bin/",
@@ -90,8 +92,6 @@ func (e *Executor) newCommand(ctx context.Context, cfg goConfig, args ...string)
 		"GOSUMDB=off",
 
 		"GOROOT=" + goRoot,
-		"GOPATH=" + filepath.Join(e.installDir, "gopath"),
-		//"GOCACHE=" + filepath.Join(e.installDir, "gocache"),
 
 		"GOARCH=" + cfg.GOARCH,
 		"GOOS=" + cfg.GOOS,

@@ -40,7 +40,7 @@ func Install(ctx context.Context, jsys wantjob.System, outDir string, snippet st
 	if err := res.Err(); err != nil {
 		return err
 	}
-	ref, err := glfstasks.ParseGLFSRef(res.Data)
+	ref, err := glfstasks.ParseGLFSRef(res.Root)
 	if err != nil {
 		return err
 	}

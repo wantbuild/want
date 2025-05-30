@@ -38,10 +38,15 @@ func (e *Executor) newVM(jc wantjob.Ctx, dir string, vmcfg vmConfig) *vm {
 	}
 	jc.Infof("vm dir: %s", dir)
 
+	machineArg := "microvm,x-option-roms=off,rtc=off,acpi=off,pic=off,isa-serial=off"
+	if runtime.GOOS != "darwin" {
+		// pit=off seems to break something on darwin, the boot hangs
+		machineArg += ",pit=off"
+	}
 	// qemu
 	qemuCmd := func() *exec.Cmd {
 		args := []string{
-			"-M", "microvm,x-option-roms=off,rtc=off,acpi=off,pit=off,pic=off,isa-serial=off",
+			"-M", machineArg,
 			"-m", strconv.FormatUint(vmcfg.Memory/1e6, 10) + "M",
 			"-smp", strconv.FormatUint(uint64(vmcfg.NumCPUs), 10),
 			"-L", filepath.Join(e.cfg.InstallDir, "share"),

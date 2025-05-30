@@ -56,7 +56,7 @@ func SerialExecAll(jc wantjob.Ctx, s cadata.Getter, x DAG) ([]wantjob.Result, er
 			}
 			nodeResults[i] = *out
 			nodeStores[i] = outSrc
-			outRef, _ = glfstasks.ParseGLFSRef(out.Data)
+			outRef, _ = glfstasks.ParseGLFSRef(out.Root)
 		}
 		if outRef != nil {
 			if err := glfstasks.FastSync(ctx, jc.Dst, union, *outRef); err != nil {

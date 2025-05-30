@@ -91,7 +91,7 @@ func (e *Executor) MakeTestExec(jc wantjob.Ctx, src cadata.Getter, task MakeTest
 		if !filepath.IsLocal(task.Path) {
 			return nil, fmt.Errorf("entry path is not local %s", task.Path)
 		}
-		entryPath = filepath.Join(inPath, task.Path)
+		entryPath = "./" + task.Path
 	}
 
 	// setup module

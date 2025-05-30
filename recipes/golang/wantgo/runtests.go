@@ -154,7 +154,7 @@ func RunTests(jc wantjob.Ctx, src cadata.Getter, x RunTestsTask) (*glfs.Ref, err
 			return nil, err
 		}
 		var outRef glfs.Ref
-		if err := json.Unmarshal(res.Data, &outRef); err != nil {
+		if err := json.Unmarshal(res.Root, &outRef); err != nil {
 			return nil, err
 		}
 		if err := glfs.Sync(jc.Context, jc.Dst, outStore, outRef); err != nil {
@@ -204,7 +204,7 @@ func makeAllTestExecs(jc wantjob.Ctx, src cadata.Getter, x RunTestsTask) (map[st
 			return nil, err
 		}
 		var outRef glfs.Ref
-		if err := json.Unmarshal(res.Data, &outRef); err != nil {
+		if err := json.Unmarshal(res.Root, &outRef); err != nil {
 			return nil, err
 		}
 		if err := glfs.Sync(jc.Context, jc.Dst, outStore, outRef); err != nil {
