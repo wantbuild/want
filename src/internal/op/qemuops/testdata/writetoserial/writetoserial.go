@@ -3,10 +3,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"syscall"
+
+	"wantbuild.io/want/src/internal/streammux"
+	"wantbuild.io/want/src/wantjob"
+	"wantbuild.io/want/src/wantjob/wanthttp"
 )
 
 func main() {
@@ -37,8 +43,15 @@ func main() {
 		log.Fatalf("failed to open /dev/vport0p1: %v", err)
 	}
 	defer f.Close()
-	if _, err := f.Write([]byte("hello world")); err != nil {
-		log.Fatalf("failed to write to /dev/vport0p1: %v", err)
+	mux := streammux.New(f)
+	hc := &http.Client{Transport: streammux.NewRoundTripper(mux)}
+	c := wanthttp.NewClient(hc, "")
+	ctx := context.Background()
+	if err := c.SetResult(ctx, wantjob.Result{
+		ErrCode: wantjob.OK,
+		Root:    []byte("hello world"),
+	}); err != nil {
+		log.Fatalf("failed to set result: %v", err)
 	}
 	fmt.Println("Successfully wrote to /dev/vport0p1")
 }

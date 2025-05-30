@@ -27,7 +27,7 @@ func Do(ctx context.Context, sys wantjob.System, src cadata.Getter, op wantjob.O
 	if err := out.Err(); err != nil {
 		return nil, nil, err
 	}
-	ref, err := ParseGLFSRef(out.Data)
+	ref, err := ParseGLFSRef(out.Root)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -45,7 +45,7 @@ func Exec(x []byte, fn func(x glfs.Ref) (*glfs.Ref, error)) wantjob.Result {
 	}
 	return wantjob.Result{
 		Schema: wantjob.Schema_GLFS,
-		Data:   MarshalGLFSRef(*out),
+		Root:   MarshalGLFSRef(*out),
 	}
 }
 
@@ -66,7 +66,7 @@ func MarshalGLFSRef(x glfs.Ref) []byte {
 }
 
 func Success(x glfs.Ref) *wantjob.Result {
-	return &wantjob.Result{Data: MarshalGLFSRef(x)}
+	return &wantjob.Result{Root: MarshalGLFSRef(x)}
 }
 
 func FastSync(ctx context.Context, dst cadata.PostExister, src cadata.Getter, root glfs.Ref) error {

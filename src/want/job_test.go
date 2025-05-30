@@ -57,7 +57,7 @@ func TestJobStores(t *testing.T) {
 	res, s2, err := jsys.ViewResult(ctx, idx)
 	require.NoError(t, err)
 	require.NoError(t, res.Err())
-	ref, err := glfstasks.ParseGLFSRef(res.Data)
+	ref, err := glfstasks.ParseGLFSRef(res.Root)
 	require.NoError(t, err)
 	var count int
 	require.NoError(t, glfs.WalkRefs(ctx, s2, *ref, func(ref glfs.Ref) error { count++; return nil }))

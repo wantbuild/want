@@ -38,7 +38,7 @@ func (e *Executor) newVM(jc wantjob.Ctx, dir string, vmcfg vmConfig) *vm {
 	}
 	jc.Infof("vm dir: %s", dir)
 
-	machineArg := "microvm,rtc=off,acpi=off,pic=off,isa-serial=off"
+	machineArg := "microvm,x-option-roms=off,rtc=off,acpi=off,pic=off,isa-serial=off"
 	if runtime.GOOS != "darwin" {
 		// pit=off seems to break something on darwin, the boot hangs
 		machineArg += ",pit=off"

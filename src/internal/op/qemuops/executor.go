@@ -3,12 +3,11 @@
 package qemuops
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,7 +20,9 @@ import (
 	"wantbuild.io/want/src/internal/glfscpio"
 	"wantbuild.io/want/src/internal/glfsport"
 	"wantbuild.io/want/src/internal/glfstasks"
+	"wantbuild.io/want/src/internal/streammux"
 	"wantbuild.io/want/src/wantjob"
+	"wantbuild.io/want/src/wantjob/wanthttp"
 	"wantbuild.io/want/src/wantqemu"
 )
 
@@ -56,27 +57,32 @@ func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task)
 	ctx := jc.Context
 	switch task.Op {
 	case OpAmd64MicroVM:
-		return glfstasks.Exec(task.Input, func(x glfs.Ref) (*glfs.Ref, error) {
-			t, err := wantqemu.GetMicroVMTask(ctx, src, x)
-			if err != nil {
-				return nil, err
-			}
-			if t.Memory > uint64(e.cfg.MemLimit) {
-				return nil, fmt.Errorf("task exceeds executor's memory limit %d > %d", t.Memory, e.cfg.MemLimit)
-			}
-			if err := e.memSem.Acquire(ctx, int64(t.Memory)); err != nil {
-				return nil, err
-			}
-			defer e.memSem.Release(int64(t.Memory))
-			return e.amd64MicroVM(jc, src, *t)
-		})
-
+		inputRef, err := glfstasks.ParseGLFSRef(task.Input)
+		if err != nil {
+			return *wantjob.Result_ErrExec(err)
+		}
+		t, err := wantqemu.GetMicroVMTask(ctx, src, *inputRef)
+		if err != nil {
+			return *wantjob.Result_ErrExec(err)
+		}
+		if t.Memory > uint64(e.cfg.MemLimit) {
+			return *wantjob.Result_ErrExec(fmt.Errorf("task exceeds executor's memory limit %d > %d", t.Memory, e.cfg.MemLimit))
+		}
+		if err := e.memSem.Acquire(ctx, int64(t.Memory)); err != nil {
+			return *wantjob.Result_ErrExec(err)
+		}
+		defer e.memSem.Release(int64(t.Memory))
+		res, err := e.amd64MicroVM(jc, src, *t)
+		if err != nil {
+			return *wantjob.Result_ErrExec(err)
+		}
+		return *res
 	default:
 		return *wantjob.Result_ErrExec(wantjob.NewErrUnknownOperator(task.Op))
 	}
 }
 
-func (e *Executor) amd64MicroVM(jc wantjob.Ctx, s cadata.Getter, t MicroVMTask) (*glfs.Ref, error) {
+func (e *Executor) amd64MicroVM(jc wantjob.Ctx, s cadata.Getter, t MicroVMTask) (*wantjob.Result, error) {
 	dir, err := os.MkdirTemp("", "microvm-")
 	if err != nil {
 		return nil, err
@@ -88,7 +94,9 @@ func (e *Executor) amd64MicroVM(jc wantjob.Ctx, s cadata.Getter, t MicroVMTask) 
 	}()
 
 	mctx := &microVMTaskCtx{
+		jc:      jc,
 		dir:     dir,
+		hsrv:    wanthttp.NewServer(jc.System),
 		vfsds:   make(map[string]*virtioFSd),
 		sockets: make(map[string]net.Listener),
 	}
@@ -162,6 +170,9 @@ func (e *Executor) amd64MicroVM(jc wantjob.Ctx, s cadata.Getter, t MicroVMTask) 
 		df()
 	}
 
+	// input
+	mctx.setInput(s, t.Input.Root)
+
 	// create and run vm
 	vm := e.newVM(jc, dir, vmCfg)
 	defer vm.Close()
@@ -172,10 +183,18 @@ func (e *Executor) amd64MicroVM(jc wantjob.Ctx, s cadata.Getter, t MicroVMTask) 
 	if err := vm.Close(); err != nil {
 		return nil, err
 	}
+
 	// get output
 	switch {
 	case t.Output.JobOutput != nil:
-		return glfs.PostBlob(jc.Context, jc.Dst, bytes.NewReader([]byte("WIP")))
+		if mctx.hsrv == nil {
+			return nil, fmt.Errorf("no want API running")
+		}
+		res := mctx.hsrv.GetResult()
+		if res == nil {
+			return nil, fmt.Errorf("no result")
+		}
+		return res, nil
 	case t.Output.VirtioFS != nil:
 		spec := *t.Output.VirtioFS
 		vfsd := mctx.vfsds[spec.ID]
@@ -183,7 +202,11 @@ func (e *Executor) amd64MicroVM(jc wantjob.Ctx, s cadata.Getter, t MicroVMTask) 
 			return nil, fmt.Errorf("no such virtiofs id=%v", vfsd)
 		}
 		defer jc.InfoSpan("importing from virtiofs")()
-		return vfsd.Import(jc.Context, jc.Dst, spec.Query)
+		ref, err := vfsd.Import(jc.Context, jc.Dst, spec.Query)
+		if err != nil {
+			return nil, err
+		}
+		return glfstasks.Success(*ref), nil
 	default:
 		return nil, ErrInvalidOutputSpec{t.Output}
 	}
@@ -219,8 +242,11 @@ func (e *Executor) addSerialPort(mctx *microVMTaskCtx, spec wantqemu.SerialSpec)
 				return
 			}
 			defer conn.Close()
-			log.Println("got connection")
-			io.Copy(os.Stderr, conn)
+			mux := streammux.New(conn)
+			lis := &streammux.Listener{Mux: mux, Context: mctx.jc.Context}
+			if err := http.Serve(lis, mctx.hsrv); err != nil {
+				mctx.jc.Errorf("http.Serve: %v", err)
+			}
 		}()
 		vmCfg.CharDevs["wanthttp"] = chardevConfig{
 			Backend: "socket",
@@ -261,7 +287,6 @@ func (e *Executor) addVirtioFS(jc wantjob.Ctx, s cadata.Getter, mctx *microVMTas
 	stdout := jc.Writer("virtiofsd/stdout")
 	stderr := jc.Writer("virtiofsd/stderr")
 	vfsd := e.newVirtioFSd(rootFSPath, vhostPath, stdout, stderr)
-	defer vfsd.Close()
 	mctx.vfsds[k] = vfsd
 
 	done := jc.InfoSpan("setup virtiofs " + k)
@@ -312,9 +337,19 @@ func (e ErrInvalidOutputSpec) Error() string {
 
 // microVMTaskCtx holds all the state for a microVM task
 type microVMTaskCtx struct {
+	jc      wantjob.Ctx
 	dir     string
 	vfsds   map[string]*virtioFSd
 	sockets map[string]net.Listener
+	hsrv    *wanthttp.Server
 	vmCfg   *vmConfig
 	vm      *vm
+}
+
+func (mctx *microVMTaskCtx) setupHTTP(jsys wantjob.System) {
+	mctx.hsrv = wanthttp.NewServer(jsys)
+}
+
+func (mctx *microVMTaskCtx) setInput(src cadata.Getter, x []byte) {
+	mctx.hsrv.SetInput(src, x)
 }

@@ -426,7 +426,7 @@ func (s *jobSystem) process(x *job) (retErr error) {
 	// if it was not originally computed, and the output is successful GLFS, then
 	// we need to Pull into the job's store.
 	if !original && res.ErrCode == 0 {
-		if err := x.dst.(*wantdb.DBStore).Pull(s.bgCtx, res.Data); err != nil {
+		if err := x.dst.(*wantdb.DBStore).Pull(s.bgCtx, res.Root); err != nil {
 			return err
 		}
 		if err := s.finishJob(s.bgCtx, x.id, res); err != nil {

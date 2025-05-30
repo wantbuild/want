@@ -44,17 +44,14 @@ func TestJobsOnPipe(t *testing.T) {
 	})
 }
 
-func TestGetTask(t *testing.T) {
+func TestGetInput(t *testing.T) {
 	ctx := testutil.Context(t)
 	client, srv := setup(t)
-	srv.task = &Task{
-		Op:    "test",
-		Input: []byte("test"),
-	}
-	task, err := client.GetTask(ctx)
+	srv.input = []byte("test")
+	input, _, err := client.GetInput(ctx)
 	require.NoError(t, err)
 
-	require.Equal(t, task, srv.task)
+	require.Equal(t, input, srv.input)
 }
 
 func TestSetResult(t *testing.T) {
@@ -63,12 +60,12 @@ func TestSetResult(t *testing.T) {
 	client.SetResult(ctx, Result{
 		ErrCode: wantjob.OK,
 		Schema:  wantjob.Schema_NoRefs,
-		Data:    []byte("test"),
+		Root:    []byte("test"),
 	})
 	result := Result{
 		ErrCode: wantjob.OK,
 		Schema:  wantjob.Schema_NoRefs,
-		Data:    []byte("test"),
+		Root:    []byte("test"),
 	}
 	require.NoError(t, client.SetResult(ctx, result))
 	require.Equal(t, result, *srv.result)

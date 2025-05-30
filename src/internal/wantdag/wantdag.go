@@ -24,9 +24,9 @@ func PrepareInput(ctx context.Context, dst cadata.PostExister, src cadata.Getter
 		if err := res.Err(); err != nil {
 			return nil, fmt.Errorf("upstream node %d errored: %v", in.Node, err)
 		}
-		ref, err := glfstasks.ParseGLFSRef(res.Data)
+		ref, err := glfstasks.ParseGLFSRef(res.Root)
 		if err != nil {
-			return nil, fmt.Errorf("cannot convert job output (%s) to GLFS Ref: %v", res.Data, err)
+			return nil, fmt.Errorf("cannot convert job output (%s) to GLFS Ref: %v", res.Root, err)
 		}
 		mode := InputFileMode
 		if ref.Type == glfs.TypeTree {

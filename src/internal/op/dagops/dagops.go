@@ -41,5 +41,5 @@ func (e Executor) ExecLast(jc wantjob.Ctx, s cadata.Getter, ref glfs.Ref) (*glfs
 	if err := res.Err(); err != nil {
 		return nil, err
 	}
-	return glfstasks.ParseGLFSRef(res.Data)
+	return glfstasks.ParseGLFSRef(res.Root)
 }

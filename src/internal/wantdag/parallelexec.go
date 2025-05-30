@@ -52,7 +52,7 @@ func ParallelExecLast(jc wantjob.Ctx, src cadata.Getter, x DAG) (*wantjob.Result
 			if err := res.Err(); err != nil {
 				jc.Errorf("error in node %v %v %v", id, node.Op, err)
 			}
-			if ref, err := glfstasks.ParseGLFSRef(res.Data); err == nil {
+			if ref, err := glfstasks.ParseGLFSRef(res.Root); err == nil {
 				outRef = ref
 			}
 			union = append(union, outSrc)

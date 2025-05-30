@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.brendoncarroll.net/state/cadata"
 
+	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/testutil"
 	"wantbuild.io/want/src/internal/wantsetup"
@@ -95,6 +96,7 @@ func TestMicroVM(t *testing.T) {
 	kernelRef := testutil.PostBlob(t, s, loadKernel(t))
 	helloRef := testutil.PostLinuxAmd64(t, s, "./testdata/helloworld")
 	writeToSerialRef := testutil.PostLinuxAmd64(t, s, "./testdata/writetoserial")
+	passthroughRef := testutil.PostLinuxAmd64(t, s, "./testdata/passthrough")
 	// emptyTree := testutil.PostFSStr(t, s, nil)
 	kargs := kernelArgs{
 		Console:        "hvc0",
@@ -108,8 +110,9 @@ func TestMicroVM(t *testing.T) {
 	tcs := []struct {
 		Task MicroVMTask
 
-		Output *glfs.Ref
-		Err    error
+		GLFSOutput *glfs.Ref
+		RawOutput  []byte
+		Err        error
 	}{
 		{
 			Task: MicroVMTask{
@@ -130,7 +133,7 @@ func TestMicroVM(t *testing.T) {
 				},
 				Output: wantqemu.GrabVirtioFS("vfs1", wantcfg.Prefix("")),
 			},
-			Output: ptr(testutil.PostTree(t, s, []glfs.TreeEntry{
+			GLFSOutput: ptr(testutil.PostTree(t, s, []glfs.TreeEntry{
 				{Name: "/sbin/init", Ref: helloRef, FileMode: 0o755},
 				{Name: "out.txt", FileMode: 0o644, Ref: testutil.PostString(t, s, "[/sbin/init]\n[HOME=/ TERM=linux]\nhello world\n")},
 			})),
@@ -167,7 +170,30 @@ func TestMicroVM(t *testing.T) {
 					JobOutput: &struct{}{},
 				},
 			},
-			Output: ptr(testutil.PostBlob(t, s, []byte("hello world"))),
+			RawOutput: []byte("hello world"),
+		},
+		{
+			Task: MicroVMTask{
+				Cores:      1,
+				Memory:     1024 * 1e6,
+				Kernel:     kernelRef,
+				KernelArgs: "panic=-1 console=hvc0 reboot=t",
+				Initrd: ptr(testutil.PostTree(t, s, []glfs.TreeEntry{
+					{Name: "init", FileMode: 0o777, Ref: passthroughRef},
+				})),
+				SerialPorts: []wantqemu.SerialSpec{
+					{Console: &struct{}{}},
+					{WantHTTP: &struct{}{}},
+				},
+				Input: wantqemu.Input{
+					Schema: wantjob.Schema_NoRefs,
+					Root:   []byte("testing123"),
+				},
+				Output: wantqemu.Output{
+					JobOutput: &struct{}{},
+				},
+			},
+			RawOutput: []byte("testing123"),
 		},
 	}
 	for i, tc := range tcs {
@@ -184,8 +210,13 @@ func TestMicroVM(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			if tc.Output != nil {
-				testutil.EqualFS(t, stores.Union{jc.Dst, s}, *tc.Output, *out)
+			if tc.GLFSOutput != nil {
+				ref, err := glfstasks.ParseGLFSRef(out.Root)
+				require.NoError(t, err)
+				testutil.EqualFS(t, stores.Union{jc.Dst, s}, *tc.GLFSOutput, *ref)
+			}
+			if tc.RawOutput != nil {
+				require.Equal(t, tc.RawOutput, out.Root)
 			}
 		})
 	}

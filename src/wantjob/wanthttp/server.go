@@ -12,22 +12,24 @@ import (
 	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/stdctx/logctx"
 	"go.uber.org/zap"
+	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/wantjob"
 )
 
 type Server struct {
-	sys  wantjob.System
-	task *Task
+	sys wantjob.System
 
 	wstore cadata.Store
 
 	mu           sync.Mutex
-	resultStores map[Idx]cadata.Getter
+	input        []byte
+	inputStore   cadata.Getter
+	resultStores map[StoreID]cadata.Getter
 	result       *Result
 }
 
 func NewServer(sys wantjob.System) *Server {
-	return &Server{sys: sys, resultStores: make(map[Idx]cadata.Getter)}
+	return &Server{sys: sys, resultStores: make(map[StoreID]cadata.Getter)}
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -45,12 +47,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch r.URL.Path {
-	case "/task":
-		handleRequest(w, r, func(ctx context.Context, req GetTaskReq) (*GetTaskResp, error) {
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			return &GetTaskResp{Task: s.task}, nil
-		})
+	case "/input":
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+		w.Write(s.input)
 	case "/result":
 		handleRequest(w, r, func(ctx context.Context, req SetResultReq) (*SetResultResp, error) {
 			s.mu.Lock()
@@ -69,10 +70,11 @@ func (s *Server) GetResult() *Result {
 	return s.result
 }
 
-func (s *Server) SetTask(task *Task) {
+func (s *Server) SetInput(src cadata.Getter, input []byte) {
 	s.mu.Lock()
-	s.task = task
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+	s.input = input
+	s.inputStore = src
 }
 
 func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
@@ -115,10 +117,11 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return nil, err
 			}
+			storeID := StoreID(req.Idx)
 			s.mu.Lock()
-			s.resultStores[req.Idx] = src
+			s.resultStores[storeID] = src
 			s.mu.Unlock()
-			return &ViewResultResp{Result: *result, StoreID: int(req.Idx)}, nil
+			return &ViewResultResp{Result: *result, StoreID: storeID}, nil
 		})
 	case "/jobs.Delete":
 		handleRequest(w, r, func(ctx context.Context, req DeleteJobReq) (*DeleteJobResp, error) {
@@ -126,8 +129,9 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return nil, err
 			}
+			storeID := StoreID(req.Idx)
 			s.mu.Lock()
-			delete(s.resultStores, req.Idx)
+			delete(s.resultStores, storeID)
 			s.mu.Unlock()
 			return &DeleteJobResp{}, nil
 		})
@@ -137,7 +141,7 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStore(w http.ResponseWriter, r *http.Request) {
-	var storeID Idx
+	var storeID StoreID
 	var method string
 	if _, err := fmt.Sscanf(r.URL.Path, "/stores/%d.%s", &storeID, &method); err != nil {
 		http.Error(w, "could not parse path", http.StatusBadRequest)
@@ -163,9 +167,7 @@ func (s *Server) handleStore(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		s.mu.Lock()
-		store := s.resultStores[storeID]
-		s.mu.Unlock()
+		store := s.getStore(storeID)
 		buf := make([]byte, store.MaxSize())
 		n, err := store.Get(r.Context(), req.CID, buf)
 		if err != nil {
@@ -200,6 +202,15 @@ func (s *Server) handleStore(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "invalid method "+method, http.StatusBadRequest)
 	}
+}
+
+func (s *Server) getStore(storeID StoreID) cadata.Getter {
+	if storeID == CurrentStore {
+		return stores.Union{s.inputStore, s.wstore}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.resultStores[storeID]
 }
 
 func handleRequest[Req, Resp any](w http.ResponseWriter, r *http.Request, fn func(context.Context, Req) (*Resp, error)) {

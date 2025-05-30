@@ -47,10 +47,10 @@ var buildCmd = star.Command{
 			} else {
 				c.Printf("%s:\n", targ.DefinedIn)
 			}
-			if ref, err := glfstasks.ParseGLFSRef(tres.Data); err == nil {
+			if ref, err := glfstasks.ParseGLFSRef(tres.Root); err == nil {
 				c.Printf("  %v %v\n", tres.ErrCode, ref)
 			} else {
-				c.Printf("  %v %q\n", tres.ErrCode, tres.Data)
+				c.Printf("  %v %q\n", tres.ErrCode, tres.Root)
 			}
 		}
 		c.Printf("%v\n", dur)
@@ -241,7 +241,7 @@ var exportRepoCmd = star.Command{
 		for i, target := range res.Targets {
 			if target.IsStatement {
 				tres := res.TargetResults[i]
-				ref, err := glfstasks.ParseGLFSRef(tres.Data)
+				ref, err := glfstasks.ParseGLFSRef(tres.Root)
 				if err != nil {
 					return err
 				}

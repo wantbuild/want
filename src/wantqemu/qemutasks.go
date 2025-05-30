@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"slices"
 
 	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/wantcfg"
+	"wantbuild.io/want/src/wantjob"
 )
 
 // MicroVMTask is an Amd64 Linux MicroVM Task
@@ -20,12 +22,14 @@ type MicroVMTask struct {
 	Memory uint64
 
 	// Kernel is the linux kernel image used to boot the VM.
-	Kernel      glfs.Ref
-	KernelArgs  string
-	Initrd      *glfs.Ref
+	Kernel     glfs.Ref
+	KernelArgs string
+	Initrd     *glfs.Ref
+
 	SerialPorts []SerialSpec
 	VirtioFS    map[string]VirtioFSSpec
 
+	Input  Input
 	Output Output
 }
 
@@ -34,6 +38,13 @@ func (t MicroVMTask) Validate() error {
 		k := t.Output.VirtioFS.ID
 		if _, exists := t.VirtioFS[k]; !exists {
 			return fmt.Errorf("output refers to virtiofs (id=%s) which does not exist", k)
+		}
+	}
+	if t.Output.JobOutput != nil {
+		if !slices.ContainsFunc(t.SerialPorts, func(s SerialSpec) bool {
+			return s.WantHTTP != nil
+		}) {
+			return fmt.Errorf("output.joboutput requires that the want API is available")
 		}
 	}
 	return nil
@@ -63,6 +74,12 @@ type Output struct {
 	JobOutput *struct{}       `json:"job,omitempty"`
 }
 
+// Input describes where to get the task input from.
+type Input struct {
+	Schema wantjob.Schema `json:"schema"`
+	Root   []byte         `json:"root"`
+}
+
 func GrabVirtioFS(fsid string, q wantcfg.PathSet) Output {
 	return Output{VirtioFS: &VirtioFSOutput{ID: fsid, Query: q}}
 }
@@ -74,17 +91,20 @@ type microVMConfig struct {
 	KernelArgs  string                  `json:"kernel_args"`
 	SerialPorts []SerialSpec            `json:"serial_ports"`
 	VirtioFS    map[string]VirtioFSSpec `json:"virtiofs"`
+	Input       Input                   `json:"input"`
 	Output      Output                  `json:"output"`
 }
 
 func PostMicroVMTask(ctx context.Context, s cadata.PostExister, x MicroVMTask) (*glfs.Ref, error) {
 	ag := glfs.NewAgent()
 	configData, err := json.Marshal(microVMConfig{
-		Cores:      x.Cores,
-		Memory:     x.Memory,
-		KernelArgs: x.KernelArgs,
-		VirtioFS:   x.VirtioFS,
-		Output:     x.Output,
+		Cores:       x.Cores,
+		Memory:      x.Memory,
+		KernelArgs:  x.KernelArgs,
+		SerialPorts: x.SerialPorts,
+		VirtioFS:    x.VirtioFS,
+		Input:       x.Input,
+		Output:      x.Output,
 	})
 	if err != nil {
 		return nil, err
@@ -99,6 +119,13 @@ func PostMicroVMTask(ctx context.Context, s cadata.PostExister, x MicroVMTask) (
 	}
 	if x.Initrd != nil {
 		ents = append(ents, glfs.TreeEntry{Name: "initrd", Ref: *x.Initrd})
+	}
+	if x.Input.Schema == wantjob.Schema_GLFS {
+		ref, err := glfstasks.ParseGLFSRef(x.Input.Root)
+		if err != nil {
+			return nil, fmt.Errorf("invalid input for schema: %w", err)
+		}
+		ents = append(ents, glfs.TreeEntry{Name: "input", Ref: *ref})
 	}
 	for name, vfs := range x.VirtioFS {
 		ents = append(ents, glfs.TreeEntry{Name: path.Join("virtiofs", name), FileMode: 0o777, Ref: vfs.Root})
@@ -156,8 +183,10 @@ func GetMicroVMTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*MicroVMT
 		KernelArgs: cfg.KernelArgs,
 		Initrd:     initrd,
 
-		VirtioFS: cfg.VirtioFS,
+		SerialPorts: cfg.SerialPorts,
+		VirtioFS:    cfg.VirtioFS,
 
+		Input:  cfg.Input,
 		Output: cfg.Output,
 	}, nil
 }
