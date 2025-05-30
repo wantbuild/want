@@ -7,7 +7,7 @@ import (
 
 	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/src/wantjob"
-	"wantbuild.io/want/src/wantqemu"
+	"wantbuild.io/want/src/wantjob/wanthttp"
 )
 
 func main() {
@@ -19,7 +19,7 @@ func main() {
 		panic(err)
 	}
 	defer f.Close()
-	wantqemu.MainRW(f, func(jc wantjob.Ctx, s cadata.Getter, root []byte) wantjob.Result {
+	wanthttp.MainRW(f, func(jc wantjob.Ctx, s cadata.Getter, root []byte) wantjob.Result {
 		return wantjob.Result{
 			ErrCode: wantjob.OK,
 			Schema:  wantjob.Schema_NoRefs,

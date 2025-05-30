@@ -50,8 +50,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/input":
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		w.WriteHeader(http.StatusOK)
-		w.Write(s.input)
+		if s.input == nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("no input set, not in a job context"))
+		} else {
+			w.WriteHeader(http.StatusOK)
+			w.Write(s.input)
+		}
 	case "/result":
 		handleRequest(w, r, func(ctx context.Context, req SetResultReq) (*SetResultResp, error) {
 			s.mu.Lock()

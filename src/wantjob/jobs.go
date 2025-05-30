@@ -91,9 +91,9 @@ const (
 // Result is produced by finished jobs.
 // Jobs will also have results when cancelled or timed out, with the situation reflected in the ErrCode
 type Result struct {
-	ErrCode ErrCode `json:"ec"`
+	ErrCode ErrCode `json:"errcode"`
 	Root    []byte  `json:"root"`
-	Schema  Schema  `json:"sch"`
+	Schema  Schema  `json:"schema"`
 }
 
 func Success(schema Schema, data []byte) *Result {
