@@ -57,7 +57,7 @@ func (s *System) goRoot() string {
 }
 
 func (s *System) goState() string {
-	return filepath.Join(s.stateDir, "go")
+	return filepath.Join(s.stateDir, "gostate")
 }
 
 // Init initializes the system

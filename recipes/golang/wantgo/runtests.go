@@ -27,6 +27,8 @@ type RunTestsTask struct {
 }
 
 type VMSpec struct {
+	Cores  uint32
+	Memory uint64
 	BaseFS glfs.Ref
 	Kernel glfs.Ref
 }
@@ -127,8 +129,8 @@ func RunTests(jc wantjob.Ctx, src cadata.Getter, x RunTestsTask) (*glfs.Ref, err
 		}
 		args := []string{"-test.v", "-test.coverprofile", "/output"}
 		taskRef, err := wantqemu.PostMicroVMTask(jc.Context, jc.Dst, wantqemu.MicroVMTask{
-			Cores:  1,
-			Memory: 1e9,
+			Cores:  x.Cores,
+			Memory: x.Memory,
 			Kernel: x.Kernel,
 			VirtioFS: map[string]wantqemu.VirtioFSSpec{
 				"rootfs": {Root: *rootfs, Writeable: true},
@@ -239,4 +241,12 @@ func makeTestExecTasks(ctx context.Context, src cadata.Getter, modRef glfs.Ref, 
 		return nil, err
 	}
 	return ret, nil
+}
+
+func jsonMarshal(x any) []byte {
+	bz, err := json.Marshal(x)
+	if err != nil {
+		panic(err)
+	}
+	return bz
 }

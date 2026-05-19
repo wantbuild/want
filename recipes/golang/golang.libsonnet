@@ -1,8 +1,8 @@
 local want = import "@want";
-local wasm = import "wasm/wasm.libsonnet";
 local linux = import "linux/linux.libsonnet";
 local alpine = import "alpine/alpine.libsonnet";
 local builtin = import "./builtin.libsonnet";
+local wasm = import "./wasm/wasm.libsonnet";
 
 local currentVersion = "1.23.4";
 
@@ -38,7 +38,7 @@ local wantGoExec = makeExec(
 
 local defaultKernel = linux.bzImage;
 
-local goCmd(modSrc, cmd, basefs, kernel) = 
+local goCmd(modSrc, cmd, basefs, kernel) =
     local initscript = want.blob(|||
         #!/bin/bash
         set -ve;
@@ -50,8 +50,8 @@ local goCmd(modSrc, cmd, basefs, kernel) =
 
         cd /input;
         ls;
-    ||| + "go %s | tee /output/out.txt;" % [cmd] + 
-    ||| 
+    ||| + "go %s | tee /output/out.txt;" % [cmd] +
+    |||
         reboot -f;
     |||);
     local rootfs = want.pass([
@@ -75,7 +75,7 @@ local defaultBaseFS = want.tree({
 local runTests(modSrc, basefs=defaultBaseFS, kernel=defaultKernel, ignore=[]) =
     local task = want.pass([
         want.input("module", modSrc),
-        want.input("modcache", modDownload(modSrc)), 
+        want.input("modcache", modDownload(modSrc)),
         want.input("run_tests.json", want.blob(std.manifestJsonEx({
             GOOS : "linux",
             GOARCH : "amd64",
@@ -89,7 +89,7 @@ local runTests(modSrc, basefs=defaultBaseFS, kernel=defaultKernel, ignore=[]) =
 {
     dist :: dist,
     pathSet :: pathSet,
-    modDownload :: modDownload,    
+    modDownload :: modDownload,
     makeExec :: makeExec,
     makeTestExec :: makeTestExec,
     runTests :: runTests,

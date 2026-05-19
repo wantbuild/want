@@ -3,6 +3,6 @@ local alpine = import "./alpine.libsonnet";
 local wassert = import "assert.libsonnet";
 
 wassert.pathExists(
-    alpine.apk("community", alpine.ARCH_AMD64, "cpio", "2.15-r0", "5789feb5129eb788b517edd8c51988c925fc4eb1de70a8af28ee9428f387c229"),
+    alpine.apk("community", alpine.ARCH_AMD64, "cpio", "2.15-r0", "2ae3624f2f985834f780272d1b1c8caa1a019b62804b1f241aea97f2d0f6e670"),
     "usr/bin/cpio",
 )

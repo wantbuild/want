@@ -79,6 +79,8 @@ func TestRunTests(t *testing.T) {
 			`),
 		}),
 		VMSpec: VMSpec{
+			Cores:  1,
+			Memory: 1e9,
 			BaseFS: mustPostFS(t, s, nil),
 			Kernel: mustPostBlob(t, s, bzImage),
 		},
