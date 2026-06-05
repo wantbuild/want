@@ -10,7 +10,8 @@ import (
 	"net/http"
 	"strings"
 
-	"go.brendoncarroll.net/state/cadata"
+	"blobcache.io/blobcache/src/bcsdk"
+	"blobcache.io/blobcache/src/blobcache"
 
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/wantjob"
@@ -73,7 +74,7 @@ func (c *Client) List(ctx context.Context) ([]Idx, error) {
 	return resp.Idxs, nil
 }
 
-func (c *Client) Spawn(ctx context.Context, src cadata.Getter, task Task) (Idx, error) {
+func (c *Client) Spawn(ctx context.Context, src bcsdk.RO, task Task) (Idx, error) {
 	var resp SpawnResp
 	if err := c.doJSON(ctx, http.MethodPost, "/jobs.Spawn", SpawnReq{Task: task}, &resp); err != nil {
 		return 0, err
@@ -81,7 +82,7 @@ func (c *Client) Spawn(ctx context.Context, src cadata.Getter, task Task) (Idx, 
 	return resp.Idx, nil
 }
 
-func (c *Client) ViewResult(ctx context.Context, idx Idx) (*Result, cadata.Getter, error) {
+func (c *Client) ViewResult(ctx context.Context, idx Idx) (*Result, bcsdk.RO, error) {
 	req := ViewResultReq{Idx: idx}
 	var resp ViewResultResp
 	if err := c.doJSON(ctx, http.MethodPost, "/jobs.ViewResult", req, &resp); err != nil {
@@ -128,7 +129,7 @@ func (c *Client) Store(sid StoreID) *Store {
 	return &Store{hc: c, sid: sid}
 }
 
-func (c *Client) GetInput(ctx context.Context) ([]byte, cadata.Getter, error) {
+func (c *Client) GetInput(ctx context.Context) ([]byte, bcsdk.RO, error) {
 	status, respBody, err := c.do(ctx, http.MethodPost, "/input", nil)
 	if err != nil {
 		return nil, nil, err
@@ -147,23 +148,23 @@ func (c *Client) SetResult(ctx context.Context, result Result) error {
 	return nil
 }
 
-var _ cadata.Store = &Store{}
+var _ bcsdk.RW = &Store{}
 
 type Store struct {
 	hc  *Client
 	sid StoreID
 }
 
-func (s *Store) Post(ctx context.Context, data []byte) (cadata.ID, error) {
+func (s *Store) Post(ctx context.Context, data []byte) (blobcache.CID, error) {
 	req := PostReq{Data: data}
 	var resp PostResp
 	if err := s.hc.doJSON(ctx, http.MethodPost, fmt.Sprintf("/stores/%d.Post", s.sid), req, &resp); err != nil {
-		return cadata.ID{}, err
+		return blobcache.CID{}, err
 	}
 	return resp.CID, nil
 }
 
-func (s *Store) Get(ctx context.Context, id cadata.ID, buf []byte) (int, error) {
+func (s *Store) Get(ctx context.Context, id blobcache.CID, buf []byte) (int, error) {
 	reqData, err := json.Marshal(GetReq{CID: id})
 	if err != nil {
 		return 0, err
@@ -178,40 +179,31 @@ func (s *Store) Get(ctx context.Context, id cadata.ID, buf []byte) (int, error) 
 	return copy(buf, respBody), nil
 }
 
-func (s *Store) Delete(ctx context.Context, id cadata.ID) error {
-	req := DeleteBlobReq{CID: id}
+func (s *Store) Delete(ctx context.Context, cids []blobcache.CID) error {
+	req := DeleteBlobReq{CIDs: cids}
 	var resp DeleteBlobResp
 	return s.hc.doJSON(ctx, http.MethodPost, fmt.Sprintf("/stores/%d.Delete", s.sid), req, &resp)
 }
 
-func (s *Store) Exists(ctx context.Context, id cadata.ID) (bool, error) {
-	req := BlobExistsReq{CIDs: []cadata.ID{id}}
+func (s *Store) Exists(ctx context.Context, cids []blobcache.CID, dst []bool) error {
+	req := BlobExistsReq{CIDs: cids}
 	var resp BlobExistsResp
 	if err := s.hc.doJSON(ctx, http.MethodPost, fmt.Sprintf("/stores/%d.Exists", s.sid), req, &resp); err != nil {
-		return false, err
+		return err
 	}
-	return resp.Exists[0], nil
-}
-
-func (s *Store) List(ctx context.Context, span cadata.Span, ids []cadata.ID) (int, error) {
-	var req ListBlobsReq
-	if gteq, ok := span.LowerBound(); ok {
-		req.Gteq = &gteq
+	if len(resp.Exists) != len(cids) {
+		return fmt.Errorf("Exists returned slice with wrong length")
 	}
-	if lt, ok := span.UpperBound(); ok {
-		req.Lt = &lt
+	for i := range dst {
+		dst[i] = dst[i] || resp.Exists[i]
 	}
-	var resp ListBlobsResp
-	if err := s.hc.doJSON(ctx, http.MethodPost, fmt.Sprintf("/stores/%d.List", s.sid), req, &resp); err != nil {
-		return 0, err
-	}
-	return 0, nil
+	return nil
 }
 
 func (s *Store) MaxSize() int {
 	return stores.MaxBlobSize
 }
 
-func (s *Store) Hash(x []byte) cadata.ID {
+func (s *Store) Hash(x []byte) blobcache.CID {
 	return stores.Hash(x)
 }

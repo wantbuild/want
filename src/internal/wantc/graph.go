@@ -7,8 +7,8 @@ import (
 	"path"
 	"strings"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/wantdag"
 )
@@ -19,12 +19,12 @@ type (
 )
 
 type GraphBuilder struct {
-	dst   cadata.Store
+	dst   bcsdk.RW
 	index map[[32]byte]wantdag.NodeID
 	b     wantdag.Builder
 }
 
-func NewGraphBuilder(dst cadata.Store) *GraphBuilder {
+func NewGraphBuilder(dst bcsdk.RW) *GraphBuilder {
 	return &GraphBuilder{
 		dst:   dst,
 		index: map[[32]byte]wantdag.NodeID{},
@@ -44,11 +44,11 @@ func (gb *GraphBuilder) Derived(ctx context.Context, op wantdag.OpName, inputs [
 	return gb.b.Derived(ctx, op, inputs)
 }
 
-func (gb *GraphBuilder) Fact(ctx context.Context, src cadata.Getter, ref glfs.Ref) (wantdag.NodeID, error) {
+func (gb *GraphBuilder) Fact(ctx context.Context, src bcsdk.RO, ref glfs.Ref) (wantdag.NodeID, error) {
 	return gb.b.Fact(ctx, src, ref)
 }
 
-func (gb *GraphBuilder) Expr(ctx context.Context, src cadata.Getter, x Expr) (wantdag.NodeID, error) {
+func (gb *GraphBuilder) Expr(ctx context.Context, src bcsdk.RO, x Expr) (wantdag.NodeID, error) {
 	n, err := gb.expr(ctx, src, x)
 	if err != nil {
 		return 0, err
@@ -56,7 +56,7 @@ func (gb *GraphBuilder) Expr(ctx context.Context, src cadata.Getter, x Expr) (wa
 	return n, nil
 }
 
-func (gb *GraphBuilder) expr(ctx context.Context, src cadata.Getter, e Expr) (wantdag.NodeID, error) {
+func (gb *GraphBuilder) expr(ctx context.Context, src bcsdk.RO, e Expr) (wantdag.NodeID, error) {
 	key := e.Key()
 	if n, exists := gb.index[key]; exists {
 		return n, nil
@@ -80,7 +80,7 @@ func (gb *GraphBuilder) expr(ctx context.Context, src cadata.Getter, e Expr) (wa
 	return dcnode, nil
 }
 
-func (gb *GraphBuilder) compute(ctx context.Context, src cadata.Getter, c *compute) (wantdag.NodeID, error) {
+func (gb *GraphBuilder) compute(ctx context.Context, src bcsdk.RO, c *compute) (wantdag.NodeID, error) {
 	nodeInputs, err := gb.computeInput(ctx, src, c.Inputs)
 	if err != nil {
 		return 0, err
@@ -88,7 +88,7 @@ func (gb *GraphBuilder) compute(ctx context.Context, src cadata.Getter, c *compu
 	return gb.b.Derived(ctx, c.Op, nodeInputs)
 }
 
-func (gb *GraphBuilder) computeInput(ctx context.Context, src cadata.Getter, inputs []computeInput) ([]wantdag.NodeInput, error) {
+func (gb *GraphBuilder) computeInput(ctx context.Context, src bcsdk.RO, inputs []computeInput) ([]wantdag.NodeInput, error) {
 	layers := []wantdag.NodeID{}
 	for _, input := range inputs {
 		nid, err := gb.expr(ctx, src, input.From)

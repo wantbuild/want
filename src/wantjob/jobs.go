@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"go.brendoncarroll.net/exp/slices2"
-	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/tai64"
 )
 
@@ -142,7 +142,7 @@ func (j Job) Elapsed() time.Duration {
 type System interface {
 	// Spawn creates a new job, which will perform task pulling data from src as needed.
 	// Job returns an index, which can be used to refer to the Job in other methods.
-	Spawn(ctx context.Context, src cadata.Getter, task Task) (Idx, error)
+	Spawn(ctx context.Context, src bcsdk.RO, task Task) (Idx, error)
 	// Inspect returns information about a Job
 	Inspect(ctx context.Context, idx Idx) (*Job, error)
 	// Await blocks until the job has completed
@@ -150,7 +150,7 @@ type System interface {
 	// Cancel attempts to cancel the job.  If the Job is already in DONE then it cannot be cancelled.
 	Cancel(ctx context.Context, idx Idx) error
 	// ViewResult returns the Job result, or immediately errors if the Job is not in the DONE state.
-	ViewResult(ctx context.Context, idx Idx) (*Result, cadata.Getter, error)
+	ViewResult(ctx context.Context, idx Idx) (*Result, bcsdk.RO, error)
 	// Delete makes the Job inaccessbile and frees any resources it is consuming.
 	// Delete will also cancel the Job if it is running, although this transitory state will
 	// not be visible to the caller of Delete.
@@ -163,7 +163,7 @@ var _ System = Ctx{}
 type Ctx struct {
 	Context context.Context
 	System
-	Dst    cadata.Store
+	Dst    bcsdk.RW
 	Writer func(string) io.Writer
 }
 
@@ -186,7 +186,7 @@ func (jc *Ctx) InfoSpan(msg string) func() {
 }
 
 // Do spawns a child job to compute the Task, then awaits it and returns the result
-func Do(ctx context.Context, sys System, src cadata.Getter, task Task) (*Result, cadata.Getter, error) {
+func Do(ctx context.Context, sys System, src bcsdk.RO, task Task) (*Result, bcsdk.RO, error) {
 	idx, err := sys.Spawn(ctx, src, task)
 	if err != nil {
 		return nil, nil, err

@@ -9,8 +9,8 @@ import (
 	"io/fs"
 	"os"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/stringsets"
@@ -47,9 +47,9 @@ var ops = map[OpName]Operator{
 	OpDiff:          Diff,
 }
 
-type Operator func(ctx context.Context, dst cadata.PostExister, src cadata.Getter, x glfs.Ref) (*glfs.Ref, error)
+type Operator func(ctx context.Context, dst bcsdk.WO, src bcsdk.RO, x glfs.Ref) (*glfs.Ref, error)
 
-func Merge(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inputsRef glfs.Ref) (*glfs.Ref, error) {
+func Merge(ctx context.Context, dst bcsdk.WO, src bcsdk.RO, inputsRef glfs.Ref) (*glfs.Ref, error) {
 	t, err := glfs.GetTreeSlice(ctx, src, inputsRef, 1e6)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func Merge(ctx context.Context, dst cadata.PostExister, src cadata.Getter, input
 	return glfs.Merge(ctx, dst, src, layers...)
 }
 
-func Pick(ctx context.Context, _ cadata.PostExister, src cadata.Getter, inputRef glfs.Ref) (*glfs.Ref, error) {
+func Pick(ctx context.Context, _ bcsdk.WO, src bcsdk.RO, inputRef glfs.Ref) (*glfs.Ref, error) {
 	inputTree, err := glfs.GetTreeSlice(ctx, src, inputRef, 1e6)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func Pick(ctx context.Context, _ cadata.PostExister, src cadata.Getter, inputRef
 	return glfs.GetAtPath(ctx, src, xent.Ref, string(pathBytes))
 }
 
-func Place(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inputRef glfs.Ref) (*glfs.Ref, error) {
+func Place(ctx context.Context, dst bcsdk.WO, src bcsdk.RO, inputRef glfs.Ref) (*glfs.Ref, error) {
 	inputTree, err := glfs.GetTreeSlice(ctx, src, inputRef, 1e6)
 	if err != nil {
 		return nil, err
@@ -109,14 +109,14 @@ func Place(ctx context.Context, dst cadata.PostExister, src cadata.Getter, input
 	})
 }
 
-func Passthrough(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inputRef glfs.Ref) (*glfs.Ref, error) {
+func Passthrough(ctx context.Context, dst bcsdk.WO, src bcsdk.RO, inputRef glfs.Ref) (*glfs.Ref, error) {
 	if err := glfstasks.FastSync(ctx, dst, src, inputRef); err != nil {
 		return nil, err
 	}
 	return &inputRef, nil
 }
 
-func FilterPathSet(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inputRef glfs.Ref) (*glfs.Ref, error) {
+func FilterPathSet(ctx context.Context, dst bcsdk.WO, src bcsdk.RO, inputRef glfs.Ref) (*glfs.Ref, error) {
 	root, err := glfs.GetTreeSlice(ctx, src, inputRef, 1e6)
 	if err != nil {
 		return nil, err
@@ -143,7 +143,7 @@ func FilterPathSet(ctx context.Context, dst cadata.PostExister, src cadata.Gette
 	})
 }
 
-func Chmod(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inputRef glfs.Ref) (*glfs.Ref, error) {
+func Chmod(ctx context.Context, dst bcsdk.WO, src bcsdk.RO, inputRef glfs.Ref) (*glfs.Ref, error) {
 	inputTree, err := glfs.GetTreeSlice(ctx, src, inputRef, 1e6)
 	if err != nil {
 		return nil, err
@@ -168,8 +168,8 @@ func Chmod(ctx context.Context, dst cadata.PostExister, src cadata.Getter, input
 	})
 }
 
-func Diff(ctx context.Context, dst cadata.PostExister, src cadata.Getter, inputRef glfs.Ref) (*glfs.Ref, error) {
-	ag := glfs.NewAgent()
+func Diff(ctx context.Context, dst bcsdk.WO, src bcsdk.RO, inputRef glfs.Ref) (*glfs.Ref, error) {
+	ag := glfs.NewMachine()
 	left, err := ag.GetAtPath(ctx, src, inputRef, "left")
 	if err != nil {
 		return nil, err

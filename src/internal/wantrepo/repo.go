@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/src/internal/glfsport"
 	"wantbuild.io/want/src/internal/stringsets"
 	"wantbuild.io/want/src/internal/wantc"
@@ -85,7 +85,7 @@ func (r *Repo) Metadata() map[string]any {
 }
 
 // Import imports a filesystem from the Repo
-func (repo *Repo) Import(ctx context.Context, dst cadata.PostExister, p string) (*glfs.Ref, error) {
+func (repo *Repo) Import(ctx context.Context, dst bcsdk.WO, p string) (*glfs.Ref, error) {
 	imp := glfsport.Importer{
 		Store:  dst,
 		Dir:    repo.RootPath(),
@@ -96,7 +96,7 @@ func (repo *Repo) Import(ctx context.Context, dst cadata.PostExister, p string) 
 }
 
 // Export writes a filesystem to (part of) the Repo
-func (r *Repo) Export(ctx context.Context, src cadata.Getter, p string, ref glfs.Ref) error {
+func (r *Repo) Export(ctx context.Context, src bcsdk.RO, p string, ref glfs.Ref) error {
 	exp := glfsport.Exporter{
 		Cache:   glfsport.NullCache{},
 		Store:   src,

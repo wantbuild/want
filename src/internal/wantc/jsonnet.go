@@ -10,9 +10,10 @@ import (
 	"strings"
 	"sync"
 
+	"blobcache.io/blobcache/src/bcsdk"
+	"blobcache.io/blobcache/src/blobcache"
 	"blobcache.io/glfs"
 	"github.com/google/go-jsonnet"
-	"go.brendoncarroll.net/state/cadata"
 )
 
 var _ jsonnet.Importer = &jsImporter{}
@@ -135,7 +136,7 @@ func parseJsonnetPath(x string) (*FQPath, error) {
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("could not parse %q as a fq path", x)
 	}
-	var modCID cadata.ID
+	var modCID blobcache.CID
 	if err := modCID.UnmarshalBase64([]byte(parts[0])); err != nil {
 		return nil, nil
 	}
@@ -153,7 +154,7 @@ type jsonnetCtx struct {
 	Submodules map[string]*jsonnetCtx
 }
 
-func newJsonnetCtx(ctx context.Context, src cadata.Getter, root glfs.Ref, deps map[ExprID]glfs.Ref) (*jsonnetCtx, error) {
+func newJsonnetCtx(ctx context.Context, src bcsdk.RO, root glfs.Ref, deps map[ExprID]glfs.Ref) (*jsonnetCtx, error) {
 	if root.Type != glfs.TypeTree {
 		return &jsonnetCtx{Root: root}, nil
 	}

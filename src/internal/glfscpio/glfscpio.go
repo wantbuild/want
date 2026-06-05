@@ -8,15 +8,15 @@ import (
 	"io/fs"
 	"path"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"github.com/cavaliergopher/cpio"
-	"go.brendoncarroll.net/state/cadata"
 )
 
 const MaxPathLen = 4096
 
 // Write serializes the filesystem at x into a CPIO archive and writes it to w.
-func Write(ctx context.Context, s cadata.Getter, root glfs.Ref, w io.Writer) error {
+func Write(ctx context.Context, s bcsdk.RO, root glfs.Ref, w io.Writer) error {
 	if root.Type != glfs.TypeTree {
 		return fmt.Errorf("cannot write non-tree as CPIO archive")
 	}
@@ -84,7 +84,7 @@ func Write(ctx context.Context, s cadata.Getter, root glfs.Ref, w io.Writer) err
 	return cpw.Close()
 }
 
-func Read(ctx context.Context, s cadata.PostExister, r io.Reader) (*glfs.Ref, error) {
+func Read(ctx context.Context, s bcsdk.WO, r io.Reader) (*glfs.Ref, error) {
 	cpr := cpio.NewReader(r)
 	var ents []glfs.TreeEntry
 	for {

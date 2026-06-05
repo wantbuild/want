@@ -8,8 +8,8 @@ import (
 	"os"
 	"syscall"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/recipes/golang/wantgo"
 	"wantbuild.io/want/src/wantjob"
@@ -40,7 +40,7 @@ func main() {
 
 	switch os.Args[1] {
 	case "runTests":
-		wanthttp.MainRW(apiPort, func(jc wantjob.Ctx, src cadata.Getter, x []byte) wantjob.Result {
+		wanthttp.MainRW(apiPort, func(jc wantjob.Ctx, src bcsdk.RO, x []byte) wantjob.Result {
 			var ref glfs.Ref
 			if err := json.Unmarshal(x, &ref); err != nil {
 				panic(err)

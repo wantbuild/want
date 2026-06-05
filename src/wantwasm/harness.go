@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"unsafe"
 
+	"blobcache.io/blobcache/src/bcsdk"
+	"blobcache.io/blobcache/src/blobcache"
 	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state/cadata"
 
@@ -55,22 +57,22 @@ func setOutput(buf []byte) error {
 
 type nativeStore struct{}
 
-func (s nativeStore) Post(ctx context.Context, buf []byte) (cadata.ID, error) {
-	var id cadata.ID
+func (s nativeStore) Post(ctx context.Context, buf []byte) (blobcache.CID, error) {
+	var id blobcache.CID
 	ec := nativePost(unsafe.Pointer(&id), unsafe.Pointer(unsafe.SliceData(buf)), uint32(len(buf)))
 	if ec != 0 {
-		return cadata.ID{}, errors.New("error posting")
+		return blobcache.CID{}, errors.New("error posting")
 	}
 	return id, nil
 }
 
-func (s nativeStore) Get(ctx context.Context, id cadata.ID, buf []byte) (int, error) {
+func (s nativeStore) Get(ctx context.Context, id blobcache.CID, buf []byte) (int, error) {
 	n := nativeGet(unsafe.Pointer(unsafe.SliceData(buf)), uint32(len(buf)), unsafe.Pointer(&id))
 	if n < 0 {
 		return 0, errors.New("error getting")
 	}
 	if bytes.HasPrefix(buf, id[:]) {
-		return 0, cadata.ErrNotFound{Key: id}
+		return 0, blobcache.ErrNotFound{CID: id}
 	}
 	// TODO: remove this
 	if s.Hash(buf[:n]) != id {
@@ -79,19 +81,30 @@ func (s nativeStore) Get(ctx context.Context, id cadata.ID, buf []byte) (int, er
 	return int(n), nil
 }
 
-func (s nativeStore) Exists(ctx context.Context, id cadata.ID) (bool, error) {
-	return stores.ExistsUsingGet(ctx, s, id)
+func (s nativeStore) Exists(ctx context.Context, cids []blobcache.CID, dst []bool) error {
+	for i, cid := range cids {
+		dst[i] = true
+		_, err := bcsdk.GetBytes(ctx, s, cid, stores.MaxBlobSize)
+		if err != nil {
+			if !blobcache.IsErrNotFound(err) {
+				return err
+			}
+		} else {
+			dst[i] = true
+		}
+	}
+	return nil
 }
 
-func (s nativeStore) Delete(ctx context.Context, id cadata.ID) error {
+func (s nativeStore) Delete(ctx context.Context, id blobcache.CID) error {
 	return errors.New("Delete not supported")
 }
 
-func (s nativeStore) List(ctx context.Context, span cadata.Span, ids []cadata.ID) (int, error) {
+func (s nativeStore) List(ctx context.Context, span cadata.Span, ids []blobcache.CID) (int, error) {
 	return 0, errors.New("List not supported")
 }
 
-func (s nativeStore) Hash(x []byte) cadata.ID {
+func (s nativeStore) Hash(x []byte) blobcache.CID {
 	return stores.Hash(x)
 }
 
@@ -104,7 +117,7 @@ func (s nativeStore) MaxSize() int {
 // - setting up the job context
 // - running fn with those things
 // - setting the output and cleaning up
-func Main(fn func(jc wantjob.Ctx, src cadata.Getter, x []byte) ([]byte, error)) {
+func Main(fn func(jc wantjob.Ctx, src bcsdk.RO, x []byte) ([]byte, error)) {
 	inputData, err := getInput()
 	if err != nil {
 		log.Fatal(err)
@@ -121,7 +134,7 @@ func Main(fn func(jc wantjob.Ctx, src cadata.Getter, x []byte) ([]byte, error)) 
 	setOutput(y)
 }
 
-func importPath(ctx context.Context, s cadata.Store, p string, finfo os.FileInfo) (*glfs.Ref, error) {
+func importPath(ctx context.Context, s bcsdk.RW, p string, finfo os.FileInfo) (*glfs.Ref, error) {
 	if finfo == nil {
 		var err error
 		finfo, err = os.Stat(p)
@@ -138,7 +151,7 @@ func importPath(ctx context.Context, s cadata.Store, p string, finfo os.FileInfo
 	return importFile(ctx, s, p)
 }
 
-func importTree(ctx context.Context, s cadata.Store, p string, finfo os.FileInfo) (*glfs.Ref, error) {
+func importTree(ctx context.Context, s bcsdk.RW, p string, finfo os.FileInfo) (*glfs.Ref, error) {
 	xs, err := os.ReadDir(p)
 	if err != nil {
 		return nil, err
@@ -160,7 +173,7 @@ func importTree(ctx context.Context, s cadata.Store, p string, finfo os.FileInfo
 	return glfs.PostTreeSlice(ctx, s, ys)
 }
 
-func importFile(ctx context.Context, s cadata.Store, p string) (*glfs.Ref, error) {
+func importFile(ctx context.Context, s bcsdk.RW, p string) (*glfs.Ref, error) {
 	f, err := os.OpenFile(p, os.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
@@ -169,6 +182,6 @@ func importFile(ctx context.Context, s cadata.Store, p string) (*glfs.Ref, error
 	return glfs.PostBlob(ctx, s, f)
 }
 
-func importSymlink(ctx context.Context, s cadata.Store, p string) (*glfs.Ref, error) {
+func importSymlink(ctx context.Context, s bcsdk.RW, p string) (*glfs.Ref, error) {
 	return nil, errors.New("symlinks unsupported")
 }

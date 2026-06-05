@@ -8,8 +8,8 @@ import (
 	"path"
 	"slices"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/wantcfg"
@@ -96,8 +96,8 @@ type microVMConfig struct {
 	Output      Output                  `json:"output"`
 }
 
-func PostMicroVMTask(ctx context.Context, s cadata.PostExister, x MicroVMTask) (*glfs.Ref, error) {
-	ag := glfs.NewAgent()
+func PostMicroVMTask(ctx context.Context, s bcsdk.WO, x MicroVMTask) (*glfs.Ref, error) {
+	ag := glfs.NewMachine()
 	configData, err := json.Marshal(microVMConfig{
 		Cores:       x.Cores,
 		Memory:      x.Memory,
@@ -134,7 +134,7 @@ func PostMicroVMTask(ctx context.Context, s cadata.PostExister, x MicroVMTask) (
 	return ag.PostTreeSlice(ctx, s, ents)
 }
 
-func GetMicroVMTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*MicroVMTask, error) {
+func GetMicroVMTask(ctx context.Context, s bcsdk.RO, x glfs.Ref) (*MicroVMTask, error) {
 	// config
 	cfg, err := glfstasks.GetJSONAt[microVMConfig](ctx, s, x, "vm.json")
 	if err != nil {
@@ -156,7 +156,7 @@ func GetMicroVMTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*MicroVMT
 		if err != nil {
 			return nil, err
 		}
-		vfsm, err := glfstasks.GetMap(ctx, s, *vfsdir, func(ctx context.Context, g cadata.Getter, r glfs.Ref) (*glfs.Ref, error) {
+		vfsm, err := glfstasks.GetMap(ctx, s, *vfsdir, func(ctx context.Context, g bcsdk.RO, r glfs.Ref) (*glfs.Ref, error) {
 			return &r, nil
 		})
 		if err != nil {

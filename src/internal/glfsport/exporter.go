@@ -11,9 +11,9 @@ import (
 	"runtime"
 	"strings"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state"
-	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/state/kv"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
@@ -22,7 +22,7 @@ import (
 const MaxPathLen = 4096
 
 type Exporter struct {
-	Store   cadata.Getter
+	Store   bcsdk.RO
 	Dir     string
 	Cache   Cache
 	Filter  func(p string) bool

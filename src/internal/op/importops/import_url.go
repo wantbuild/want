@@ -20,13 +20,13 @@ import (
 	"net/url"
 	"os"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"blobcache.io/glfs/glfstar"
 	"blobcache.io/glfs/glfszip"
 	"github.com/klauspost/compress/zstd"
 	"github.com/pkg/errors"
 	"github.com/ulikunitz/xz"
-	"go.brendoncarroll.net/state/cadata"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/sha3"
 	"golang.org/x/sync/errgroup"
@@ -45,7 +45,7 @@ type ImportURLTask struct {
 }
 
 // PostImportURLSpec marshals spec and posts it to the store, returning a Blob Ref.
-func PostImportURLTask(ctx context.Context, s cadata.Poster, spec ImportURLTask) (*glfs.Ref, error) {
+func PostImportURLTask(ctx context.Context, s bcsdk.WO, spec ImportURLTask) (*glfs.Ref, error) {
 	data, err := json.Marshal(spec)
 	if err != nil {
 		return nil, err
@@ -54,7 +54,7 @@ func PostImportURLTask(ctx context.Context, s cadata.Poster, spec ImportURLTask)
 }
 
 // GetImportURLTask retrieves the Blob at x, and unmarshals it into an ImportURLSpec
-func GetImportURLTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*ImportURLTask, error) {
+func GetImportURLTask(ctx context.Context, s bcsdk.RO, x glfs.Ref) (*ImportURLTask, error) {
 	return loadJSON[ImportURLTask](ctx, s, x)
 }
 
@@ -63,7 +63,7 @@ type GraphBuilder interface {
 	Derived(ctx context.Context, op wantjob.OpName, inputs []wantdag.NodeInput) (wantdag.NodeID, error)
 }
 
-func DeriveFromURL(ctx context.Context, gb GraphBuilder, s cadata.Poster, x ImportURLTask) (wantdag.NodeID, error) {
+func DeriveFromURL(ctx context.Context, gb GraphBuilder, s bcsdk.WO, x ImportURLTask) (wantdag.NodeID, error) {
 	ref, err := PostImportURLTask(ctx, s, x)
 	if err != nil {
 		return 0, err
@@ -104,8 +104,8 @@ func (e *Executor) ImportURL(jc wantjob.Ctx, spec ImportURLTask) (*glfs.Ref, err
 
 type pipelineStage = func(w io.Writer, r io.Reader) error
 
-func importStream(ctx context.Context, dst cadata.PostExister, r io.Reader, stages []pipelineStage, transforms []string) (*glfs.Ref, error) {
-	ag := glfs.NewAgent()
+func importStream(ctx context.Context, dst bcsdk.WO, r io.Reader, stages []pipelineStage, transforms []string) (*glfs.Ref, error) {
+	ag := glfs.NewMachine()
 	var collect = func(r io.Reader) (*glfs.Ref, error) {
 		return glfs.PostBlob(ctx, dst, r)
 	}
@@ -195,7 +195,7 @@ func checkHash(h hash.Hash, sum []byte) pipelineStage {
 	}
 }
 
-func untar(ctx context.Context, op *glfs.Agent, s cadata.PostExister, r io.Reader) (*glfs.Ref, error) {
+func untar(ctx context.Context, op *glfs.Machine, s bcsdk.WO, r io.Reader) (*glfs.Ref, error) {
 	tr := tar.NewReader(r)
 	ref, err := glfstar.ReadTAR(ctx, op, s, tr)
 	if err != nil {
@@ -207,7 +207,7 @@ func untar(ctx context.Context, op *glfs.Agent, s cadata.PostExister, r io.Reade
 	return ref, nil
 }
 
-func unzip(ctx context.Context, op *glfs.Agent, s cadata.PostExister, r io.Reader) (*glfs.Ref, error) {
+func unzip(ctx context.Context, op *glfs.Machine, s bcsdk.WO, r io.Reader) (*glfs.Ref, error) {
 	f, err := os.CreateTemp("", "unzip-*")
 	if err != nil {
 		return nil, err

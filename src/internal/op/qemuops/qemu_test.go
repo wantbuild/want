@@ -8,9 +8,9 @@ import (
 	"runtime"
 	"testing"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"github.com/stretchr/testify/require"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/stores"
@@ -222,7 +222,7 @@ func TestMicroVM(t *testing.T) {
 	}
 }
 
-func setupTest(t testing.TB) (wantjob.Ctx, cadata.Store, *Executor) {
+func setupTest(t testing.TB) (wantjob.Ctx, bcsdk.RW, *Executor) {
 	ctx := testutil.Context(t)
 	s := stores.NewMem()
 	installDir, err := filepath.Abs("testcache")

@@ -9,9 +9,9 @@ import (
 	"slices"
 	"strings"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"go.brendoncarroll.net/exp/streams"
-	"go.brendoncarroll.net/state/cadata"
 )
 
 type NodeListBuilder struct {
@@ -19,8 +19,8 @@ type NodeListBuilder struct {
 	nlw *NodeListWriter
 }
 
-func NewNodeListBuilder(s cadata.Poster) NodeListBuilder {
-	ag := glfs.NewAgent()
+func NewNodeListBuilder(s bcsdk.WO) NodeListBuilder {
+	ag := glfs.NewMachine()
 	bw := ag.NewBlobWriter(s)
 	return NodeListBuilder{bw: bw, nlw: NewNodeListWriter(bw)}
 }
@@ -84,28 +84,28 @@ func NewNodeListReader(r io.Reader) *NodeListReader {
 	return &NodeListReader{dec: json.NewDecoder(r)}
 }
 
-func (gr *NodeListReader) Next(ctx context.Context, dst *Node) error {
+func (gr *NodeListReader) Next(ctx context.Context, dst []Node) (int, error) {
 	if !gr.dec.More() {
-		return streams.EOS()
+		return 0, streams.EOS()
 	}
 	var node nodeODF
 	if err := gr.dec.Decode(&node); err != nil {
-		return err
+		return 0, err
 	}
-	dst.Value = node.Value
-	dst.Op = node.OpName
-	dst.Inputs = dst.Inputs[:0]
+	dst[0].Value = node.Value
+	dst[0].Op = node.OpName
+	dst[0].Inputs = dst[0].Inputs[:0]
 	for _, input := range node.Inputs {
 		if input.From == 0 {
-			return fmt.Errorf("input %q has 0 offset", input.To)
+			return 0, fmt.Errorf("input %q has 0 offset", input.To)
 		}
-		dst.Inputs = append(dst.Inputs, NodeInput{
+		dst[0].Inputs = append(dst[0].Inputs, NodeInput{
 			Name: input.To,
 			Node: gr.nextNode - NodeID(input.From),
 		})
 	}
 	gr.nextNode++
-	return nil
+	return 1, nil
 }
 
 // NodeOffset is how nodes refer to other nodes as input in the wire format

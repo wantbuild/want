@@ -6,15 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/wantjob"
 	"wantbuild.io/want/src/wantwasm"
 )
 
 func main() {
-	wantwasm.Main(func(jc wantjob.Ctx, src cadata.Getter, input []byte) ([]byte, error) {
+	wantwasm.Main(func(jc wantjob.Ctx, src bcsdk.RO, input []byte) ([]byte, error) {
 		ctx := jc.Context
 		var x glfs.Ref
 		if err := json.Unmarshal(input, &x); err != nil {

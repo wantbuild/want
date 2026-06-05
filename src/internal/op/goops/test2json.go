@@ -3,13 +3,13 @@ package goops
 import (
 	"bytes"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/wantjob"
 )
 
-func (e *Executor) Test2JSON(jc wantjob.Ctx, src cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+func (e *Executor) Test2JSON(jc wantjob.Ctx, src bcsdk.RO, ref glfs.Ref) (*glfs.Ref, error) {
 	ctx := jc.Context
 	r, err := glfs.GetBlob(ctx, src, ref)
 	if err != nil {

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"go.brendoncarroll.net/exp/slices2"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/op/glfsops"
 	"wantbuild.io/want/src/internal/stringsets"
@@ -26,14 +26,14 @@ func Intersects(a, b wantcfg.PathSet) bool {
 }
 
 // Select performs the selection logic on a known filesystem root.
-func Select(ctx context.Context, dst cadata.Store, src cadata.Getter, root glfs.Ref, q wantcfg.PathSet) (*glfs.Ref, error) {
+func Select(ctx context.Context, dst bcsdk.RW, src bcsdk.RO, root glfs.Ref, q wantcfg.PathSet) (*glfs.Ref, error) {
 	strset := stringsets.FromPathSet(q)
 	return glfs.FilterPaths(ctx, dst, src, root, func(p string) bool {
 		return strset.Contains(p)
 	})
 }
 
-func (c *Compiler) query(ctx context.Context, dst cadata.PostExister, vfs *VFS, ks stringsets.Set) (Expr, error) {
+func (c *Compiler) query(ctx context.Context, dst bcsdk.WO, vfs *VFS, ks stringsets.Set) (Expr, error) {
 	vents := vfs.Get(ks)
 	q := stringsets.ToPathSet(ks)
 	var layers []Expr
@@ -51,7 +51,7 @@ func (c *Compiler) query(ctx context.Context, dst cadata.PostExister, vfs *VFS, 
 	return c.merge(layers)
 }
 
-func (c *Compiler) placeAt(ctx context.Context, dst cadata.PostExister, x Expr, p string) (Expr, error) {
+func (c *Compiler) placeAt(ctx context.Context, dst bcsdk.WO, x Expr, p string) (Expr, error) {
 	if p == "" {
 		return x, nil
 	}

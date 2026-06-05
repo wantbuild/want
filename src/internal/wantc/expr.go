@@ -9,14 +9,15 @@ import (
 	"strconv"
 	"strings"
 
+	"blobcache.io/blobcache/src/bcsdk"
+	"blobcache.io/blobcache/src/blobcache"
+	"blobcache.io/blobcache/src/schema"
 	"blobcache.io/glfs"
 	"github.com/kr/text"
 	"github.com/pkg/errors"
-	"go.brendoncarroll.net/state/cadata"
 	"lukechampine.com/blake3"
 
 	"wantbuild.io/want/src/internal/glfstasks"
-	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/stringsets"
 	"wantbuild.io/want/src/internal/wantdag"
 	"wantbuild.io/want/src/wantcfg"
@@ -203,7 +204,7 @@ func (c *Compiler) compileCompute(cc *compileCtx, exprPath string, x wantcfg.Com
 }
 
 func (c *Compiler) compileSelection(cc *compileCtx, exprPath string, x wantcfg.Selection) (Expr, error) {
-	var moduleCID cadata.ID
+	var moduleCID blobcache.CID
 	if err := moduleCID.UnmarshalBase64([]byte(x.Source.Module)); err != nil {
 		return nil, fmt.Errorf("invalid source: %w", err)
 	}
@@ -239,7 +240,7 @@ func (c *Compiler) compileSelection(cc *compileCtx, exprPath string, x wantcfg.S
 	return c.pickExpr(cc.ctx, cc.dst, sel, PathFrom(callerPath, x.Pick))
 }
 
-func (c *Compiler) compileBlob(ctx context.Context, dst cadata.Store, content string) (*value, error) {
+func (c *Compiler) compileBlob(ctx context.Context, dst bcsdk.RW, content string) (*value, error) {
 	ref, err := glfs.PostBlob(ctx, dst, strings.NewReader(content))
 	if err != nil {
 		return nil, err
@@ -248,7 +249,7 @@ func (c *Compiler) compileBlob(ctx context.Context, dst cadata.Store, content st
 }
 
 // compileTree writes a tree defined by dst to
-func (c *Compiler) compileTree(ctx context.Context, dst cadata.Store, src cadata.Getter, cfgEnts []wantcfg.TreeEntry) (*value, error) {
+func (c *Compiler) compileTree(ctx context.Context, dst bcsdk.RW, src bcsdk.RO, cfgEnts []wantcfg.TreeEntry) (*value, error) {
 	var ents []glfs.TreeEntry
 	for _, cfgEnt := range cfgEnts {
 		var ref glfs.Ref
@@ -288,9 +289,9 @@ func (c *Compiler) compileTree(ctx context.Context, dst cadata.Store, src cadata
 }
 
 // compileRef compiles a Ref expression, which is essentially a noop, except for the check for referential integrity.
-func (c *Compiler) compileRef(ctx context.Context, dst cadata.Store, src cadata.Getter, x glfs.Ref) (*value, error) {
+func (c *Compiler) compileRef(ctx context.Context, dst bcsdk.RW, src bcsdk.RO, x glfs.Ref) (*value, error) {
 	if err := c.glfs.WalkRefs(ctx, src, x, func(ref glfs.Ref) error {
-		yes, err := stores.ExistsOnGet(ctx, src, ref.CID)
+		yes, err := schema.ExistsUnit(ctx, src, ref.CID)
 		if err != nil {
 			return err
 		}

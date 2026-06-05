@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"os"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/sumdb/dirhash"
 
@@ -22,7 +22,7 @@ type ImportGoZipTask struct {
 	Hash    string `json:"hash"`
 }
 
-func GetImportGoZipTask(ctx context.Context, s cadata.Getter, ref glfs.Ref) (*ImportGoZipTask, error) {
+func GetImportGoZipTask(ctx context.Context, s bcsdk.RO, ref glfs.Ref) (*ImportGoZipTask, error) {
 	return loadJSON[ImportGoZipTask](ctx, s, ref)
 }
 
@@ -35,7 +35,7 @@ func MarshalGoZipTask(x ImportGoZipTask) []byte {
 }
 
 // ImportGoZip imports and validates a go module zip file
-func (e *Executor) ImportGoZip(jc wantjob.Ctx, s cadata.Getter, x ImportGoZipTask) (*glfs.Ref, error) {
+func (e *Executor) ImportGoZip(jc wantjob.Ctx, s bcsdk.RO, x ImportGoZipTask) (*glfs.Ref, error) {
 	const proxy = "https://proxy.golang.org"
 	escapedPath, err := module.EscapePath(x.Path)
 	if err != nil {

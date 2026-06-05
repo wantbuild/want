@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfsport"
 	"wantbuild.io/want/src/wantjob"
@@ -37,7 +37,7 @@ type MakeExecConfig struct {
 	Main   string `json:"main"`
 }
 
-func GetMakeExecTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*MakeExecTask, error) {
+func GetMakeExecTask(ctx context.Context, s bcsdk.RO, x glfs.Ref) (*MakeExecTask, error) {
 	moduleRef, err := glfs.GetAtPath(ctx, s, x, "module")
 	if err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func GetMakeExecTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*MakeExe
 	}, nil
 }
 
-func PostMakeExecTask(ctx context.Context, s cadata.PostExister, x MakeExecTask) (*glfs.Ref, error) {
+func PostMakeExecTask(ctx context.Context, s bcsdk.WO, x MakeExecTask) (*glfs.Ref, error) {
 	data, err := json.Marshal(x.MakeExecConfig)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func PostMakeExecTask(ctx context.Context, s cadata.PostExister, x MakeExecTask)
 	return glfs.PostTreeSlice(ctx, s, ents)
 }
 
-func (e *Executor) MakeExec(jc wantjob.Ctx, src cadata.Getter, task MakeExecTask) (*glfs.Ref, error) {
+func (e *Executor) MakeExec(jc wantjob.Ctx, src bcsdk.RO, task MakeExecTask) (*glfs.Ref, error) {
 	ctx := jc.Context
 	if err := task.Validate(); err != nil {
 		return nil, err

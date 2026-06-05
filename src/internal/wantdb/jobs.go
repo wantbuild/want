@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"blobcache.io/blobcache/src/blobcache"
 	"github.com/jmoiron/sqlx"
-	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/tai64"
 
 	"wantbuild.io/want/src/internal/dbutil"
@@ -243,7 +243,7 @@ func ListJobInfos(tx *sqlx.Tx, parent wantjob.JobID) ([]*wantjob.JobInfo, error)
 	return ret, nil
 }
 
-func cacheRead(tx *sqlx.Tx, taskID cadata.ID) ([]byte, StoreID, error) {
+func cacheRead(tx *sqlx.Tx, taskID blobcache.CID) ([]byte, StoreID, error) {
 	var row struct {
 		Data  []byte  `db:"res_data"`
 		Store StoreID `db:"store_id"`
@@ -269,17 +269,17 @@ func ensureOp(tx *sqlx.Tx, name wantjob.OpName) (int64, error) {
 	return dbutil.GetTx[int64](tx, `INSERT INTO ops (name) VALUES (?) RETURNING id`, string(name))
 }
 
-func ensureTask(tx *sqlx.Tx, task wantjob.Task) (cadata.ID, error) {
+func ensureTask(tx *sqlx.Tx, task wantjob.Task) (blobcache.CID, error) {
 	taskID := task.ID()
 	opid, err := ensureOp(tx, task.Op)
 	if err != nil {
-		return cadata.ID{}, err
+		return blobcache.CID{}, err
 	}
 	if task.Input == nil {
 		task.Input = []byte{}
 	}
 	if _, err := tx.Exec(`INSERT INTO tasks (id, op, input) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`, taskID, opid, task.Input); err != nil {
-		return cadata.ID{}, err
+		return blobcache.CID{}, err
 	}
 	return taskID, nil
 }

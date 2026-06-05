@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"github.com/stretchr/testify/require"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/testutil"
@@ -89,7 +89,7 @@ func TestTest2JSON(t *testing.T) {
 	testutil.PrintFS(t, s, *out)
 }
 
-func setupTest(t testing.TB, useExisting bool) (wantjob.Ctx, cadata.Store, *Executor) {
+func setupTest(t testing.TB, useExisting bool) (wantjob.Ctx, bcsdk.RW, *Executor) {
 	ctx := testutil.Context(t)
 	s := stores.NewMem()
 	installDir := filepath.Join(os.TempDir(), "want-test-goroot")

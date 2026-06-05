@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"go.brendoncarroll.net/state/cadata"
+	"blobcache.io/blobcache/src/bcsdk"
 	"go.brendoncarroll.net/stdctx/logctx"
 	"go.uber.org/zap"
 	"wantbuild.io/want/src/internal/stores"
@@ -19,17 +19,17 @@ import (
 type Server struct {
 	sys wantjob.System
 
-	wstore cadata.Store
+	wstore bcsdk.RWD
 
 	mu           sync.Mutex
 	input        []byte
-	inputStore   cadata.Getter
-	resultStores map[StoreID]cadata.Getter
+	inputStore   bcsdk.RO
+	resultStores map[StoreID]bcsdk.RO
 	result       *Result
 }
 
 func NewServer(sys wantjob.System) *Server {
-	return &Server{sys: sys, resultStores: make(map[StoreID]cadata.Getter)}
+	return &Server{sys: sys, resultStores: make(map[StoreID]bcsdk.RO)}
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +75,7 @@ func (s *Server) GetResult() *Result {
 	return s.result
 }
 
-func (s *Server) SetInput(src cadata.Getter, input []byte) {
+func (s *Server) SetInput(src bcsdk.RO, input []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.input = input
@@ -183,7 +183,7 @@ func (s *Server) handleStore(w http.ResponseWriter, r *http.Request) {
 		w.Write(buf[:n])
 	case "Delete":
 		handleRequest(w, r, func(ctx context.Context, req DeleteBlobReq) (*DeleteBlobResp, error) {
-			if err := s.wstore.Delete(ctx, req.CID); err != nil {
+			if err := s.wstore.Delete(ctx, req.CIDs); err != nil {
 				return nil, err
 			}
 			return &DeleteBlobResp{}, nil
@@ -191,25 +191,17 @@ func (s *Server) handleStore(w http.ResponseWriter, r *http.Request) {
 	case "Exists":
 		handleRequest(w, r, func(ctx context.Context, req BlobExistsReq) (*BlobExistsResp, error) {
 			exists := make([]bool, len(req.CIDs))
-			for i, cid := range req.CIDs {
-				var err error
-				exists[i], err = s.wstore.Exists(r.Context(), cid)
-				if err != nil {
-					return nil, err
-				}
+			if err := s.wstore.Exists(r.Context(), req.CIDs, exists); err != nil {
+				return nil, err
 			}
 			return &BlobExistsResp{Exists: exists}, nil
-		})
-	case "List":
-		handleRequest(w, r, func(ctx context.Context, req ListBlobsReq) (*ListBlobsResp, error) {
-			return nil, fmt.Errorf("not implemented")
 		})
 	default:
 		http.Error(w, "invalid method "+method, http.StatusBadRequest)
 	}
 }
 
-func (s *Server) getStore(storeID StoreID) cadata.Getter {
+func (s *Server) getStore(storeID StoreID) bcsdk.RO {
 	if storeID == CurrentStore {
 		return stores.Union{s.inputStore, s.wstore}
 	}

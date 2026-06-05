@@ -4,8 +4,7 @@ package wanthttp
 import (
 	"math"
 
-	"go.brendoncarroll.net/state/cadata"
-
+	"blobcache.io/blobcache/src/blobcache"
 	"wantbuild.io/want/src/wantjob"
 )
 
@@ -74,32 +73,23 @@ type PostReq struct {
 }
 
 type PostResp struct {
-	CID cadata.ID `json:"cid"`
+	CID blobcache.CID `json:"cid"`
 }
 
 type GetReq struct {
-	CID cadata.ID `json:"cid"`
+	CID blobcache.CID `json:"cid"`
 }
 
 type DeleteBlobReq struct {
-	CID cadata.ID `json:"cid"`
+	CIDs []blobcache.CID `json:"cid"`
 }
 
 type DeleteBlobResp struct{}
 
 type BlobExistsReq struct {
-	CIDs []cadata.ID `json:"cid"`
+	CIDs []blobcache.CID `json:"cid"`
 }
 
 type BlobExistsResp struct {
 	Exists []bool `json:"exists"`
-}
-
-type ListBlobsReq struct {
-	Gteq *cadata.ID `json:"gteq,omitempty"`
-	Lt   *cadata.ID `json:"lt,omitempty"`
-}
-
-type ListBlobsResp struct {
-	CIDs []cadata.ID `json:"cids"`
 }

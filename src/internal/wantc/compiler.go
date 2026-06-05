@@ -11,8 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/stdctx/logctx"
 	"golang.org/x/sync/errgroup"
 
@@ -35,12 +35,12 @@ const (
 type Metadata = map[string]any
 
 type Compiler struct {
-	glfs *glfs.Agent
+	glfs *glfs.Machine
 }
 
 func NewCompiler() *Compiler {
 	return &Compiler{
-		glfs: glfs.NewAgent(),
+		glfs: glfs.NewMachine(),
 	}
 }
 
@@ -50,7 +50,7 @@ type CompileTask struct {
 	Deps     map[ExprID]glfs.Ref
 }
 
-func (c *Compiler) Compile(ctx context.Context, dst cadata.Store, src cadata.Getter, ct CompileTask) (*Plan, error) {
+func (c *Compiler) Compile(ctx context.Context, dst bcsdk.RW, src bcsdk.RO, ct CompileTask) (*Plan, error) {
 	isMod, err := IsModule(ctx, src, ct.Module)
 	if err != nil {
 		return nil, err
@@ -64,8 +64,8 @@ func (c *Compiler) Compile(ctx context.Context, dst cadata.Store, src cadata.Get
 // compileCtx holds the state for a single run of the compiler
 type compileCtx struct {
 	ctx      context.Context
-	src      cadata.Getter
-	dst      cadata.Store
+	src      bcsdk.RO
+	dst      bcsdk.RW
 	buildCtx Metadata
 	ground   glfs.Ref
 	deps     map[ExprID]glfs.Ref
@@ -146,7 +146,7 @@ func (cs *compileCtx) acquireVFS() (*VFS, func()) {
 	return cs.vfs, cs.vfsMu.Unlock
 }
 
-func (c *Compiler) compileModule(ctx context.Context, dst cadata.Store, src cadata.Getter, metadata Metadata, ground glfs.Ref, deps map[ModuleID]glfs.Ref) (*Plan, error) {
+func (c *Compiler) compileModule(ctx context.Context, dst bcsdk.RW, src bcsdk.RO, metadata Metadata, ground glfs.Ref, deps map[ModuleID]glfs.Ref) (*Plan, error) {
 	cfg, err := GetModuleConfig(ctx, src, ground)
 	if err != nil {
 		return nil, err
@@ -545,7 +545,7 @@ func (c *Compiler) makeTargets(cc *compileCtx) error {
 	return nil
 }
 
-func (c *Compiler) makeGraphFromExpr(ctx context.Context, dst cadata.Store, src cadata.Getter, x Expr, place string) (*glfs.Ref, error) {
+func (c *Compiler) makeGraphFromExpr(ctx context.Context, dst bcsdk.RW, src bcsdk.RO, x Expr, place string) (*glfs.Ref, error) {
 	gb := NewGraphBuilder(dst)
 	nid, err := gb.Expr(ctx, src, x)
 	if err != nil {
@@ -574,7 +574,7 @@ func (c *Compiler) makeKnown(cc *compileCtx) error {
 	return nil
 }
 
-func (c *Compiler) pickExpr(ctx context.Context, dst cadata.Store, x Expr, p string) (Expr, error) {
+func (c *Compiler) pickExpr(ctx context.Context, dst bcsdk.RW, x Expr, p string) (Expr, error) {
 	if p == "" {
 		return x, nil
 	}
@@ -592,7 +592,7 @@ func (c *Compiler) pickExpr(ctx context.Context, dst cadata.Store, x Expr, p str
 	}, nil
 }
 
-func (c *Compiler) filterExpr(ctx context.Context, dst cadata.PostExister, x Expr, q wantcfg.PathSet) (Expr, error) {
+func (c *Compiler) filterExpr(ctx context.Context, dst bcsdk.WO, x Expr, q wantcfg.PathSet) (Expr, error) {
 	data, err := json.Marshal(q)
 	if err != nil {
 		return nil, err

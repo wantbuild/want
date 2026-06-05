@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 	"golang.org/x/sync/errgroup"
 
 	"wantbuild.io/want/src/internal/glfstasks"
@@ -16,7 +16,7 @@ import (
 	"wantbuild.io/want/src/wantjob"
 )
 
-func (e *Executor) Build(jc wantjob.Ctx, src cadata.Getter, buildTask BuildTask) (*BuildResult, error) {
+func (e *Executor) Build(jc wantjob.Ctx, src bcsdk.RO, buildTask BuildTask) (*BuildResult, error) {
 	ctx := jc.Context
 	deps, err := MakeDeps(jc, src, buildTask.Main, func(expr wantcfg.Expr) (*glfs.Ref, error) {
 		jc2 := jc
@@ -104,7 +104,7 @@ func (e *Executor) Build(jc wantjob.Ctx, src cadata.Getter, buildTask BuildTask)
 	}, nil
 }
 
-func MakeDeps(jc wantjob.Ctx, src cadata.Getter, modRef glfs.Ref, eval func(wantcfg.Expr) (*glfs.Ref, error)) (map[wantc.ExprID]glfs.Ref, error) {
+func MakeDeps(jc wantjob.Ctx, src bcsdk.RO, modRef glfs.Ref, eval func(wantcfg.Expr) (*glfs.Ref, error)) (map[wantc.ExprID]glfs.Ref, error) {
 	deps := make(map[wantc.ExprID]glfs.Ref)
 	if err := dependencyClosure(jc.Context, stores.Union{jc.Dst, src}, modRef, deps, eval); err != nil {
 		return nil, err
@@ -118,7 +118,7 @@ type maskJobs struct {
 	wantjob.System
 }
 
-func (mj maskJobs) Spawn(ctx context.Context, src cadata.Getter, task wantjob.Task) (wantjob.Idx, error) {
+func (mj maskJobs) Spawn(ctx context.Context, src bcsdk.RO, task wantjob.Task) (wantjob.Idx, error) {
 	x := string(task.Op)
 	allowed := []string{
 		"dag.",

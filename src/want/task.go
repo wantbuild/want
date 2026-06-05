@@ -5,8 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"go.brendoncarroll.net/state/cadata"
-
+	"blobcache.io/blobcache/src/bcsdk"
 	"wantbuild.io/want/src/internal/op/assertops"
 	"wantbuild.io/want/src/internal/op/dagops"
 	"wantbuild.io/want/src/internal/op/glfsops"
@@ -78,7 +77,7 @@ func newExecutor(cfg ExecutorConfig) *executor {
 	}
 }
 
-func (e *executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task) wantjob.Result {
+func (e *executor) Execute(jc wantjob.Ctx, src bcsdk.RO, task wantjob.Task) wantjob.Result {
 	parts := strings.SplitN(string(task.Op), ".", 2)
 	execName := wantjob.OpName(parts[0])
 

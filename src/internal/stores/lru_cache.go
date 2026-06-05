@@ -4,17 +4,18 @@ import (
 	"context"
 	"slices"
 
+	"blobcache.io/blobcache/src/bcsdk"
+	"blobcache.io/blobcache/src/blobcache"
 	lru "github.com/hashicorp/golang-lru/v2"
-	"go.brendoncarroll.net/state/cadata"
 )
 
 type LRUCache struct {
-	inner cadata.Getter
-	c     *lru.Cache[cadata.ID, []byte]
+	inner bcsdk.RO
+	c     *lru.Cache[blobcache.CID, []byte]
 }
 
-func NewLRUCache(inner cadata.Getter, size int) *LRUCache {
-	c, err := lru.New[cadata.ID, []byte](size)
+func NewLRUCache(inner bcsdk.RO, size int) *LRUCache {
+	c, err := lru.New[blobcache.CID, []byte](size)
 	if err != nil {
 		panic(err)
 	}
@@ -24,7 +25,7 @@ func NewLRUCache(inner cadata.Getter, size int) *LRUCache {
 	}
 }
 
-func (c *LRUCache) Get(ctx context.Context, id cadata.ID, buf []byte) (int, error) {
+func (c *LRUCache) Get(ctx context.Context, id blobcache.CID, buf []byte) (int, error) {
 	data, ok := c.c.Get(id)
 	if ok {
 		return copy(buf, data), nil
@@ -37,7 +38,7 @@ func (c *LRUCache) Get(ctx context.Context, id cadata.ID, buf []byte) (int, erro
 	return n, nil
 }
 
-func (c *LRUCache) Hash(x []byte) cadata.ID {
+func (c *LRUCache) Hash(x []byte) blobcache.CID {
 	return c.inner.Hash(x)
 }
 

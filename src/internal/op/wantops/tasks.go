@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/src/internal/wantc"
 	"wantbuild.io/want/src/internal/wantdag"
 	"wantbuild.io/want/src/wantcfg"
@@ -31,7 +31,7 @@ type BuildTask struct {
 	Metadata wantc.Metadata
 }
 
-func PostBuildTask(ctx context.Context, s cadata.PostExister, x BuildTask) (*glfs.Ref, error) {
+func PostBuildTask(ctx context.Context, s bcsdk.WO, x BuildTask) (*glfs.Ref, error) {
 	cfgJson, err := json.Marshal(BuildConfig{
 		Query:    x.Query,
 		Metadata: x.Metadata,
@@ -49,7 +49,7 @@ func PostBuildTask(ctx context.Context, s cadata.PostExister, x BuildTask) (*glf
 	})
 }
 
-func GetBuildTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*BuildTask, error) {
+func GetBuildTask(ctx context.Context, s bcsdk.RO, x glfs.Ref) (*BuildTask, error) {
 	mainRef, err := glfs.GetAtPath(ctx, s, x, "main")
 	if err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func (br BuildResult) ErrorCount() (ret int) {
 	return ret
 }
 
-func PostBuildResult(ctx context.Context, s cadata.PostExister, x BuildResult) (*glfs.Ref, error) {
+func PostBuildResult(ctx context.Context, s bcsdk.WO, x BuildResult) (*glfs.Ref, error) {
 	planRef, err := wantc.PostPlan(ctx, s, x.Plan)
 	if err != nil {
 		return nil, err
@@ -120,7 +120,7 @@ func PostBuildResult(ctx context.Context, s cadata.PostExister, x BuildResult) (
 	return glfs.PostTreeMap(ctx, s, ents)
 }
 
-func GetBuildResult(ctx context.Context, s cadata.Getter, x glfs.Ref) (*BuildResult, error) {
+func GetBuildResult(ctx context.Context, s bcsdk.RO, x glfs.Ref) (*BuildResult, error) {
 	// config
 	cfgRef, err := glfs.GetAtPath(ctx, s, x, "build_results.json")
 	if err != nil {
@@ -167,7 +167,7 @@ func GetBuildResult(ctx context.Context, s cadata.Getter, x glfs.Ref) (*BuildRes
 	return &ret, nil
 }
 
-func PostCompileTask(ctx context.Context, s cadata.PostExister, x wantc.CompileTask) (*glfs.Ref, error) {
+func PostCompileTask(ctx context.Context, s bcsdk.WO, x wantc.CompileTask) (*glfs.Ref, error) {
 	mdJson, err := json.Marshal(x.Metadata)
 	if err != nil {
 		return nil, err
@@ -196,7 +196,7 @@ func PostCompileTask(ctx context.Context, s cadata.PostExister, x wantc.CompileT
 	})
 }
 
-func GetCompileTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*wantc.CompileTask, error) {
+func GetCompileTask(ctx context.Context, s bcsdk.RO, x glfs.Ref) (*wantc.CompileTask, error) {
 	moduleRef, err := glfs.GetAtPath(ctx, s, x, "module")
 	if err != nil {
 		return nil, err

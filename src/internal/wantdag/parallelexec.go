@@ -3,8 +3,8 @@ package wantdag
 import (
 	"sync/atomic"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 	"golang.org/x/sync/errgroup"
 
 	"wantbuild.io/want/src/internal/glfstasks"
@@ -12,7 +12,7 @@ import (
 	"wantbuild.io/want/src/wantjob"
 )
 
-func ParallelExecLast(jc wantjob.Ctx, src cadata.Getter, x DAG) (*wantjob.Result, error) {
+func ParallelExecLast(jc wantjob.Ctx, src bcsdk.RO, x DAG) (*wantjob.Result, error) {
 	results := make([]wantjob.Result, len(x))
 	unblocks := make([][]NodeID, len(x))
 	needCount := make([]int32, len(x))

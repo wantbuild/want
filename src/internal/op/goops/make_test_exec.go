@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfsport"
 	"wantbuild.io/want/src/wantjob"
@@ -29,7 +29,7 @@ type MakeTestExecConfig struct {
 	Path   string
 }
 
-func GetMakeTestExecTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*MakeTestExecTask, error) {
+func GetMakeTestExecTask(ctx context.Context, s bcsdk.RO, x glfs.Ref) (*MakeTestExecTask, error) {
 	moduleRef, err := glfs.GetAtPath(ctx, s, x, "module")
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func GetMakeTestExecTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*Mak
 	}, nil
 }
 
-func PostMakeTestExecTask(ctx context.Context, s cadata.PostExister, x MakeTestExecTask) (*glfs.Ref, error) {
+func PostMakeTestExecTask(ctx context.Context, s bcsdk.WO, x MakeTestExecTask) (*glfs.Ref, error) {
 	configData, err := json.Marshal(x.MakeTestExecConfig)
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func PostMakeTestExecTask(ctx context.Context, s cadata.PostExister, x MakeTestE
 	return glfs.PostTreeMap(ctx, s, m)
 }
 
-func (e *Executor) MakeTestExec(jc wantjob.Ctx, src cadata.Getter, task MakeTestExecTask) (*glfs.Ref, error) {
+func (e *Executor) MakeTestExec(jc wantjob.Ctx, src bcsdk.RO, task MakeTestExecTask) (*glfs.Ref, error) {
 	ctx := jc.Context
 	dir, cleanup, err := e.mkdirTemp(ctx, "makeTestExec-")
 	if err != nil {

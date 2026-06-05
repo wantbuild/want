@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"go.brendoncarroll.net/state/cadata"
+	"blobcache.io/blobcache/src/bcsdk"
+	"blobcache.io/blobcache/src/blobcache"
 
 	"wantbuild.io/want/src/internal/stores"
 )
@@ -16,7 +17,7 @@ const MaxInputSize = 1 << 16
 type OpName string
 
 // TaskID uniquely identifies Tasks
-type TaskID = cadata.ID
+type TaskID = blobcache.CID
 
 // Schema describes how objects in the store are related to inputs and outputs of tasks
 type Schema string
@@ -48,14 +49,14 @@ func (t Task) String() string {
 // Executors execute Tasks
 type Executor interface {
 	// Execute blocks while the task is executing, and returns the result or an error.
-	Execute(jc Ctx, src cadata.Getter, task Task) Result
+	Execute(jc Ctx, src bcsdk.RO, task Task) Result
 }
 
-type OpFunc = func(jc Ctx, src cadata.Getter, data []byte) Result
+type OpFunc = func(jc Ctx, src bcsdk.RO, data []byte) Result
 
 type BasicExecutor map[OpName]OpFunc
 
-func (exec BasicExecutor) Execute(jc Ctx, src cadata.Getter, task Task) Result {
+func (exec BasicExecutor) Execute(jc Ctx, src bcsdk.RO, task Task) Result {
 	fn, exists := exec[task.Op]
 	if !exists {
 		return *Result_ErrExec(NewErrUnknownOperator(task.Op))
@@ -65,7 +66,7 @@ func (exec BasicExecutor) Execute(jc Ctx, src cadata.Getter, task Task) Result {
 
 type MultiExecutor map[OpName]Executor
 
-func (me MultiExecutor) Execute(jc Ctx, src cadata.Getter, task Task) Result {
+func (me MultiExecutor) Execute(jc Ctx, src bcsdk.RO, task Task) Result {
 	parts := strings.SplitN(string(task.Op), ".", 2)
 	e2, exists := me[OpName(parts[0])]
 	if !exists {
@@ -77,7 +78,7 @@ func (me MultiExecutor) Execute(jc Ctx, src cadata.Getter, task Task) Result {
 	})
 }
 
-func productHash(hf cadata.HashFunc, xs ...[]byte) cadata.ID {
+func productHash(hf blobcache.HashFunc, xs ...[]byte) blobcache.CID {
 	var data []byte
 	for _, x := range xs {
 		h := hf(x)

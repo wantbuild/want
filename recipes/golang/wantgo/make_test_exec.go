@@ -1,8 +1,7 @@
 // DO NOT EDIT
 // This has been duplicated from src/internal/op/goops
-// 
-// cp src/internal/op/goops/make_test_exec.go recipes/golang/wantgo
 //
+// cp src/internal/op/goops/make_test_exec.go recipes/golang/wantgo
 package wantgo
 
 import (
@@ -10,8 +9,8 @@ import (
 	"context"
 	"encoding/json"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 )
 
 const MakeTestExecConfigFilename = "makeTestExec.json"
@@ -29,7 +28,7 @@ type MakeTestExecConfig struct {
 	Path   string
 }
 
-func GetMakeTestExecTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*MakeTestExecTask, error) {
+func GetMakeTestExecTask(ctx context.Context, s bcsdk.RO, x glfs.Ref) (*MakeTestExecTask, error) {
 	moduleRef, err := glfs.GetAtPath(ctx, s, x, "module")
 	if err != nil {
 		return nil, err
@@ -57,7 +56,7 @@ func GetMakeTestExecTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*Mak
 	}, nil
 }
 
-func PostMakeTestExecTask(ctx context.Context, s cadata.PostExister, x MakeTestExecTask) (*glfs.Ref, error) {
+func PostMakeTestExecTask(ctx context.Context, s bcsdk.WO, x MakeTestExecTask) (*glfs.Ref, error) {
 	configData, err := json.Marshal(x.MakeTestExecConfig)
 	if err != nil {
 		return nil, err

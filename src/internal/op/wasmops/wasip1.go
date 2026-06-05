@@ -5,17 +5,17 @@ import (
 	"os"
 	"path/filepath"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"blobcache.io/glfs/glfsiofs"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfsport"
 	"wantbuild.io/want/src/wantjob"
 )
 
-func ExecWASIp1(jc wantjob.Ctx, src cadata.Getter, task WASIp1Task) (*glfs.Ref, error) {
+func ExecWASIp1(jc wantjob.Ctx, src bcsdk.RO, task WASIp1Task) (*glfs.Ref, error) {
 	ctx := jc.Context
 	if task.Memory == 0 {
 		task.Memory = 4 * 1e9

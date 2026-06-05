@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"github.com/jmoiron/sqlx"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/dbutil"
 	"wantbuild.io/want/src/internal/glfstasks"
@@ -26,7 +26,7 @@ func (sys *System) Import(ctx context.Context, repo *wantrepo.Repo) (*wantdb.Art
 		return nil, errors.New("import requires a repo, got nil")
 	}
 	return dbutil.DoTx1(ctx, sys.db, func(tx *sqlx.Tx) (*ArtifactID, error) {
-		afid, err := wantdb.CreateArtifact(tx, wantjob.Schema_GLFS, func(dst cadata.Store) ([]byte, error) {
+		afid, err := wantdb.CreateArtifact(tx, wantjob.Schema_GLFS, func(dst bcsdk.RW) ([]byte, error) {
 			root, err := repo.Import(ctx, dst, "")
 			if err != nil {
 				return nil, err
@@ -43,7 +43,7 @@ func (sys *System) Import(ctx context.Context, repo *wantrepo.Repo) (*wantdb.Art
 type Artifact struct {
 	Root   []byte
 	Schema wantjob.Schema
-	Store  cadata.Getter
+	Store  bcsdk.RO
 }
 
 func (a Artifact) GLFS() (*glfs.Ref, error) {

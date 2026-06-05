@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 )
 
 const (
@@ -28,7 +28,7 @@ type unpackBlobConfig struct {
 	Transforms []string `json:"transforms"`
 }
 
-func PostUnpackTask(ctx context.Context, s cadata.PostExister, spec UnpackTask) (*glfs.Ref, error) {
+func PostUnpackTask(ctx context.Context, s bcsdk.WO, spec UnpackTask) (*glfs.Ref, error) {
 	configData, err := json.Marshal(unpackBlobConfig{
 		Transforms: spec.Transforms,
 	})
@@ -45,7 +45,7 @@ func PostUnpackTask(ctx context.Context, s cadata.PostExister, spec UnpackTask) 
 	})
 }
 
-func GetUnpackTask(ctx context.Context, s cadata.Getter, ref glfs.Ref) (*UnpackTask, error) {
+func GetUnpackTask(ctx context.Context, s bcsdk.RO, ref glfs.Ref) (*UnpackTask, error) {
 	input, err := glfs.GetAtPath(ctx, s, ref, "x")
 	if err != nil {
 		return nil, err
@@ -61,8 +61,8 @@ func GetUnpackTask(ctx context.Context, s cadata.Getter, ref glfs.Ref) (*UnpackT
 	return &UnpackTask{X: *input, Transforms: config.Transforms}, nil
 }
 
-func (e *Executor) Unpack(ctx context.Context, dst cadata.PostExister, s cadata.Getter, spec UnpackTask) (*glfs.Ref, error) {
-	op := glfs.NewAgent()
+func (e *Executor) Unpack(ctx context.Context, dst bcsdk.WO, s bcsdk.RO, spec UnpackTask) (*glfs.Ref, error) {
+	op := glfs.NewMachine()
 	r, err := op.GetBlob(ctx, s, spec.X)
 	if err != nil {
 		return nil, fmt.Errorf("unpack: while getting blob: %w", err)

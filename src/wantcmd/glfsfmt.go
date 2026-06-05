@@ -7,8 +7,8 @@ import (
 	"io"
 	"strings"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/stdctx/units"
 )
 
@@ -51,7 +51,7 @@ func fmtRefSize(x glfs.Ref) string {
 	}
 }
 
-func printTreeRec(ctx context.Context, store cadata.Getter, w io.Writer, treeRef glfs.Ref) error {
+func printTreeRec(ctx context.Context, store bcsdk.RO, w io.Writer, treeRef glfs.Ref) error {
 	if _, err := store.Get(ctx, treeRef.CID, make([]byte, store.MaxSize())); err != nil {
 		return err
 	}

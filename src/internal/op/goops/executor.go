@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/stdctx/logctx"
 	"golang.org/x/sync/semaphore"
 
@@ -44,7 +44,7 @@ func NewExecutor(goRoot string, scratchDir string) *Executor {
 	}
 }
 
-func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task) wantjob.Result {
+func (e *Executor) Execute(jc wantjob.Ctx, src bcsdk.RO, task wantjob.Task) wantjob.Result {
 	ctx := jc.Context
 	if err := e.buildSem.Acquire(ctx, 1); err != nil {
 		return *wantjob.Result_ErrInternal(err)

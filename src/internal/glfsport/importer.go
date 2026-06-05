@@ -10,16 +10,16 @@ import (
 	"runtime"
 	"strings"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"go.brendoncarroll.net/state"
-	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/state/kv"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 )
 
 type Importer struct {
-	Store  cadata.PostExister
+	Store  bcsdk.WO
 	Dir    string
 	Filter func(p string) bool
 	Cache  Cache

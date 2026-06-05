@@ -20,7 +20,7 @@ func Root() star.Command {
 }
 
 var rootCmd = star.NewDir(star.Metadata{Short: "want build system"},
-	map[star.Symbol]star.Command{
+	map[string]star.Command{
 		"init": initCmd,
 
 		"import-repo": importRepoCmd,
@@ -44,7 +44,6 @@ var rootCmd = star.NewDir(star.Metadata{Short: "want build system"},
 
 var initCmd = star.Command{
 	Metadata: star.Metadata{Short: "initialize want in the current directory"},
-	Pos:      []star.IParam{},
 	F: func(c star.Context) error {
 		wd, err := os.Getwd()
 		if err != nil {
@@ -56,7 +55,6 @@ var initCmd = star.Command{
 
 var statusCmd = star.Command{
 	Metadata: star.Metadata{Short: "print status information"},
-	Flags:    []star.IParam{},
 	F: func(c star.Context) error {
 		wd, err := os.Getwd()
 		if err != nil {
@@ -101,7 +99,7 @@ var envCmd = &star.Command{
 		for _, k := range ks {
 			c.Printf("%s=%s\n", k, m[k])
 		}
-		return c.StdOut.Flush()
+		return nil
 	},
 }
 

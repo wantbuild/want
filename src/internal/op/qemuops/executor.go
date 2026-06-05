@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 	"golang.org/x/sync/semaphore"
 
 	"wantbuild.io/want/src/internal/glfscpio"
@@ -53,7 +53,7 @@ func NewExecutor(cfg Config) *Executor {
 	}
 }
 
-func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task) wantjob.Result {
+func (e *Executor) Execute(jc wantjob.Ctx, src bcsdk.RO, task wantjob.Task) wantjob.Result {
 	ctx := jc.Context
 	switch task.Op {
 	case OpAmd64MicroVM:
@@ -82,7 +82,7 @@ func (e *Executor) Execute(jc wantjob.Ctx, src cadata.Getter, task wantjob.Task)
 	}
 }
 
-func (e *Executor) amd64MicroVM(jc wantjob.Ctx, s cadata.Getter, t MicroVMTask) (*wantjob.Result, error) {
+func (e *Executor) amd64MicroVM(jc wantjob.Ctx, s bcsdk.RO, t MicroVMTask) (*wantjob.Result, error) {
 	dir, err := os.MkdirTemp("", "microvm-")
 	if err != nil {
 		return nil, err
@@ -276,7 +276,7 @@ func (e *Executor) addSerialPort(mctx *microVMTaskCtx, spec wantqemu.SerialSpec)
 	return nil
 }
 
-func (e *Executor) addVirtioFS(jc wantjob.Ctx, s cadata.Getter, mctx *microVMTaskCtx, k string, spec wantqemu.VirtioFSSpec) error {
+func (e *Executor) addVirtioFS(jc wantjob.Ctx, s bcsdk.RO, mctx *microVMTaskCtx, k string, spec wantqemu.VirtioFSSpec) error {
 	vmCfg := mctx.vmCfg
 	if strings.Contains(k, "..") {
 		return fmt.Errorf("invalid name %v", k)
@@ -303,7 +303,7 @@ func (e *Executor) addVirtioFS(jc wantjob.Ctx, s cadata.Getter, mctx *microVMTas
 	return nil
 }
 
-func exportInitrd(ctx context.Context, s cadata.Getter, dir string, initrdRef glfs.Ref) error {
+func exportInitrd(ctx context.Context, s bcsdk.RO, dir string, initrdRef glfs.Ref) error {
 	f, err := os.OpenFile(filepath.Join(dir, initrdFilename), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
@@ -350,6 +350,6 @@ func (mctx *microVMTaskCtx) setupHTTP(jsys wantjob.System) {
 	mctx.hsrv = wanthttp.NewServer(jsys)
 }
 
-func (mctx *microVMTaskCtx) setInput(src cadata.Getter, x []byte) {
+func (mctx *microVMTaskCtx) setInput(src bcsdk.RO, x []byte) {
 	mctx.hsrv.SetInput(src, x)
 }

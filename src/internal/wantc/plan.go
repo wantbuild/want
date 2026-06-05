@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"go.brendoncarroll.net/exp/streams"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/stringsets"
@@ -47,7 +47,7 @@ type Plan struct {
 	Targets []Target `json:"targets"`
 }
 
-func PostPlan(ctx context.Context, s cadata.PostExister, x Plan) (*glfs.Ref, error) {
+func PostPlan(ctx context.Context, s bcsdk.WO, x Plan) (*glfs.Ref, error) {
 	data, err := json.Marshal(x)
 	if err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ func PostPlan(ctx context.Context, s cadata.PostExister, x Plan) (*glfs.Ref, err
 	return glfs.PostTreeSlice(ctx, s, ents)
 }
 
-func SyncPlan(ctx context.Context, dst cadata.PostExister, src cadata.Getter, plan Plan) error {
+func SyncPlan(ctx context.Context, dst bcsdk.WO, src bcsdk.RO, plan Plan) error {
 	allRefs := func(yield func(glfs.Ref) bool) {
 		for _, target := range plan.Targets {
 			if !yield(target.DAG) {
@@ -91,8 +91,8 @@ func SyncPlan(ctx context.Context, dst cadata.PostExister, src cadata.Getter, pl
 
 const MaxPlanSize = 1e6
 
-func GetPlan(ctx context.Context, s cadata.Getter, x glfs.Ref) (*Plan, error) {
-	ag := glfs.NewAgent()
+func GetPlan(ctx context.Context, s bcsdk.RO, x glfs.Ref) (*Plan, error) {
+	ag := glfs.NewMachine()
 	tr, err := ag.NewTreeReader(s, x)
 	if err != nil {
 		return nil, err

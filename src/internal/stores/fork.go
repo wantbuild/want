@@ -3,30 +3,34 @@ package stores
 import (
 	"context"
 
-	"go.brendoncarroll.net/state/cadata"
+	"blobcache.io/blobcache/src/bcsdk"
+	"blobcache.io/blobcache/src/blobcache"
 )
 
 type Fork struct {
-	W cadata.PostExister
-	R cadata.Getter
+	W bcsdk.WO
+	R bcsdk.RO
 }
 
-func (s Fork) Post(ctx context.Context, data []byte) (cadata.ID, error) {
+func (s Fork) Post(ctx context.Context, data []byte) (blobcache.CID, error) {
 	return s.W.Post(ctx, data)
 }
 
-func (s Fork) Exists(ctx context.Context, id cadata.ID) (bool, error) {
-	if yes, err := s.W.Exists(ctx, id); err == nil && yes {
-		return yes, nil
+func (s Fork) Exists(ctx context.Context, cids []blobcache.CID, dst []bool) error {
+	if err := s.W.Exists(ctx, cids, dst); err != nil {
+		return err
 	}
-	return ExistsOnGet(ctx, s.R, id)
+	if err := s.R.Exists(ctx, cids, dst); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (s Fork) Get(ctx context.Context, id cadata.ID, buf []byte) (int, error) {
+func (s Fork) Get(ctx context.Context, id blobcache.CID, buf []byte) (int, error) {
 	return s.R.Get(ctx, id, buf)
 }
 
-func (s Fork) Hash(x []byte) cadata.ID {
+func (s Fork) Hash(x []byte) blobcache.CID {
 	return s.W.Hash(x)
 }
 

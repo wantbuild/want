@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"github.com/google/go-jsonnet"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/wantdag"
 	"wantbuild.io/want/src/wantcfg"
@@ -15,7 +15,7 @@ import (
 // CompileSnippet turns a Jsonnet snippet into a wantdag.Graph.
 // Values are loaded into the compiler's store.
 // Selections are not allowed and will result in a compiler error.
-func (c *Compiler) CompileSnippet(ctx context.Context, dst cadata.Store, src cadata.Getter, x []byte) (wantdag.DAG, error) {
+func (c *Compiler) CompileSnippet(ctx context.Context, dst bcsdk.RW, src bcsdk.RO, x []byte) (wantdag.DAG, error) {
 	vm := jsonnet.MakeVM()
 	vm.Importer(&snippetImporter{})
 	jsonData, err := vm.EvaluateAnonymousSnippet("", string(x))
@@ -31,7 +31,7 @@ func (c *Compiler) CompileSnippet(ctx context.Context, dst cadata.Store, src cad
 
 // CompileExpr takes a Expr in the build language and produces a DAG that will evaluate it.
 // The Expr is evaluated in the snippet context.
-func (c *Compiler) CompileExpr(ctx context.Context, dst cadata.Store, src cadata.Getter, x wantcfg.Expr) (wantdag.DAG, error) {
+func (c *Compiler) CompileExpr(ctx context.Context, dst bcsdk.RW, src bcsdk.RO, x wantcfg.Expr) (wantdag.DAG, error) {
 	vm := jsonnet.MakeVM()
 	vm.Importer(&snippetImporter{})
 

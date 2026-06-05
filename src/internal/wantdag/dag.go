@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"go.brendoncarroll.net/exp/streams"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/wantjob"
@@ -14,7 +14,7 @@ import (
 
 type DAG []Node
 
-func GetDAG(ctx context.Context, s cadata.Getter, ref glfs.Ref) (DAG, error) {
+func GetDAG(ctx context.Context, s bcsdk.RO, ref glfs.Ref) (DAG, error) {
 	factsRef, err := glfs.GetAtPath(ctx, s, ref, "facts")
 	if err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ func GetDAG(ctx context.Context, s cadata.Getter, ref glfs.Ref) (DAG, error) {
 	return nodes, nil
 }
 
-func PostDAG(ctx context.Context, s cadata.PostExister, x DAG) (*glfs.Ref, error) {
+func PostDAG(ctx context.Context, s bcsdk.WO, x DAG) (*glfs.Ref, error) {
 	var factEnts []glfs.TreeEntry
 	for i, node := range x {
 		if node.IsFact() {
@@ -88,7 +88,7 @@ func PostDAG(ctx context.Context, s cadata.PostExister, x DAG) (*glfs.Ref, error
 	})
 }
 
-func EditDAG(ctx context.Context, dst cadata.Store, src cadata.Getter, x glfs.Ref, fn func(DAG) (*DAG, error)) (*glfs.Ref, error) {
+func EditDAG(ctx context.Context, dst bcsdk.RW, src bcsdk.RO, x glfs.Ref, fn func(DAG) (*DAG, error)) (*glfs.Ref, error) {
 	dagX, err := GetDAG(ctx, src, x)
 	if err != nil {
 		return nil, err
@@ -107,14 +107,14 @@ func nodeName(x NodeID) string {
 // Builder performs checks while building a DAG.
 type Builder struct {
 	nodes []Node
-	dst   cadata.Store
+	dst   bcsdk.RW
 }
 
-func NewBuilder(dst cadata.Store) Builder {
+func NewBuilder(dst bcsdk.RW) Builder {
 	return Builder{dst: dst}
 }
 
-func (b *Builder) Fact(ctx context.Context, src cadata.Getter, x glfs.Ref) (NodeID, error) {
+func (b *Builder) Fact(ctx context.Context, src bcsdk.RO, x glfs.Ref) (NodeID, error) {
 	if err := glfstasks.FastSync(ctx, b.dst, src, x); err != nil {
 		return 0, err
 	}

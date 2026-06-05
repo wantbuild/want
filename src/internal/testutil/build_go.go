@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"github.com/stretchr/testify/require"
-	"go.brendoncarroll.net/state/cadata"
 )
 
 func BuildLinuxAmd64(t testing.TB, srcDir string) []byte {
@@ -44,7 +44,7 @@ func BuildLinuxAmd64(t testing.TB, srcDir string) []byte {
 	return data
 }
 
-func PostLinuxAmd64(t testing.TB, s cadata.Store, p string) glfs.Ref {
+func PostLinuxAmd64(t testing.TB, s bcsdk.RW, p string) glfs.Ref {
 	bin := BuildLinuxAmd64(t, p)
 	ctx := Context(t)
 	ref, err := glfs.PostBlob(ctx, s, bytes.NewReader(bin))

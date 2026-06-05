@@ -7,8 +7,8 @@ import (
 	"path"
 	"strings"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/wantcfg"
 	"wantbuild.io/want/src/wantjob"
@@ -39,7 +39,7 @@ type RunTestsConfig struct {
 	Ignore []string
 }
 
-func PostRunTestsTask(ctx context.Context, s cadata.PostExister, x RunTestsTask) (*glfs.Ref, error) {
+func PostRunTestsTask(ctx context.Context, s bcsdk.WO, x RunTestsTask) (*glfs.Ref, error) {
 	cfgJson, err := json.Marshal(x.RunTestsConfig)
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func PostRunTestsTask(ctx context.Context, s cadata.PostExister, x RunTestsTask)
 	return glfs.PostTreeMap(ctx, s, m)
 }
 
-func GetRunTestsTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*RunTestsTask, error) {
+func GetRunTestsTask(ctx context.Context, s bcsdk.RO, x glfs.Ref) (*RunTestsTask, error) {
 	moduleRef, err := glfs.GetAtPath(ctx, s, x, "module")
 	if err != nil {
 		return nil, err
@@ -104,7 +104,7 @@ func GetRunTestsTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*RunTest
 }
 
 // RunTests creates a graph with nodes for building and running a test.
-func RunTests(jc wantjob.Ctx, src cadata.Getter, x RunTestsTask) (*glfs.Ref, error) {
+func RunTests(jc wantjob.Ctx, src bcsdk.RO, x RunTestsTask) (*glfs.Ref, error) {
 	testExecs, err := makeAllTestExecs(jc, src, x)
 	if err != nil {
 		return nil, err
@@ -169,7 +169,7 @@ func RunTests(jc wantjob.Ctx, src cadata.Getter, x RunTestsTask) (*glfs.Ref, err
 
 // makeAllTestExecs builds test executables for each package.
 // The map key will be the package path within the module.
-func makeAllTestExecs(jc wantjob.Ctx, src cadata.Getter, x RunTestsTask) (map[string]glfs.Ref, error) {
+func makeAllTestExecs(jc wantjob.Ctx, src bcsdk.RO, x RunTestsTask) (map[string]glfs.Ref, error) {
 	tasks, err := makeTestExecTasks(jc.Context, src, x.Module, x.ModCache, x.RunTestsConfig)
 	if err != nil {
 		return nil, err
@@ -219,7 +219,7 @@ func makeAllTestExecs(jc wantjob.Ctx, src cadata.Getter, x RunTestsTask) (map[st
 }
 
 // makeTestExecTasks generates tasks to create a test executable for each package
-func makeTestExecTasks(ctx context.Context, src cadata.Getter, modRef glfs.Ref, modCache *glfs.Ref, rtcfg RunTestsConfig) ([]MakeTestExecTask, error) {
+func makeTestExecTasks(ctx context.Context, src bcsdk.RO, modRef glfs.Ref, modCache *glfs.Ref, rtcfg RunTestsConfig) ([]MakeTestExecTask, error) {
 	var ret []MakeTestExecTask
 	if err := glfs.WalkTree(ctx, src, modRef, func(prefix string, ent glfs.TreeEntry) error {
 		if yes, err := IsGoPackage(ctx, src, ent.Ref); err != nil {

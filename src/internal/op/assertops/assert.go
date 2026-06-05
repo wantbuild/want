@@ -8,9 +8,9 @@ import (
 	"io"
 	"strings"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"go.brendoncarroll.net/exp/streams"
-	"go.brendoncarroll.net/state/cadata"
 )
 
 const MaxPathLen = 4096
@@ -29,7 +29,7 @@ type Assertions struct {
 	PathExists *string
 }
 
-func PostAssertTask(ctx context.Context, s cadata.PostExister, x AssertTask) (*glfs.Ref, error) {
+func PostAssertTask(ctx context.Context, s bcsdk.WO, x AssertTask) (*glfs.Ref, error) {
 	var ents []glfs.TreeEntry
 	ents = append(ents, glfs.TreeEntry{
 		Name:     "x",
@@ -57,7 +57,7 @@ func PostAssertTask(ctx context.Context, s cadata.PostExister, x AssertTask) (*g
 	return glfs.PostTreeSlice(ctx, s, ents)
 }
 
-func GetAssertTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*AssertTask, error) {
+func GetAssertTask(ctx context.Context, s bcsdk.RO, x glfs.Ref) (*AssertTask, error) {
 	tree, err := glfs.GetTreeSlice(ctx, s, x, 1e6)
 	if err != nil {
 		return nil, err
@@ -90,7 +90,7 @@ func GetAssertTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*AssertTas
 	return &ret, nil
 }
 
-func AssertAll(ctx context.Context, dst cadata.Poster, src cadata.Getter, task AssertTask) (*glfs.Ref, error) {
+func AssertAll(ctx context.Context, dst bcsdk.WO, src bcsdk.RO, task AssertTask) (*glfs.Ref, error) {
 	// assert checks
 	err := checkAssertions(ctx, src, task.X, task.Assertions)
 	// add error message if it exists
@@ -100,8 +100,8 @@ func AssertAll(ctx context.Context, dst cadata.Poster, src cadata.Getter, task A
 	return &task.X, err
 }
 
-func checkAssertions(ctx context.Context, s cadata.Getter, x glfs.Ref, as Assertions) (err error) {
-	ag := glfs.NewAgent()
+func checkAssertions(ctx context.Context, s bcsdk.RO, x glfs.Ref, as Assertions) (err error) {
+	ag := glfs.NewMachine()
 	if as.SubsetOf != nil {
 		err = errors.Join(err, assertSubsetOf(ctx, ag, s, x, *as.SubsetOf))
 	}
@@ -111,7 +111,7 @@ func checkAssertions(ctx context.Context, s cadata.Getter, x glfs.Ref, as Assert
 	return err
 }
 
-func assertSubsetOf(ctx context.Context, ag *glfs.Agent, s cadata.Getter, x, subsetOf glfs.Ref) error {
+func assertSubsetOf(ctx context.Context, ag *glfs.Machine, s bcsdk.RO, x, subsetOf glfs.Ref) error {
 	if x.Type != subsetOf.Type {
 		return fmt.Errorf("assert: mismatched types %q != %q ", x.Type, subsetOf.Type)
 	}
@@ -139,7 +139,7 @@ func assertSubsetOf(ctx context.Context, ag *glfs.Agent, s cadata.Getter, x, sub
 	return assertStreamsEqual(rx, rso)
 }
 
-func assertPathExists(ctx context.Context, ag *glfs.Agent, s cadata.Getter, x glfs.Ref, p string) error {
+func assertPathExists(ctx context.Context, ag *glfs.Machine, s bcsdk.RO, x glfs.Ref, p string) error {
 	_, err := ag.GetAtPath(ctx, s, x, p)
 	return err
 }

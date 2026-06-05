@@ -33,10 +33,10 @@ func PrettyExpr(w io.Writer, x wantcfg.Expr) error {
 
 func prettyTree(w io.Writer, tree wantcfg.Tree) error {
 	fmt.Fprintf(w, "{\n")
-	for k, v := range tree {
-		fmt.Fprintf(w, "\t%q: {%v ", k, v.Mode)
+	for _, ent := range tree {
+		fmt.Fprintf(w, "\t%q: {%v ", ent.Name, ent.Mode)
 		w2 := text.NewIndentWriter(w, []byte("  "))
-		if err := PrettyExpr(w2, v.Value); err != nil {
+		if err := PrettyExpr(w2, ent.Value); err != nil {
 			return err
 		}
 		fmt.Fprintf(w, "\n")

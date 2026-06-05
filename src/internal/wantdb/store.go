@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 
+	"blobcache.io/blobcache/src/blobcache"
 	"github.com/jmoiron/sqlx"
 	"go.brendoncarroll.net/state/cadata"
 	"modernc.org/sqlite"
@@ -27,48 +28,42 @@ func NewDBStore(db *sqlx.DB, id StoreID) *DBStore {
 	return &DBStore{id: id, db: db}
 }
 
-func (s *DBStore) Post(ctx context.Context, data []byte) (cadata.ID, error) {
-	return dbutil.DoTx1(ctx, s.db, func(tx *sqlx.Tx) (cadata.ID, error) {
+func (s *DBStore) Post(ctx context.Context, data []byte) (blobcache.CID, error) {
+	return dbutil.DoTx1(ctx, s.db, func(tx *sqlx.Tx) (blobcache.CID, error) {
 		return PostBlob(tx, s.id, data)
 	})
 }
 
-func (s *DBStore) Get(ctx context.Context, id cadata.ID, buf []byte) (int, error) {
+func (s *DBStore) Get(ctx context.Context, id blobcache.CID, buf []byte) (int, error) {
 	return dbutil.ROTx1(ctx, s.db, func(tx *sqlx.Tx) (int, error) {
 		return GetBlob(tx, 0, id, buf)
 	})
 }
 
-func (s *DBStore) Exists(ctx context.Context, id cadata.ID) (bool, error) {
-	return dbutil.ROTx1(ctx, s.db, func(tx *sqlx.Tx) (bool, error) {
-		return storeContains(tx, 0, id)
+func (s *DBStore) Exists(ctx context.Context, cids []blobcache.CID, dst []bool) error {
+	return dbutil.ROTx(ctx, s.db, func(tx *sqlx.Tx) error {
+		return storeContains(tx, 0, cids, dst)
 	})
 }
 
-func (s *DBStore) Add(ctx context.Context, id cadata.ID) error {
+func (s *DBStore) Add(ctx context.Context, id blobcache.CID) error {
 	return dbutil.DoTx(ctx, s.db, func(tx *sqlx.Tx) error {
 		return AddBlob(tx, s.id, id)
 	})
 }
 
-func (s *DBStore) Delete(ctx context.Context, id cadata.ID) error {
+func (s *DBStore) Delete(ctx context.Context, cids []blobcache.CID) error {
 	return dbutil.DoTx(ctx, s.db, func(tx *sqlx.Tx) error {
-		return DeleteBlob(tx, s.id, id)
+		return DeleteBlob(tx, s.id, cids)
 	})
 }
 
-func (s *DBStore) Hash(x []byte) cadata.ID {
+func (s *DBStore) Hash(x []byte) blobcache.CID {
 	return stores.Hash(x)
 }
 
 func (s *DBStore) MaxSize() int {
 	return stores.MaxBlobSize
-}
-
-func (s *DBStore) List(ctx context.Context, span cadata.Span, ids []cadata.ID) (int, error) {
-	return dbutil.ROTx1(ctx, s.db, func(tx *sqlx.Tx) (int, error) {
-		return ListBlobs(tx, s.id, span, ids)
-	})
 }
 
 func (s *DBStore) StoreID() StoreID {
@@ -98,48 +93,42 @@ func NewTxStore(tx *sqlx.Tx, id StoreID) *TxStore {
 	}
 }
 
-func (s *TxStore) Post(ctx context.Context, data []byte) (cadata.ID, error) {
+func (s *TxStore) Post(ctx context.Context, data []byte) (blobcache.CID, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return PostBlob(s.tx, s.id, data)
 }
 
-func (s *TxStore) Get(ctx context.Context, id cadata.ID, buf []byte) (int, error) {
+func (s *TxStore) Get(ctx context.Context, id blobcache.CID, buf []byte) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return GetBlob(s.tx, s.id, id, buf)
 }
 
-func (s *TxStore) Exists(ctx context.Context, id cadata.ID) (bool, error) {
+func (s *TxStore) Exists(ctx context.Context, cids []blobcache.CID, dst []bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return storeContains(s.tx, s.id, id)
+	return storeContains(s.tx, s.id, cids, dst)
 }
 
-func (s *TxStore) Add(ctx context.Context, id cadata.ID) error {
+func (s *TxStore) Add(ctx context.Context, id blobcache.CID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return AddBlob(s.tx, s.id, id)
 }
 
-func (s *TxStore) Delete(ctx context.Context, id cadata.ID) error {
+func (s *TxStore) Delete(ctx context.Context, cids []blobcache.CID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return DeleteBlob(s.tx, s.id, id)
+	return DeleteBlob(s.tx, s.id, cids)
 }
 
-func (s *TxStore) Hash(x []byte) cadata.ID {
+func (s *TxStore) Hash(x []byte) blobcache.CID {
 	return stores.Hash(x)
 }
 
 func (s *TxStore) MaxSize() int {
 	return stores.MaxBlobSize
-}
-
-func (s *TxStore) List(ctx context.Context, span cadata.Span, ids []cadata.ID) (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return ListBlobs(s.tx, s.id, span, ids)
 }
 
 func (s *TxStore) StoreID() StoreID {
@@ -173,27 +162,27 @@ func DropStore(tx *sqlx.Tx, sid StoreID) error {
 	return nil
 }
 
-func PostBlob(tx *sqlx.Tx, sid StoreID, data []byte) (cadata.ID, error) {
+func PostBlob(tx *sqlx.Tx, sid StoreID, data []byte) (blobcache.CID, error) {
 	if len(data) > stores.MaxBlobSize {
-		return cadata.ID{}, cadata.ErrTooLarge
+		return blobcache.CID{}, cadata.ErrTooLarge
 	}
 	id := stores.Hash(data)
 	yes, err := blobExists(tx, id)
 	if err != nil {
-		return cadata.ID{}, err
+		return blobcache.CID{}, err
 	}
 	if !yes {
 		if err := insertBlob(tx, id, data); err != nil {
-			return cadata.ID{}, err
+			return blobcache.CID{}, err
 		}
 	}
 	if err := AddBlob(tx, sid, id); err != nil {
-		return cadata.ID{}, err
+		return blobcache.CID{}, err
 	}
 	return id, nil
 }
 
-func GetBlob(tx *sqlx.Tx, sid StoreID, id cadata.ID, buf []byte) (int, error) {
+func GetBlob(tx *sqlx.Tx, sid StoreID, id blobcache.CID, buf []byte) (int, error) {
 	var data []byte
 	var err error
 	if sid == 0 {
@@ -205,7 +194,7 @@ func GetBlob(tx *sqlx.Tx, sid StoreID, id cadata.ID, buf []byte) (int, error) {
 	}
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return 0, cadata.ErrNotFound{Key: id}
+			return 0, blobcache.ErrNotFound{CID: id}
 		}
 		return 0, err
 	}
@@ -215,12 +204,12 @@ func GetBlob(tx *sqlx.Tx, sid StoreID, id cadata.ID, buf []byte) (int, error) {
 	return copy(buf, data), nil
 }
 
-func AddBlob(tx *sqlx.Tx, sid StoreID, id cadata.ID) error {
+func AddBlob(tx *sqlx.Tx, sid StoreID, id blobcache.CID) error {
 	if _, err := tx.Exec(`INSERT OR IGNORE INTO store_blobs (store_id, blob_id) VALUES (?, ?)`, sid, id); err != nil {
 		sqlerr := &sqlite.Error{}
 		if errors.As(err, &sqlerr) {
 			if sqlerr.Code() == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY {
-				return cadata.ErrNotFound{Key: id}
+				return blobcache.ErrNotFound{CID: id}
 			}
 		}
 		return err
@@ -231,22 +220,20 @@ func AddBlob(tx *sqlx.Tx, sid StoreID, id cadata.ID) error {
 	return nil
 }
 
-func DeleteBlob(tx *sqlx.Tx, sid StoreID, id cadata.ID) error {
-	if err := storeRemove(tx, sid, id); err != nil {
+func DeleteBlob(tx *sqlx.Tx, sid StoreID, cids []blobcache.CID) error {
+	if err := storeRemove(tx, sid, cids); err != nil {
 		return err
 	}
-	rc, err := getBlobRC(tx, id)
-	if err != nil {
-		return err
+	for _, cid := range cids {
+		rc, err := getBlobRC(tx, cid)
+		if err != nil {
+			return err
+		}
+		if rc == 0 {
+			return dropBlob(tx, cid)
+		}
 	}
-	if rc == 0 {
-		return dropBlob(tx, id)
-	}
-	return err
-}
-
-func ListBlobs(tx *sqlx.Tx, sid StoreID, span cadata.Span, ids []cadata.ID) (int, error) {
-	panic("not implemented")
+	return nil
 }
 
 func CopyAll(tx *sqlx.Tx, src, dst StoreID) error {
@@ -258,55 +245,69 @@ func CopyAll(tx *sqlx.Tx, src, dst StoreID) error {
 	return err
 }
 
-func storeContains(tx *sqlx.Tx, sid StoreID, id cadata.ID) (bool, error) {
-	var exists bool
+func storeContains(tx *sqlx.Tx, sid StoreID, cids []blobcache.CID, dst []bool) error {
 	var err error
+	var exists bool
 	if sid == 0 {
-		err = tx.Get(&exists, `SELECT EXISTS (SELECT 1 FROM blobs WHERE id = ?)`, id)
+		for i, cid := range cids {
+			if err = tx.Get(&exists, `SELECT EXISTS (SELECT 1 FROM blobs WHERE id = ?)`, cid); err != nil {
+				return err
+			}
+			dst[i] = exists
+		}
 	} else {
-		err = tx.Get(&exists, `SELECT EXISTS (SELECT 1 FROM store_blobs WHERE store_id = ? AND blob_id = ?)`, sid, id)
+		for i, cid := range cids {
+			if err = tx.Get(&exists, `SELECT EXISTS (SELECT 1 FROM store_blobs WHERE store_id = ? AND blob_id = ?)`, sid, cid); err != nil {
+				return err
+			}
+			dst[i] = exists
+		}
 	}
-	return exists, err
+	return nil
 }
 
-func storeRemove(tx *sqlx.Tx, sid StoreID, id cadata.ID) error {
-	yes, err := storeContains(tx, sid, id)
-	if err != nil {
+func storeRemove(tx *sqlx.Tx, sid StoreID, cids []blobcache.CID) error {
+	exists := make([]bool, len(cids))
+	if err := storeContains(tx, sid, cids, exists); err != nil {
 		return err
 	}
-	if yes {
-		if _, err := tx.Exec(`DELETE FROM store_blobs WHERE store_id = ? AND blob_id = ?`, sid, id); err != nil {
+	for i, yes := range exists {
+		if !yes {
+			continue
+		}
+		cid := cids[i]
+		if _, err := tx.Exec(`DELETE FROM store_blobs WHERE store_id = ? AND blob_id = ?`, sid, cid); err != nil {
 			return err
 		}
-		return decrBlobRC(tx, id)
+		return decrBlobRC(tx, cid)
 	}
 	return nil
 }
 
 // blobExists returns (true, nil) if the blob exists and (false, nil) if it doesn't.
-func blobExists(tx *sqlx.Tx, id cadata.ID) (bool, error) {
+func blobExists(tx *sqlx.Tx, id blobcache.CID) (bool, error) {
 	var exists bool
 	err := tx.Get(&exists, `SELECT EXISTS (SELECT 1 FROM blobs WHERE id = ?)`, id)
 	return exists, err
 }
 
 // insertBlob inserts an entry into the blobs table
-func insertBlob(tx *sqlx.Tx, id cadata.ID, data []byte) error {
+func insertBlob(tx *sqlx.Tx, id blobcache.CID, data []byte) error {
 	_, err := tx.Exec(`INSERT INTO blobs (id, data, rc) VALUES (?, ?, 0)`, id, data)
 	return err
 }
 
-func dropBlob(tx *sqlx.Tx, id cadata.ID) error {
+func dropBlob(tx *sqlx.Tx, id blobcache.CID) error {
 	_, err := tx.Exec(`DELETE FROM blobs WHERE id = ?`, id)
 	return err
 }
 
-func decrBlobRC(tx *sqlx.Tx, id cadata.ID) error {
+func decrBlobRC(tx *sqlx.Tx, id blobcache.CID) error {
 	_, err := tx.Exec(`UPDATE blobs SET rc = rc - 1 WHERE id = ?`, id)
 	return err
 }
 
-func getBlobRC(tx *sqlx.Tx, id cadata.ID) (int64, error) {
+func getBlobRC(tx *sqlx.Tx, id blobcache.CID) (int64, error) {
 	var rc int64
 	err := tx.Get(&rc, `SELECT rc FROM blobs WHERE id = ?`, id)
 	return rc, err

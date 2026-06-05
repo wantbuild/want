@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/stores"
@@ -31,7 +31,7 @@ type Executor struct {
 	DAGExecOp wantjob.OpName
 }
 
-func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) wantjob.Result {
+func (e Executor) Execute(jc wantjob.Ctx, src bcsdk.RO, x wantjob.Task) wantjob.Result {
 	ctx := jc.Context
 	switch x.Op {
 	case OpBuild:
@@ -69,7 +69,7 @@ func (e Executor) Execute(jc wantjob.Ctx, src cadata.Getter, x wantjob.Task) wan
 	}
 }
 
-func (e Executor) Compile(jc wantjob.Ctx, s cadata.Getter, x glfs.Ref) (*glfs.Ref, error) {
+func (e Executor) Compile(jc wantjob.Ctx, s bcsdk.RO, x glfs.Ref) (*glfs.Ref, error) {
 	defer jc.InfoSpan("compile")()
 	ctx := jc.Context
 	dst := jc.Dst
@@ -85,7 +85,7 @@ func (e Executor) Compile(jc wantjob.Ctx, s cadata.Getter, x glfs.Ref) (*glfs.Re
 	return wantc.PostPlan(ctx, dst, *plan)
 }
 
-func (e Executor) CompileSnippet(ctx context.Context, dst cadata.Store, s cadata.Getter, ref glfs.Ref) (*glfs.Ref, error) {
+func (e Executor) CompileSnippet(ctx context.Context, dst bcsdk.RW, s bcsdk.RO, ref glfs.Ref) (*glfs.Ref, error) {
 	c := wantc.NewCompiler()
 	data, err := glfs.GetBlobBytes(ctx, s, ref, MaxSnippetSize)
 	if err != nil {
@@ -98,7 +98,7 @@ func (e Executor) CompileSnippet(ctx context.Context, dst cadata.Store, s cadata
 	return wantdag.PostDAG(ctx, dst, dag)
 }
 
-func DoCompile(ctx context.Context, sys wantjob.System, compileOp wantjob.OpName, src cadata.Getter, ct wantc.CompileTask) (*wantc.Plan, cadata.Getter, error) {
+func DoCompile(ctx context.Context, sys wantjob.System, compileOp wantjob.OpName, src bcsdk.RO, ct wantc.CompileTask) (*wantc.Plan, bcsdk.RO, error) {
 	scratch := stores.NewMem()
 	for _, ref := range ct.Deps {
 		if err := glfstasks.FastSync(ctx, scratch, src, ref); err != nil {
@@ -120,7 +120,7 @@ func DoCompile(ctx context.Context, sys wantjob.System, compileOp wantjob.OpName
 	return plan, planStore, nil
 }
 
-func (e Executor) EvalExpr(jc wantjob.Ctx, src cadata.Getter, expr wantcfg.Expr) (*glfs.Ref, error) {
+func (e Executor) EvalExpr(jc wantjob.Ctx, src bcsdk.RO, expr wantcfg.Expr) (*glfs.Ref, error) {
 	ctx := jc.Context
 	c := wantc.NewCompiler()
 	dag, err := c.CompileExpr(ctx, jc.Dst, src, expr)
@@ -141,7 +141,7 @@ func (e Executor) EvalExpr(jc wantjob.Ctx, src cadata.Getter, expr wantcfg.Expr)
 	return outRef, nil
 }
 
-func dependencyClosure(ctx context.Context, src cadata.Getter, modRef glfs.Ref, deps map[wantc.ExprID]glfs.Ref, eval func(wantcfg.Expr) (*glfs.Ref, error)) error {
+func dependencyClosure(ctx context.Context, src bcsdk.RO, modRef glfs.Ref, deps map[wantc.ExprID]glfs.Ref, eval func(wantcfg.Expr) (*glfs.Ref, error)) error {
 	if modRef.Type == glfs.TypeTree {
 		modCfg, err := wantc.GetModuleConfig(ctx, src, modRef)
 		if err != nil {

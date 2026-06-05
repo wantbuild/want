@@ -4,9 +4,9 @@ import (
 	"context"
 	"path"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"go.brendoncarroll.net/exp/streams"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/wantjob"
 )
@@ -14,8 +14,8 @@ import (
 const OpMakeTestExec = wantjob.OpName("golang.makeTestExec")
 
 // IsGoModule returns (true, nil) if the directory is a Go Module
-func IsGoModule(ctx context.Context, s cadata.Getter, x glfs.Ref) (bool, error) {
-	tr, err := glfs.NewAgent().NewTreeReader(s, x)
+func IsGoModule(ctx context.Context, s bcsdk.RO, x glfs.Ref) (bool, error) {
+	tr, err := glfs.NewMachine().NewTreeReader(s, x)
 	if err != nil {
 		return false, err
 	}
@@ -44,12 +44,12 @@ func IsGoModule(ctx context.Context, s cadata.Getter, x glfs.Ref) (bool, error) 
 // IsGoPackage returns (true, nil) if the directory at x is a Go Package
 // Go packages contain 1 or more .go files.
 // It will return (false, nil) if the package is not a Go package
-func IsGoPackage(ctx context.Context, s cadata.Getter, x glfs.Ref) (bool, error) {
+func IsGoPackage(ctx context.Context, s bcsdk.RO, x glfs.Ref) (bool, error) {
 	const goExt = ".go"
 	if x.Type != glfs.TypeTree {
 		return false, nil
 	}
-	tr, err := glfs.NewAgent().NewTreeReader(s, x)
+	tr, err := glfs.NewMachine().NewTreeReader(s, x)
 	if err != nil {
 		return false, err
 	}

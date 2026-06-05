@@ -9,7 +9,6 @@ import (
 
 var importRepoCmd = star.Command{
 	Metadata: star.Metadata{Short: "import the repository, then exit"},
-	Flags:    []star.IParam{},
 	F: func(c star.Context) error {
 		ctx := c.Context
 		startTime := time.Now()
@@ -39,6 +38,6 @@ var importRepoCmd = star.Command{
 			return err
 		}
 		fmt.Fprintf(c.StdErr, "%v\n", dur)
-		return c.StdOut.Flush()
+		return nil
 	},
 }

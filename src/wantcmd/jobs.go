@@ -14,7 +14,7 @@ import (
 
 var jobCmd = star.NewDir(star.Metadata{
 	Short: "inspect and manage jobs",
-}, map[star.Symbol]star.Command{
+}, map[string]star.Command{
 	"ls":   lsJobCmd,
 	"drop": dropJobCmd,
 })
@@ -44,13 +44,13 @@ var lsJobCmd = star.Command{
 			}
 			fmt.Fprintf(w, fmtStr, j.ID, j.Task.Op, createdAt, endAt)
 		}
-		return w.Flush()
+		return nil
 	},
 }
 
 var dropJobCmd = star.Command{
 	Metadata: star.Metadata{Short: "drop a job"},
-	Pos:      []star.IParam{jobidParam},
+	Pos:      []star.Positional{jobidParam},
 	F: func(c star.Context) error {
 		wbs, err := newSys(&c)
 		if err != nil {
@@ -77,12 +77,11 @@ var dashCmd = star.Command{
 			return err
 		}
 		c.Printf("listening on http://%v ...\n", l.Addr())
-		c.StdOut.Flush()
 		return http.Serve(l, http.FileServerFS(fsys))
 	},
 }
 
-var jobidParam = star.Param[wantjob.JobID]{
+var jobidParam = &star.Required[wantjob.JobID]{
 	Parse: func(x string) (wantjob.JobID, error) {
 		parts := strings.Split(strings.Trim(x, "/"), "/")
 		var ret wantjob.JobID

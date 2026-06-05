@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
@@ -15,7 +16,7 @@ import (
 	"wantbuild.io/want/src/wantwasm"
 )
 
-func (e *Executor) ExecNativeGLFS(jc wantjob.Ctx, s cadata.Getter, task wantwasm.NativeGLFSTask) (*glfs.Ref, error) {
+func (e *Executor) ExecNativeGLFS(jc wantjob.Ctx, s bcsdk.RO, task wantwasm.NativeGLFSTask) (*glfs.Ref, error) {
 	ctx := jc.Context
 	if task.Memory == 0 {
 		task.Memory = 1e9
@@ -81,7 +82,7 @@ func (e *Executor) ExecNativeGLFS(jc wantjob.Ctx, s cadata.Getter, task wantwasm
 		if !ok {
 			return -1
 		}
-		id := cadata.IDFromBytes(idData)
+		id := bcsdk.CIDFromBytes(idData)
 		buf := make([]byte, src.MaxSize())
 		n, err := src.Get(ctx, id, buf)
 		if err != nil && !cadata.IsNotFound(err) {

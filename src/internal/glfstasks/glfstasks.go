@@ -6,17 +6,17 @@ import (
 	"errors"
 	"fmt"
 
+	"blobcache.io/blobcache/src/bcsdk"
+	"blobcache.io/blobcache/src/schema"
 	"blobcache.io/glfs"
 	"go.brendoncarroll.net/exp/streams"
-	"go.brendoncarroll.net/state/cadata"
 	"golang.org/x/sync/errgroup"
 
-	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/wantdb"
 	"wantbuild.io/want/src/wantjob"
 )
 
-func Do(ctx context.Context, sys wantjob.System, src cadata.Getter, op wantjob.OpName, x glfs.Ref) (*glfs.Ref, cadata.Getter, error) {
+func Do(ctx context.Context, sys wantjob.System, src bcsdk.RO, op wantjob.OpName, x glfs.Ref) (*glfs.Ref, bcsdk.RO, error) {
 	out, dst, err := wantjob.Do(ctx, sys, src, wantjob.Task{
 		Op:    op,
 		Input: MarshalGLFSRef(x),
@@ -69,8 +69,8 @@ func Success(x glfs.Ref) *wantjob.Result {
 	return &wantjob.Result{Root: MarshalGLFSRef(x)}
 }
 
-func FastSync(ctx context.Context, dst cadata.PostExister, src cadata.Getter, root glfs.Ref) error {
-	if exists, err := dst.Exists(ctx, root.CID); err == nil && exists {
+func FastSync(ctx context.Context, dst bcsdk.WO, src bcsdk.RO, root glfs.Ref) error {
+	if exists, err := schema.ExistsUnit(ctx, dst, root.CID); err == nil && exists {
 		return nil
 	}
 	rootData := MarshalGLFSRef(root)
@@ -99,7 +99,7 @@ func FastSync(ctx context.Context, dst cadata.PostExister, src cadata.Getter, ro
 			if err := eg.Wait(); err != nil {
 				return err
 			}
-			return cadata.Copy(ctx, dst, src, root.CID)
+			return schema.CopyBlob(ctx, src, dst, root.CID)
 		} else {
 			return glfs.Sync(ctx, dst, src, root)
 		}
@@ -107,12 +107,12 @@ func FastSync(ctx context.Context, dst cadata.PostExister, src cadata.Getter, ro
 	return err
 }
 
-func Check(ctx context.Context, src cadata.Getter, root glfs.Ref) error {
+func Check(ctx context.Context, src bcsdk.RO, root glfs.Ref) error {
 	return check(ctx, src, root, nil)
 }
 
-func check(ctx context.Context, src cadata.Getter, root glfs.Ref, history []string) error {
-	if yes, err := stores.ExistsOnGet(ctx, src, root.CID); err != nil {
+func check(ctx context.Context, src bcsdk.RO, root glfs.Ref, history []string) error {
+	if yes, err := schema.ExistsUnit(ctx, src, root.CID); err != nil {
 		return err
 	} else if !yes {
 		return fmt.Errorf("integrity check failed, store %v: %T is missing %v", src, src, root.CID)
@@ -132,7 +132,7 @@ func check(ctx context.Context, src cadata.Getter, root glfs.Ref, history []stri
 	return nil
 }
 
-func PostMap[V any](ctx context.Context, s cadata.PostExister, m map[string]V, fn func(context.Context, cadata.PostExister, V) (*glfs.Ref, error)) (*glfs.Ref, error) {
+func PostMap[V any](ctx context.Context, s bcsdk.WO, m map[string]V, fn func(context.Context, bcsdk.WO, V) (*glfs.Ref, error)) (*glfs.Ref, error) {
 	var ents []glfs.TreeEntry
 	for k, v := range m {
 		ref, err := fn(ctx, s, v)
@@ -144,9 +144,9 @@ func PostMap[V any](ctx context.Context, s cadata.PostExister, m map[string]V, f
 	return glfs.PostTreeSlice(ctx, s, ents)
 }
 
-func GetMap[V any](ctx context.Context, s cadata.Getter, x glfs.Ref, fn func(context.Context, cadata.Getter, glfs.Ref) (*V, error)) (map[string]V, error) {
+func GetMap[V any](ctx context.Context, s bcsdk.RO, x glfs.Ref, fn func(context.Context, bcsdk.RO, glfs.Ref) (*V, error)) (map[string]V, error) {
 	ret := make(map[string]V)
-	tr, err := glfs.NewAgent().NewTreeReader(s, x)
+	tr, err := glfs.NewMachine().NewTreeReader(s, x)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func GetMap[V any](ctx context.Context, s cadata.Getter, x glfs.Ref, fn func(con
 	return ret, nil
 }
 
-func GetJSONAt[T any](ctx context.Context, s cadata.Getter, ref glfs.Ref, p string) (ret T, _ error) {
+func GetJSONAt[T any](ctx context.Context, s bcsdk.RO, ref glfs.Ref, p string) (ret T, _ error) {
 	ref2, err := glfs.GetAtPath(ctx, s, ref, p)
 	if err != nil {
 		return ret, err

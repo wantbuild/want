@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"github.com/stretchr/testify/require"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/stores"
@@ -31,7 +31,7 @@ func TestJobStores(t *testing.T) {
 	db := wantdb.NewMemory()
 	require.NoError(t, wantdb.Setup(ctx, db))
 	exec := wantjob.BasicExecutor{
-		"op1": func(jc wantjob.Ctx, src cadata.Getter, x []byte) wantjob.Result {
+		"op1": func(jc wantjob.Ctx, src bcsdk.RO, x []byte) wantjob.Result {
 			return glfstasks.Exec(x, func(x glfs.Ref) (*glfs.Ref, error) {
 				ctx := jc.Context
 				// generate some data in a tree which will need to be synced.

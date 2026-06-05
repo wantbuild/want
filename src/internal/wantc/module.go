@@ -5,21 +5,22 @@ import (
 	"encoding/json"
 	"path"
 
+	"blobcache.io/blobcache/src/bcsdk"
+	"blobcache.io/blobcache/src/blobcache"
 	"blobcache.io/glfs"
 	"github.com/google/go-jsonnet"
-	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/wantcfg"
 )
 
-type ModuleID = cadata.ID
+type ModuleID = blobcache.CID
 
 func NewModuleID(x glfs.Ref) ModuleID {
 	// TODO: hash DEK and CID together?
 	return x.CID
 }
 
-type ExprID = cadata.ID
+type ExprID = blobcache.CID
 
 func NewExprID(e wantcfg.Expr) ExprID {
 	data, err := json.Marshal(e)
@@ -37,7 +38,7 @@ type FQPath struct {
 // type Namespace map[string]glfs.Ref
 
 // IsModule returns true if x is valid Want Module.
-func IsModule(ctx context.Context, src cadata.Getter, x glfs.Ref) (bool, error) {
+func IsModule(ctx context.Context, src bcsdk.RO, x glfs.Ref) (bool, error) {
 	if x.Type != glfs.TypeTree {
 		return false, nil
 	}
@@ -54,7 +55,7 @@ func IsModule(ctx context.Context, src cadata.Getter, x glfs.Ref) (bool, error) 
 
 // FindModules finds all the modules in root.
 // Usually root itself is a module, and there could be submodules within root.
-func FindModules(ctx context.Context, src cadata.Getter, root glfs.Ref) (map[string]glfs.Ref, error) {
+func FindModules(ctx context.Context, src bcsdk.RO, root glfs.Ref) (map[string]glfs.Ref, error) {
 	modules := make(map[string]glfs.Ref)
 	if err := glfs.WalkTree(ctx, src, root, func(prefix string, ent glfs.TreeEntry) error {
 		p := path.Join(prefix, ent.Name)
@@ -73,7 +74,7 @@ func FindModules(ctx context.Context, src cadata.Getter, root glfs.Ref) (map[str
 }
 
 // GetModuleConfig gets the WANT file from the directory at modRef, evaluates it and returns it.
-func GetModuleConfig(ctx context.Context, src cadata.Getter, modRef glfs.Ref) (*wantcfg.ModuleConfig, error) {
+func GetModuleConfig(ctx context.Context, src bcsdk.RO, modRef glfs.Ref) (*wantcfg.ModuleConfig, error) {
 	cfgRef, err := glfs.GetAtPath(ctx, src, modRef, "WANT")
 	if err != nil {
 		return nil, err

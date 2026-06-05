@@ -1,6 +1,7 @@
 package wantcmd
 
 import (
+	"bufio"
 	"fmt"
 
 	"go.brendoncarroll.net/star"
@@ -12,7 +13,7 @@ var blameCmd = star.Command{
 	Metadata: star.Metadata{
 		Short: "check what produces what",
 	},
-	Flags: []star.IParam{},
+	Flags: map[string]star.Flag{},
 	F: func(c star.Context) error {
 		ctx := c.Context
 		wbs, err := newSys(&c)
@@ -29,7 +30,7 @@ var blameCmd = star.Command{
 			return err
 		}
 
-		w := c.StdOut
+		w := bufio.NewWriter(c.StdOut)
 		for _, target := range targets {
 			// key
 			ss := wantc.SetFromQuery(target.DefinedIn, target.To)

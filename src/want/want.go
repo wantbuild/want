@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"github.com/jmoiron/sqlx"
 	"github.com/pbnjay/memory"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/op/dagops"
@@ -106,7 +106,7 @@ func (sys *System) JobSystem() wantjob.System {
 	return sys.jobs
 }
 
-func (sys *System) EvalSnippet(ctx context.Context, repo *wantrepo.Repo, calledFrom string, expr []byte) (*glfs.Ref, cadata.Getter, error) {
+func (sys *System) EvalSnippet(ctx context.Context, repo *wantrepo.Repo, calledFrom string, expr []byte) (*glfs.Ref, bcsdk.RO, error) {
 	s := stores.NewMem()
 	c := wantc.NewCompiler()
 	dag, err := c.CompileSnippet(ctx, s, s, expr)
@@ -122,7 +122,7 @@ func (sys *System) EvalSnippet(ctx context.Context, repo *wantrepo.Repo, calledF
 
 // IsModule returns true if the tree at x is a valid want module.
 // All non-tree refs return (false, nil)
-func IsModule(ctx context.Context, src cadata.Getter, x glfs.Ref) (bool, error) {
+func IsModule(ctx context.Context, src bcsdk.RO, x glfs.Ref) (bool, error) {
 	return wantc.IsModule(ctx, src, x)
 }
 

@@ -7,19 +7,19 @@ import (
 	"os"
 	"sync"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"github.com/kr/text"
-	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/src/internal/stores"
 )
 
 type memJob struct {
 	exec Executor
-	src  cadata.Getter
+	src  bcsdk.RO
 	task Task
 
 	ctx      context.Context
 	cf       context.CancelFunc
-	dst      cadata.Store
+	dst      bcsdk.RW
 	children []*memJob
 
 	doneOnce    sync.Once
@@ -28,7 +28,7 @@ type memJob struct {
 	isTombstone bool
 }
 
-func newMemJob(parentCtx context.Context, exec Executor, src cadata.Getter, task Task) *memJob {
+func newMemJob(parentCtx context.Context, exec Executor, src bcsdk.RO, task Task) *memJob {
 	ctx2, cf := context.WithCancel(parentCtx)
 	return &memJob{
 		exec: exec,
@@ -41,7 +41,7 @@ func newMemJob(parentCtx context.Context, exec Executor, src cadata.Getter, task
 	}
 }
 
-func (j *memJob) Spawn(ctx context.Context, src cadata.Getter, task Task) (Idx, error) {
+func (j *memJob) Spawn(ctx context.Context, src bcsdk.RO, task Task) (Idx, error) {
 	n := len(j.children)
 	child := newMemJob(j.ctx, j.exec, src, task)
 	j.children = append(j.children, child)
@@ -105,7 +105,7 @@ func (j *memJob) Inspect(ctx context.Context, idx Idx) (*Job, error) {
 	panic("Inspect not implemented")
 }
 
-func (j *memJob) ViewResult(ctx context.Context, idx Idx) (*Result, cadata.Getter, error) {
+func (j *memJob) ViewResult(ctx context.Context, idx Idx) (*Result, bcsdk.RO, error) {
 	child := j.children[idx]
 	if !child.isDone() {
 		return nil, nil, fmt.Errorf("ViewResult called on unfinished Job")

@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 )
 
 const (
@@ -31,8 +31,8 @@ type wasip1Config struct {
 }
 
 // PostTask converts a Task to a glfs Tree stored in s.
-func PostWASIp1Task(ctx context.Context, ag *glfs.Agent, s cadata.PostExister, task WASIp1Task) (*glfs.Ref, error) {
-	fRef, err := ag.PostBlob(ctx, s, bytes.NewReader(task.Program))
+func PostWASIp1Task(ctx context.Context, mach *glfs.Machine, s bcsdk.WO, task WASIp1Task) (*glfs.Ref, error) {
+	fRef, err := mach.PostBlob(ctx, s, bytes.NewReader(task.Program))
 	if err != nil {
 		return nil, err
 	}
@@ -44,11 +44,11 @@ func PostWASIp1Task(ctx context.Context, ag *glfs.Agent, s cadata.PostExister, t
 	if err != nil {
 		return nil, err
 	}
-	configRef, err := ag.PostBlob(ctx, s, bytes.NewReader(data))
+	configRef, err := mach.PostBlob(ctx, s, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
-	return ag.PostTreeMap(ctx, s, map[string]glfs.Ref{
+	return mach.PostTreeMap(ctx, s, map[string]glfs.Ref{
 		"program":     *fRef,
 		"input":       task.Input,
 		"config.json": *configRef,
@@ -56,24 +56,24 @@ func PostWASIp1Task(ctx context.Context, ag *glfs.Agent, s cadata.PostExister, t
 }
 
 // GetTask parses a task from a glfs Tree.
-func GetWASIp1Task(ctx context.Context, ag *glfs.Agent, s cadata.Getter, ref glfs.Ref) (*WASIp1Task, error) {
-	fRef, err := ag.GetAtPath(ctx, s, ref, "program")
+func GetWASIp1Task(ctx context.Context, mach *glfs.Machine, s bcsdk.RO, ref glfs.Ref) (*WASIp1Task, error) {
+	fRef, err := mach.GetAtPath(ctx, s, ref, "program")
 	if err != nil {
 		return nil, err
 	}
-	progData, err := ag.GetBlobBytes(ctx, s, *fRef, MaxProgramSize)
+	progData, err := mach.GetBlobBytes(ctx, s, *fRef, MaxProgramSize)
 	if err != nil {
 		return nil, fmt.Errorf("getting wasm function: %w", err)
 	}
-	inputRef, err := ag.GetAtPath(ctx, s, ref, "input")
+	inputRef, err := mach.GetAtPath(ctx, s, ref, "input")
 	if err != nil {
 		return nil, err
 	}
-	configRef, err := ag.GetAtPath(ctx, s, ref, "config.json")
+	configRef, err := mach.GetAtPath(ctx, s, ref, "config.json")
 	if err != nil {
 		return nil, err
 	}
-	data, err := ag.GetBlobBytes(ctx, s, *configRef, MaxConfigSize)
+	data, err := mach.GetBlobBytes(ctx, s, *configRef, MaxConfigSize)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ type NativeGLFSTask struct {
 	Env    map[string]string
 }
 
-func PostNativeGLFSTask(ctx context.Context, s cadata.PostExister, x NativeGLFSTask) (*glfs.Ref, error) {
+func PostNativeGLFSTask(ctx context.Context, s bcsdk.WO, x NativeGLFSTask) (*glfs.Ref, error) {
 	progRef, err := glfs.PostBlob(ctx, s, bytes.NewReader(x.Program))
 	if err != nil {
 		return nil, err
@@ -119,28 +119,28 @@ func PostNativeGLFSTask(ctx context.Context, s cadata.PostExister, x NativeGLFST
 	})
 }
 
-func GetNativeTask(ctx context.Context, store cadata.Getter, ref glfs.Ref) (*NativeGLFSTask, error) {
-	ag := glfs.NewAgent()
+func GetNativeTask(ctx context.Context, store bcsdk.RO, ref glfs.Ref) (*NativeGLFSTask, error) {
+	mach := glfs.NewMachine()
 	// program
-	progRef, err := ag.GetAtPath(ctx, store, ref, "program")
+	progRef, err := mach.GetAtPath(ctx, store, ref, "program")
 	if err != nil {
 		return nil, err
 	}
-	progData, err := ag.GetBlobBytes(ctx, store, *progRef, MaxProgramSize)
+	progData, err := mach.GetBlobBytes(ctx, store, *progRef, MaxProgramSize)
 	if err != nil {
 		return nil, fmt.Errorf("getting wasm function: %w", err)
 	}
 	// input
-	inputRef, err := ag.GetAtPath(ctx, store, ref, "input")
+	inputRef, err := mach.GetAtPath(ctx, store, ref, "input")
 	if err != nil {
 		return nil, err
 	}
 
-	configRef, err := ag.GetAtPath(ctx, store, ref, "config.json")
+	configRef, err := mach.GetAtPath(ctx, store, ref, "config.json")
 	if err != nil {
 		return nil, err
 	}
-	data, err := ag.GetBlobBytes(ctx, store, *configRef, MaxConfigSize)
+	data, err := mach.GetBlobBytes(ctx, store, *configRef, MaxConfigSize)
 	if err != nil {
 		return nil, err
 	}

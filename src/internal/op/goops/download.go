@@ -7,14 +7,14 @@ import (
 	"runtime"
 	"strings"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfsport"
 	"wantbuild.io/want/src/wantjob"
 )
 
-func (e *Executor) ModDownload(jc wantjob.Ctx, s cadata.Getter, x glfs.Ref) (*glfs.Ref, error) {
+func (e *Executor) ModDownload(jc wantjob.Ctx, s bcsdk.RO, x glfs.Ref) (*glfs.Ref, error) {
 	ctx := jc.Context
 	if _, err := glfs.GetAtPath(ctx, s, x, "go.sum"); err != nil {
 		return nil, err

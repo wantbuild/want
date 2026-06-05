@@ -1,16 +1,17 @@
 package wantdb
 
 import (
+	"blobcache.io/blobcache/src/bcsdk"
+	"blobcache.io/blobcache/src/blobcache"
 	"github.com/jmoiron/sqlx"
-	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/tai64"
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/wantjob"
 )
 
-type ArtifactID = cadata.ID
+type ArtifactID = blobcache.CID
 
-func CreateArtifact(tx *sqlx.Tx, sch wantjob.Schema, fn func(dst cadata.Store) ([]byte, error)) (*ArtifactID, error) {
+func CreateArtifact(tx *sqlx.Tx, sch wantjob.Schema, fn func(dst bcsdk.RW) ([]byte, error)) (*ArtifactID, error) {
 	sid, err := CreateStore(tx)
 	if err != nil {
 		return nil, err

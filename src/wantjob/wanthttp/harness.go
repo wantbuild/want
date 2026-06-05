@@ -5,13 +5,13 @@ import (
 	"io"
 	"net/http"
 
-	"go.brendoncarroll.net/state/cadata"
+	"blobcache.io/blobcache/src/bcsdk"
 	"wantbuild.io/want/src/internal/streammux"
 	"wantbuild.io/want/src/wantjob"
 )
 
 // MainRW connects to a wanthttp API served on rw and calls fn with a job context for the server.
-func MainRW(rw io.ReadWriter, fn func(jc wantjob.Ctx, s cadata.Getter, input []byte) wantjob.Result) {
+func MainRW(rw io.ReadWriter, fn func(jc wantjob.Ctx, s bcsdk.RO, input []byte) wantjob.Result) {
 	mux := streammux.New(rw)
 	hc := &http.Client{
 		Transport: streammux.NewRoundTripper(mux),

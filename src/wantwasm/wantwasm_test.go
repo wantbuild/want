@@ -11,7 +11,7 @@ import (
 
 func TestPostGetWASIp1Task(t *testing.T) {
 	ctx := testutil.Context(t)
-	glfsAg := glfs.NewAgent()
+	glfsAg := glfs.NewMachine()
 	s := stores.NewMem()
 	//wasmBytes := buildWASMBin(t, "testdata/hello/hello.go")
 	wasmBytes := []byte("fake data")

@@ -3,14 +3,14 @@ package glfsgit
 import (
 	"context"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/storage"
-	"go.brendoncarroll.net/state/cadata"
 )
 
-func ImportTree(ctx context.Context, dst cadata.PostExister, gitstor storage.Storer, gt *object.Tree) (*glfs.Ref, error) {
+func ImportTree(ctx context.Context, dst bcsdk.WO, gitstor storage.Storer, gt *object.Tree) (*glfs.Ref, error) {
 	var ents []glfs.TreeEntry
 	for _, ge := range gt.Entries {
 		mode, err := ge.Mode.ToOSFileMode()
@@ -52,7 +52,7 @@ func ImportTree(ctx context.Context, dst cadata.PostExister, gitstor storage.Sto
 	return glfs.PostTreeSlice(ctx, dst, ents)
 }
 
-func ImportBlob(ctx context.Context, dst cadata.PostExister, gitstore storage.Storer, gb *object.Blob) (*glfs.Ref, error) {
+func ImportBlob(ctx context.Context, dst bcsdk.WO, gitstore storage.Storer, gb *object.Blob) (*glfs.Ref, error) {
 	rc, err := gb.Reader()
 	if err != nil {
 		return nil, err

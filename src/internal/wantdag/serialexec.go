@@ -1,15 +1,15 @@
 package wantdag
 
 import (
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/wantjob"
 )
 
-func SerialExecLast(jc wantjob.Ctx, s cadata.Getter, x DAG) (wantjob.Result, error) {
+func SerialExecLast(jc wantjob.Ctx, s bcsdk.RO, x DAG) (wantjob.Result, error) {
 	// TODO: lazy execution
 	nrs, err := SerialExecAll(jc, s, x)
 	if err != nil {
@@ -19,9 +19,9 @@ func SerialExecLast(jc wantjob.Ctx, s cadata.Getter, x DAG) (wantjob.Result, err
 }
 
 // ExecAll executes all nodes in the DAG, and returns the result of returning each.
-func SerialExecAll(jc wantjob.Ctx, s cadata.Getter, x DAG) ([]wantjob.Result, error) {
+func SerialExecAll(jc wantjob.Ctx, s bcsdk.RO, x DAG) ([]wantjob.Result, error) {
 	ctx := jc.Context
-	nodeStores := make([]cadata.Getter, len(x))
+	nodeStores := make([]bcsdk.RO, len(x))
 	nodeResults := make([]wantjob.Result, len(x))
 	resolve := func(nid NodeID) wantjob.Result {
 		return nodeResults[nid]

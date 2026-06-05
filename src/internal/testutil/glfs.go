@@ -12,20 +12,20 @@ import (
 	"strings"
 	"testing"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"blobcache.io/glfs/glfstar"
 	"github.com/stretchr/testify/require"
-	"go.brendoncarroll.net/state/cadata"
 )
 
-func PostFS(t testing.TB, s cadata.Store, m map[string][]byte) glfs.Ref {
+func PostFS(t testing.TB, s bcsdk.WO, m map[string][]byte) glfs.Ref {
 	ctx := Context(t)
 	ref, err := postFS(ctx, s, m)
 	require.NoError(t, err)
 	return *ref
 }
 
-func PostFSStr(t testing.TB, s cadata.Store, m map[string]string) glfs.Ref {
+func PostFSStr(t testing.TB, s bcsdk.WO, m map[string]string) glfs.Ref {
 	m2 := make(map[string][]byte)
 	for k, v := range m {
 		m2[k] = []byte(v)
@@ -33,8 +33,8 @@ func PostFSStr(t testing.TB, s cadata.Store, m map[string]string) glfs.Ref {
 	return PostFS(t, s, m2)
 }
 
-func postFS(ctx context.Context, s cadata.Store, m map[string][]byte) (*glfs.Ref, error) {
-	ag := glfs.NewAgent()
+func postFS(ctx context.Context, s bcsdk.WO, m map[string][]byte) (*glfs.Ref, error) {
+	ag := glfs.NewMachine()
 	var ents []glfs.TreeEntry
 	for p, data := range m {
 		ref, err := ag.PostBlob(ctx, s, bytes.NewReader(data))
@@ -50,7 +50,7 @@ func postFS(ctx context.Context, s cadata.Store, m map[string][]byte) (*glfs.Ref
 	return glfs.PostTreeSlice(ctx, s, ents)
 }
 
-func EqualFS(t testing.TB, s cadata.Getter, expected, actual glfs.Ref) bool {
+func EqualFS(t testing.TB, s bcsdk.RO, expected, actual glfs.Ref) bool {
 	if expected.Equals(actual) {
 		return true
 	}
@@ -62,10 +62,10 @@ func EqualFS(t testing.TB, s cadata.Getter, expected, actual glfs.Ref) bool {
 	return false
 }
 
-func PrintFS(t testing.TB, s cadata.Getter, x glfs.Ref) {
+func PrintFS(t testing.TB, s bcsdk.RO, x glfs.Ref) {
 	t.Helper()
 	ctx := Context(t)
-	ag := glfs.NewAgent()
+	ag := glfs.NewMachine()
 	if x.Type != glfs.TypeTree {
 		r, err := ag.GetTyped(ctx, s, "", x)
 		require.NoError(t, err)
@@ -88,7 +88,7 @@ func PrintFS(t testing.TB, s cadata.Getter, x glfs.Ref) {
 	require.NoError(t, err)
 }
 
-func PrintFile(t testing.TB, s cadata.Store, x glfs.Ref, p string) {
+func PrintFile(t testing.TB, s bcsdk.RW, x glfs.Ref, p string) {
 	ctx := Context(t)
 	ref, err := glfs.GetAtPath(ctx, s, x, p)
 	require.NoError(t, err)
@@ -97,7 +97,7 @@ func PrintFile(t testing.TB, s cadata.Store, x glfs.Ref, p string) {
 	t.Log(string(data))
 }
 
-func BlobContains(t testing.TB, s cadata.Store, x glfs.Ref, p string, ss []byte) {
+func BlobContains(t testing.TB, s bcsdk.RW, x glfs.Ref, p string, ss []byte) {
 	ctx := Context(t)
 	ref, err := glfs.GetAtPath(ctx, s, x, p)
 	require.NoError(t, err)
@@ -106,9 +106,9 @@ func BlobContains(t testing.TB, s cadata.Store, x glfs.Ref, p string, ss []byte)
 	require.Contains(t, string(data), string(ss))
 }
 
-func LoadFile(t testing.TB, s cadata.Poster, p string) glfs.Ref {
+func LoadFile(t testing.TB, s bcsdk.WO, p string) glfs.Ref {
 	ctx := Context(t)
-	op := glfs.NewAgent()
+	op := glfs.NewMachine()
 	f, err := os.Open(p)
 	require.NoError(t, err)
 	defer f.Close()
@@ -117,9 +117,9 @@ func LoadFile(t testing.TB, s cadata.Poster, p string) glfs.Ref {
 	return *ref
 }
 
-func LoadTarGz(t testing.TB, s cadata.Store, p string, subpath string) glfs.Ref {
+func LoadTarGz(t testing.TB, s bcsdk.RW, p string, subpath string) glfs.Ref {
 	ctx := Context(t)
-	ag := glfs.NewAgent()
+	ag := glfs.NewMachine()
 
 	f, err := os.Open(p)
 	require.NoError(t, err)
@@ -138,40 +138,40 @@ func LoadTarGz(t testing.TB, s cadata.Store, p string, subpath string) glfs.Ref 
 	return *ref
 }
 
-func PostTree(t testing.TB, s cadata.Store, ents []glfs.TreeEntry) glfs.Ref {
+func PostTree(t testing.TB, s bcsdk.RW, ents []glfs.TreeEntry) glfs.Ref {
 	ctx := Context(t)
-	ag := glfs.NewAgent()
+	ag := glfs.NewMachine()
 	ref, err := ag.PostTreeSlice(ctx, s, ents)
 	require.NoError(t, err)
 	return *ref
 }
 
-func MergeFS(t testing.TB, s cadata.Store, xs ...glfs.Ref) glfs.Ref {
+func MergeFS(t testing.TB, s bcsdk.RW, xs ...glfs.Ref) glfs.Ref {
 	ctx := Context(t)
-	ag := glfs.NewAgent()
+	ag := glfs.NewMachine()
 	ref, err := ag.Merge(ctx, s, s, xs...)
 	require.NoError(t, err)
 	return *ref
 }
 
-func PostBlob(t testing.TB, s cadata.Poster, data []byte) glfs.Ref {
+func PostBlob(t testing.TB, s bcsdk.WO, data []byte) glfs.Ref {
 	ctx := Context(t)
-	ag := glfs.NewAgent()
+	ag := glfs.NewMachine()
 	ref, err := ag.PostBlob(ctx, s, bytes.NewReader(data))
 	require.NoError(t, err)
 	return *ref
 }
 
-func PostString(t testing.TB, s cadata.Poster, x string) glfs.Ref {
+func PostString(t testing.TB, s bcsdk.WO, x string) glfs.Ref {
 	ctx := Context(t)
 	ref, err := glfs.PostBlob(ctx, s, strings.NewReader(x))
 	require.NoError(t, err)
 	return *ref
 }
 
-func SymlinkTree(t testing.TB, s cadata.Store, target, newp string) glfs.Ref {
+func SymlinkTree(t testing.TB, s bcsdk.RW, target, newp string) glfs.Ref {
 	ctx := Context(t)
-	ag := glfs.NewAgent()
+	ag := glfs.NewMachine()
 	ref, err := ag.PostBlob(ctx, s, strings.NewReader(target))
 	require.NoError(t, err)
 	ref, err = ag.PostTreeSlice(ctx, s, []glfs.TreeEntry{

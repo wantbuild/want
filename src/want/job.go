@@ -11,9 +11,9 @@ import (
 	"slices"
 	"sync"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"github.com/jmoiron/sqlx"
 	"go.brendoncarroll.net/exp/singleflight"
-	"go.brendoncarroll.net/state/cadata"
 	"go.brendoncarroll.net/stdctx/logctx"
 	"go.brendoncarroll.net/tai64"
 	"go.uber.org/zap"
@@ -30,11 +30,11 @@ type job struct {
 	id  wantjob.JobID
 
 	task wantjob.Task
-	src  cadata.Getter
+	src  bcsdk.RO
 
 	ctx    context.Context
 	cf     context.CancelFunc
-	dst    cadata.Store
+	dst    bcsdk.RW
 	done   chan struct{}
 	result *wantjob.Result
 
@@ -48,7 +48,7 @@ type job struct {
 	stackTrace                []byte
 }
 
-func newJob(sys *jobSystem, parent *job, idx wantjob.Idx, dst cadata.Store, src cadata.Getter, task wantjob.Task) *job {
+func newJob(sys *jobSystem, parent *job, idx wantjob.Idx, dst bcsdk.RW, src bcsdk.RO, task wantjob.Task) *job {
 	var jobid wantjob.JobID
 	parentCtx := sys.bgCtx
 	if parent != nil {
@@ -73,7 +73,7 @@ func newJob(sys *jobSystem, parent *job, idx wantjob.Idx, dst cadata.Store, src 
 	}
 }
 
-func (j *job) Spawn(ctx context.Context, src cadata.Getter, task wantjob.Task) (wantjob.Idx, error) {
+func (j *job) Spawn(ctx context.Context, src bcsdk.RO, task wantjob.Task) (wantjob.Idx, error) {
 	j.childMu.Lock()
 	defer j.childMu.Unlock()
 	idx, child, err := j.sys.spawn(ctx, j, src, task)
@@ -112,7 +112,7 @@ func (j *job) Inspect(ctx context.Context, idx wantjob.Idx) (*wantjob.Job, error
 	return child.inspect(), nil
 }
 
-func (j *job) ViewResult(ctx context.Context, idx wantjob.Idx) (*wantjob.Result, cadata.Getter, error) {
+func (j *job) ViewResult(ctx context.Context, idx wantjob.Idx) (*wantjob.Result, bcsdk.RO, error) {
 	child, err := j.getChild(idx)
 	if err != nil {
 		return nil, nil, err
@@ -197,7 +197,7 @@ func (j *job) finish(ctx context.Context, res wantjob.Result) {
 	close(j.done)
 }
 
-func (j *job) viewResult() (*wantjob.Result, cadata.Getter, error) {
+func (j *job) viewResult() (*wantjob.Result, bcsdk.RO, error) {
 	if !j.isDone() {
 		return nil, nil, fmt.Errorf("job is not done")
 	}
@@ -266,7 +266,7 @@ func newJobSystem(db *sqlx.DB, logDir string, exec wantjob.Executor, numWorkers 
 	return s
 }
 
-func (sys *jobSystem) Spawn(ctx context.Context, src cadata.Getter, task wantjob.Task) (wantjob.Idx, error) {
+func (sys *jobSystem) Spawn(ctx context.Context, src bcsdk.RO, task wantjob.Task) (wantjob.Idx, error) {
 	idx, j, err := sys.spawn(ctx, nil, src, task)
 	if err != nil {
 		return 0, err
@@ -328,7 +328,7 @@ func (sys *jobSystem) Cancel(ctx context.Context, idx wantjob.Idx) error {
 	return j.cancel()
 }
 
-func (sys *jobSystem) ViewResult(ctx context.Context, idx wantjob.Idx) (*wantjob.Result, cadata.Getter, error) {
+func (sys *jobSystem) ViewResult(ctx context.Context, idx wantjob.Idx) (*wantjob.Result, bcsdk.RO, error) {
 	sys.mu.RLock()
 	defer sys.mu.RUnlock()
 	j, exists := sys.rootJobs[idx]
@@ -344,7 +344,7 @@ func (sys *jobSystem) ListInfos(ctx context.Context) ([]*wantjob.JobInfo, error)
 	})
 }
 
-func (sys *jobSystem) spawn(ctx context.Context, parent *job, src cadata.Getter, task wantjob.Task) (wantjob.Idx, *job, error) {
+func (sys *jobSystem) spawn(ctx context.Context, parent *job, src bcsdk.RO, task wantjob.Task) (wantjob.Idx, *job, error) {
 	var (
 		idx   wantjob.Idx
 		dbJob *wantjob.Job

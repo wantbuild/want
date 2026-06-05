@@ -9,10 +9,12 @@ import (
 	"runtime"
 	"testing"
 
+	"blobcache.io/blobcache/src/bcsdk"
+	"blobcache.io/blobcache/src/blobcache"
+	"blobcache.io/blobcache/src/schema"
 	"blobcache.io/glfs"
 	"github.com/kr/text"
 	"github.com/stretchr/testify/require"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/want/testwant"
 	"wantbuild.io/want/src/wantjob"
@@ -58,7 +60,7 @@ func TestRunTests(t *testing.T) {
 					"testing"
 					"fmt"
 				)
-				
+
 				func TestA(t *testing.T) {
 					fmt.Println("Hello from Test A")
 				}
@@ -68,13 +70,13 @@ func TestRunTests(t *testing.T) {
 					"testing"
 					"fmt"
 				)
-				
+
 				func TestBGood(t *testing.T) {
 					fmt.Println("Hello from TestBGood")
 				}
-				
+
 				func TestBBad(t *testing.T) {
-					t.Error("hello from TestBBad")			
+					t.Error("hello from TestBBad")
 				}
 			`),
 		}),
@@ -107,28 +109,28 @@ func TestRunTests(t *testing.T) {
 	requirePathExists(t, s, *ref, "subpkg1/subpkg2.test")
 }
 
-func requirePathExists(t testing.TB, s cadata.Getter, x glfs.Ref, k string) glfs.Ref {
+func requirePathExists(t testing.TB, s bcsdk.RO, x glfs.Ref, k string) glfs.Ref {
 	ref, err := glfs.GetAtPath(context.TODO(), s, x, k)
 	require.NoError(t, err)
 	return *ref
 }
 
-func mustPostFS(t testing.TB, s cadata.PostExister, m map[string][]byte) glfs.Ref {
+func mustPostFS(t testing.TB, s bcsdk.WO, m map[string][]byte) glfs.Ref {
 	ctx := context.TODO()
 	ref, err := postFS(ctx, s, m)
 	require.NoError(t, err)
 	return *ref
 }
 
-func mustPostBlob(t testing.TB, s cadata.Poster, data []byte) glfs.Ref {
+func mustPostBlob(t testing.TB, s bcsdk.WO, data []byte) glfs.Ref {
 	ctx := context.TODO()
 	ref, err := glfs.PostBlob(ctx, s, bytes.NewReader(data))
 	require.NoError(t, err)
 	return *ref
 }
 
-func newStore() cadata.Store {
-	return cadata.NewMem(cadata.DefaultHash, 1<<21)
+func newStore() bcsdk.RW {
+	return schema.NewMem(blobcache.HashAlgo_BLAKE3_256.Hash, 1<<21)
 }
 
 func newJobCtx(t testing.TB) wantjob.Ctx {
@@ -144,7 +146,7 @@ func newJobCtx(t testing.TB) wantjob.Ctx {
 	}
 }
 
-func postFS(ctx context.Context, s cadata.PostExister, m map[string][]byte) (*glfs.Ref, error) {
+func postFS(ctx context.Context, s bcsdk.WO, m map[string][]byte) (*glfs.Ref, error) {
 	var ents []glfs.TreeEntry
 	for k, v := range m {
 		ref, err := glfs.PostBlob(ctx, s, bytes.NewReader(v))

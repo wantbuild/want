@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/op/glfsops"
 	"wantbuild.io/want/src/internal/wantdag"
@@ -44,7 +44,7 @@ func DerivePlace(g *wantdag.Builder, x, path NodeID) NodeID {
 	})
 }
 
-func FactString(ctx context.Context, gb *wantdag.Builder, s cadata.GetPoster, p string) wantdag.NodeID {
+func FactString(ctx context.Context, gb *wantdag.Builder, s bcsdk.RW, p string) wantdag.NodeID {
 	ref, err := glfs.PostBlob(ctx, s, strings.NewReader(p))
 	if err != nil {
 		panic(err)
@@ -56,7 +56,7 @@ func FactString(ctx context.Context, gb *wantdag.Builder, s cadata.GetPoster, p 
 	return nid
 }
 
-func FactTree(ctx context.Context, gb *wantdag.Builder, dst cadata.PostExister, src cadata.Getter, ents []glfs.TreeEntry) wantdag.NodeID {
+func FactTree(ctx context.Context, gb *wantdag.Builder, dst bcsdk.WO, src bcsdk.RO, ents []glfs.TreeEntry) wantdag.NodeID {
 	ref, err := glfs.PostTreeSlice(ctx, dst, ents)
 	if err != nil {
 		panic(err)

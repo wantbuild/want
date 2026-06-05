@@ -2,6 +2,7 @@ package wantcmd
 
 import (
 	"archive/zip"
+	"bufio"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,12 +25,12 @@ import (
 
 var buildCmd = star.Command{
 	Metadata: star.Metadata{Short: "run a build"},
-	Flags:    []star.IParam{},
-	Pos:      []star.IParam{pathsParam},
+	Flags:    map[string]star.Flag{},
+	Pos:      []star.Positional{pathsParam},
 	F: func(c star.Context) error {
 		startTime := time.Now()
 		// query
-		q := mkBuildQuery(pathsParam.LoadAll(c)...)
+		q := mkBuildQuery(pathsParam.Load(c)...)
 		res, close, err := doBuild(c, q)
 		if err != nil {
 			return err
@@ -54,14 +55,14 @@ var buildCmd = star.Command{
 			}
 		}
 		c.Printf("%v\n", dur)
-		return c.StdOut.Flush()
+		return nil
 	},
 }
 
 var lsCmd = star.Command{
 	Metadata: star.Metadata{Short: "list tree entries in the build output"},
-	Flags:    []star.IParam{},
-	Pos:      []star.IParam{pathParam},
+	Flags:    map[string]star.Flag{},
+	Pos:      []star.Positional{pathParam},
 	F: func(c star.Context) error {
 		ctx := c.Context
 		p := pathParam.Load(c)
@@ -91,18 +92,17 @@ var lsCmd = star.Command{
 		if err := fmtTree(w, tree); err != nil {
 			return err
 		}
-		return w.Flush()
+		return nil
 	},
 }
 
 var catCmd = star.Command{
 	Metadata: star.Metadata{Short: "concatenate files from the build output and write them to stdout"},
-	Flags:    []star.IParam{},
-	Pos:      []star.IParam{pathsParam},
+	Pos:      []star.Positional{pathsParam},
 	F: func(c star.Context) error {
 		ctx := c.Context
-		ps := pathsParam.LoadAll(c)
-		q := mkBuildQuery(pathsParam.LoadAll(c)...)
+		ps := pathsParam.Load(c)
+		q := mkBuildQuery(pathsParam.Load(c)...)
 		res, close, err := doBuild(c, q)
 		if err != nil {
 			return err
@@ -111,7 +111,7 @@ var catCmd = star.Command{
 		src := res.Store
 		ref := res.OutputRoot
 		// process the output
-		w := c.StdOut
+		w := bufio.NewWriter(c.StdOut)
 		for _, p := range ps {
 			ref, err = glfs.GetAtPath(ctx, src, *ref, p)
 			if err != nil {
@@ -134,8 +134,7 @@ var catCmd = star.Command{
 
 var serveHttpCmd = star.Command{
 	Metadata: star.Metadata{Short: "serve the build output over http"},
-	Pos:      []star.IParam{pathParam},
-	Flags:    []star.IParam{},
+	Pos:      []star.Positional{pathParam},
 	F: func(c star.Context) error {
 		ctx := c.Context
 		q := mkBuildQuery(pathParam.Load(c))
@@ -159,7 +158,6 @@ var serveHttpCmd = star.Command{
 		fsys := glfsiofs.New(src, *ref)
 		laddr := "127.0.0.1:8000"
 		c.Printf("http://%s\n", laddr)
-		c.StdOut.Flush()
 
 		h := http.FileServerFS(fsys)
 		return http.ListenAndServe(laddr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -176,8 +174,10 @@ var serveHttpCmd = star.Command{
 
 var exportZipCmd = star.Command{
 	Metadata: star.Metadata{Short: "export the build output to zip file"},
-	Pos:      []star.IParam{pathParam},
-	Flags:    []star.IParam{outParam},
+	Pos:      []star.Positional{pathParam},
+	Flags: map[string]star.Flag{
+		"out": outParam,
+	},
 	F: func(c star.Context) error {
 		q := mkBuildQuery(pathParam.Load(c))
 		res, close, err := doBuild(c, q)
@@ -208,14 +208,17 @@ var exportZipCmd = star.Command{
 
 var exportRepoCmd = star.Command{
 	Metadata: star.Metadata{Short: "export build targets to local repo"},
-	Flags:    []star.IParam{unitPathSetParam, prefixPathSetParam, suffixPathSetParam},
+	Flags: map[string]star.Flag{
+		"unit":   unitPathSetParam,
+		"prefix": prefixPathSetParam,
+		"suffix": suffixPathSetParam},
 	F: func(c star.Context) error {
 		ctx := c.Context
 
 		var psets []wantcfg.PathSet
-		psets = append(psets, unitPathSetParam.LoadAll(c)...)
-		psets = append(psets, prefixPathSetParam.LoadAll(c)...)
-		psets = append(psets, suffixPathSetParam.LoadAll(c)...)
+		psets = append(psets, unitPathSetParam.Load(c)...)
+		psets = append(psets, prefixPathSetParam.Load(c)...)
+		psets = append(psets, suffixPathSetParam.Load(c)...)
 		if len(psets) == 0 {
 			return fmt.Errorf("must provide a path set")
 		}
@@ -291,47 +294,40 @@ func supersets(a, b wantcfg.PathSet) bool {
 	return stringsets.Superset(wantc.SetFromQuery("", a), wantc.SetFromQuery("", b))
 }
 
-var outParam = star.Param[*os.File]{
-	Name: "out",
+var outParam = &star.Required[*os.File]{
+	PosName: "out",
 	Parse: func(s string) (*os.File, error) {
 		return os.OpenFile(s, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	},
 }
 
-var unitPathSetParam = star.Param[wantcfg.PathSet]{
-	Name:     "unit",
-	Repeated: true,
+var unitPathSetParam = &star.Repeated[wantcfg.PathSet]{
+	PosName: "unit",
 	Parse: func(s string) (wantcfg.PathSet, error) {
 		return wantcfg.Unit(s), nil
 	},
 }
 
-var prefixPathSetParam = star.Param[wantcfg.PathSet]{
-	Name:     "prefix",
-	Repeated: true,
+var prefixPathSetParam = &star.Repeated[wantcfg.PathSet]{
+	PosName: "prefix",
 	Parse: func(s string) (wantcfg.PathSet, error) {
 		return wantcfg.Prefix(s), nil
 	},
 }
 
-var suffixPathSetParam = star.Param[wantcfg.PathSet]{
-	Name:     "suffix",
-	Repeated: true,
+var suffixPathSetParam = &star.Repeated[wantcfg.PathSet]{
+	PosName: "suffix",
 	Parse: func(s string) (wantcfg.PathSet, error) {
 		return wantcfg.Suffix(s), nil
 	},
 }
 
-var pathParam = star.Param[string]{
-	Name:     "path",
-	Repeated: false,
-	Default:  star.Ptr(""),
-	Parse:    star.ParseString,
+var pathParam = &star.Required[string]{
+	PosName: "path",
+	Parse:   star.ParseString,
 }
 
-var pathsParam = star.Param[string]{
-	Name:     "path",
-	Default:  star.Ptr(""),
-	Repeated: true,
-	Parse:    star.ParseString,
+var pathsParam = &star.Repeated[string]{
+	PosName: "path",
+	Parse:   star.ParseString,
 }

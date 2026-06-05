@@ -8,8 +8,8 @@ import (
 	"os/exec"
 	"time"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 	"wantbuild.io/want/src/internal/glfsport"
 	"wantbuild.io/want/src/wantcfg"
 	"wantbuild.io/want/src/wantjob"
@@ -56,7 +56,7 @@ func (vfsd *virtioFSd) Start() error {
 	return vfsd.cmd.Start()
 }
 
-func (vfsd *virtioFSd) Export(ctx context.Context, src cadata.Getter, prefix string, root glfs.Ref) error {
+func (vfsd *virtioFSd) Export(ctx context.Context, src bcsdk.RO, prefix string, root glfs.Ref) error {
 	exp := &glfsport.Exporter{
 		Dir:   vfsd.rootPath,
 		Cache: glfsport.NullCache{},
@@ -65,7 +65,7 @@ func (vfsd *virtioFSd) Export(ctx context.Context, src cadata.Getter, prefix str
 	return exp.Export(ctx, root, prefix)
 }
 
-func (vfsd *virtioFSd) Import(ctx context.Context, dst cadata.PostExister, q wantcfg.PathSet) (*glfs.Ref, error) {
+func (vfsd *virtioFSd) Import(ctx context.Context, dst bcsdk.WO, q wantcfg.PathSet) (*glfs.Ref, error) {
 	var prefix string
 	switch {
 	case q.Prefix != nil:

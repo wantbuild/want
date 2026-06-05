@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"testing"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"github.com/kr/text"
 	"github.com/stretchr/testify/require"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/stores"
 	"wantbuild.io/want/src/internal/testutil"
@@ -92,7 +92,7 @@ func buildWASMBin(t testing.TB, dir string) []byte {
 	return data
 }
 
-func NewTestJobCtx(t testing.TB, ctx context.Context, dst cadata.Store) wantjob.Ctx {
+func NewTestJobCtx(t testing.TB, ctx context.Context, dst bcsdk.RW) wantjob.Ctx {
 	t.Helper()
 	return wantjob.Ctx{
 		Context: ctx,

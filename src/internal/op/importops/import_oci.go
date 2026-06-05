@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
 	"blobcache.io/glfs/glfstar"
 	crname "github.com/google/go-containerregistry/pkg/name"
@@ -15,7 +16,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/wantjob"
 )
@@ -26,12 +26,12 @@ type ImportOCIImageTask struct {
 	Hash string `json:"hash"`
 }
 
-func GetImportOCIImageTask(ctx context.Context, s cadata.Getter, x glfs.Ref) (*ImportOCIImageTask, error) {
+func GetImportOCIImageTask(ctx context.Context, s bcsdk.RO, x glfs.Ref) (*ImportOCIImageTask, error) {
 	return loadJSON[ImportOCIImageTask](ctx, s, x)
 }
 
-func (e *Executor) ImportOCIImage(jc wantjob.Ctx, s cadata.Getter, task ImportOCIImageTask) (*glfs.Ref, error) {
-	ag := glfs.NewAgent()
+func (e *Executor) ImportOCIImage(jc wantjob.Ctx, s bcsdk.RO, task ImportOCIImageTask) (*glfs.Ref, error) {
+	ag := glfs.NewMachine()
 	if len(task.Hash) < 40 {
 		return nil, fmt.Errorf("hash too short %q len=%d", task.Hash, len(task.Hash))
 	}
@@ -60,7 +60,7 @@ type ImportOCIManifestTask struct {
 	Hash string
 }
 
-func (e *Executor) ImportOCIManifest(ctx context.Context, _ *wantjob.Ctx, s cadata.Getter, task ImportOCIManifestTask) (*v1.Manifest, error) {
+func (e *Executor) ImportOCIManifest(ctx context.Context, _ *wantjob.Ctx, s bcsdk.RO, task ImportOCIManifestTask) (*v1.Manifest, error) {
 	if len(task.Hash) < 40 {
 		return nil, fmt.Errorf("hash too short %q len=%d", task.Hash, len(task.Hash))
 	}
@@ -89,7 +89,7 @@ type ImportOCILayerTask struct {
 	Descriptor v1.Descriptor
 }
 
-func (e *Executor) ImportOCILayer(jc *wantjob.Ctx, dst cadata.Store, s cadata.Getter, task ImportOCILayerTask) (*glfs.Ref, error) {
+func (e *Executor) ImportOCILayer(jc *wantjob.Ctx, dst bcsdk.RW, s bcsdk.RO, task ImportOCILayerTask) (*glfs.Ref, error) {
 	jc.Infof("name: %v", task.Name)
 	jc.Infof("descriptor: %v", task.Descriptor)
 	dig, err := crname.NewDigest(task.Name+"@"+task.Descriptor.Digest.String(), crname.StrictValidation)
@@ -105,7 +105,7 @@ func (e *Executor) ImportOCILayer(jc *wantjob.Ctx, dst cadata.Store, s cadata.Ge
 		return nil, err
 	}
 	defer rc.Close()
-	ag := glfs.NewAgent()
+	ag := glfs.NewMachine()
 	tr := tar.NewReader(rc)
 	ctx := jc.Context
 	return glfstar.ReadTAR(ctx, ag, dst, tr)
@@ -115,9 +115,9 @@ type MergeOCILayersTask struct {
 	Layers []glfs.Ref
 }
 
-func (e *Executor) MergeOCILayers(jc *wantjob.Ctx, dst cadata.PostExister, s cadata.Getter, task MergeOCILayersTask) (*glfs.Ref, error) {
+func (e *Executor) MergeOCILayers(jc *wantjob.Ctx, dst bcsdk.WO, s bcsdk.RO, task MergeOCILayersTask) (*glfs.Ref, error) {
 	ctx := jc.Context
-	ag := glfs.NewAgent()
+	ag := glfs.NewMachine()
 	img := empty.Image
 	for _, layer := range task.Layers {
 		l, err := tarball.LayerFromOpener(func() (io.ReadCloser, error) {

@@ -3,8 +3,8 @@ package want
 import (
 	"context"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/internal/op/dagops"
@@ -30,10 +30,10 @@ type BuildResult struct {
 	OutputRoot    *glfs.Ref
 
 	// TODO: remove
-	Store cadata.Getter
+	Store bcsdk.RO
 }
 
-func Build(ctx context.Context, jobs wantjob.System, src cadata.Getter, bt BuildTask) (*BuildResult, error) {
+func Build(ctx context.Context, jobs wantjob.System, src bcsdk.RO, bt BuildTask) (*BuildResult, error) {
 	scratch := stores.NewMem()
 	btRef, err := wantops.PostBuildTask(ctx, stores.Fork{W: scratch, R: src}, bt)
 	if err != nil {
@@ -116,7 +116,7 @@ func (sys *System) Blame(ctx context.Context, repo *wantrepo.Repo) ([]Target, er
 	return plan.Targets, nil
 }
 
-func (sys *System) evalExpr(ctx context.Context, x wantcfg.Expr) (*glfs.Ref, cadata.Getter, error) {
+func (sys *System) evalExpr(ctx context.Context, x wantcfg.Expr) (*glfs.Ref, bcsdk.RO, error) {
 	s := stores.NewMem()
 	c := wantc.NewCompiler()
 	dag, err := c.CompileExpr(ctx, s, s, x)

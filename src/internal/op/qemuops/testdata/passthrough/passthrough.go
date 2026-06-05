@@ -5,7 +5,7 @@ import (
 	"os"
 	"syscall"
 
-	"go.brendoncarroll.net/state/cadata"
+	"blobcache.io/blobcache/src/bcsdk"
 	"wantbuild.io/want/src/wantjob"
 	"wantbuild.io/want/src/wantjob/wanthttp"
 )
@@ -19,7 +19,7 @@ func main() {
 		panic(err)
 	}
 	defer f.Close()
-	wanthttp.MainRW(f, func(jc wantjob.Ctx, s cadata.Getter, root []byte) wantjob.Result {
+	wanthttp.MainRW(f, func(jc wantjob.Ctx, s bcsdk.RO, root []byte) wantjob.Result {
 		return wantjob.Result{
 			ErrCode: wantjob.OK,
 			Schema:  wantjob.Schema_NoRefs,

@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/glfs"
-	"go.brendoncarroll.net/state/cadata"
 
 	"wantbuild.io/want/src/internal/glfstasks"
 	"wantbuild.io/want/src/wantjob"
@@ -31,7 +31,7 @@ func NewExecutor() *Executor {
 	return &Executor{hc: http.DefaultClient}
 }
 
-func (e *Executor) Execute(jc wantjob.Ctx, s cadata.Getter, x wantjob.Task) wantjob.Result {
+func (e *Executor) Execute(jc wantjob.Ctx, s bcsdk.RO, x wantjob.Task) wantjob.Result {
 	ctx := jc.Context
 
 	switch x.Op {
@@ -82,7 +82,7 @@ func (e *Executor) Execute(jc wantjob.Ctx, s cadata.Getter, x wantjob.Task) want
 
 const MaxConfigSize = 1e6
 
-func loadJSON[T any](ctx context.Context, s cadata.Getter, ref glfs.Ref) (*T, error) {
+func loadJSON[T any](ctx context.Context, s bcsdk.RO, ref glfs.Ref) (*T, error) {
 	data, err := glfs.GetBlobBytes(ctx, s, ref, MaxConfigSize)
 	if err != nil {
 		return nil, err
