@@ -40,7 +40,7 @@ func (s *DBStore) Get(ctx context.Context, id blobcache.CID, buf []byte) (int, e
 	})
 }
 
-func (s *DBStore) Exists(ctx context.Context, cids []blobcache.CID, dst []bool) error {
+func (s *DBStore) Exists(ctx context.Context, cids []blobcache.CID, dst *blobcache.BitMap) error {
 	return dbutil.ROTx(ctx, s.db, func(tx *sqlx.Tx) error {
 		return storeContains(tx, 0, cids, dst)
 	})
@@ -105,7 +105,7 @@ func (s *TxStore) Get(ctx context.Context, id blobcache.CID, buf []byte) (int, e
 	return GetBlob(s.tx, s.id, id, buf)
 }
 
-func (s *TxStore) Exists(ctx context.Context, cids []blobcache.CID, dst []bool) error {
+func (s *TxStore) Exists(ctx context.Context, cids []blobcache.CID, dst *blobcache.BitMap) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return storeContains(s.tx, s.id, cids, dst)
@@ -245,7 +245,7 @@ func CopyAll(tx *sqlx.Tx, src, dst StoreID) error {
 	return err
 }
 
-func storeContains(tx *sqlx.Tx, sid StoreID, cids []blobcache.CID, dst []bool) error {
+func storeContains(tx *sqlx.Tx, sid StoreID, cids []blobcache.CID, dst *blobcache.BitMap) error {
 	var err error
 	var exists bool
 	if sid == 0 {
@@ -253,25 +253,30 @@ func storeContains(tx *sqlx.Tx, sid StoreID, cids []blobcache.CID, dst []bool) e
 			if err = tx.Get(&exists, `SELECT EXISTS (SELECT 1 FROM blobs WHERE id = ?)`, cid); err != nil {
 				return err
 			}
-			dst[i] = exists
+			if exists {
+				dst.Set(i)
+			}
 		}
 	} else {
 		for i, cid := range cids {
 			if err = tx.Get(&exists, `SELECT EXISTS (SELECT 1 FROM store_blobs WHERE store_id = ? AND blob_id = ?)`, sid, cid); err != nil {
 				return err
 			}
-			dst[i] = exists
+			if exists {
+				dst.Set(i)
+			}
 		}
 	}
 	return nil
 }
 
 func storeRemove(tx *sqlx.Tx, sid StoreID, cids []blobcache.CID) error {
-	exists := make([]bool, len(cids))
-	if err := storeContains(tx, sid, cids, exists); err != nil {
+	var exists blobcache.BitMap
+	if err := storeContains(tx, sid, cids, &exists); err != nil {
 		return err
 	}
-	for i, yes := range exists {
+	for i := range cids {
+		yes := exists.IsSet(i)
 		if !yes {
 			continue
 		}

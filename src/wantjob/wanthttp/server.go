@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"blobcache.io/blobcache/src/bcsdk"
+	"blobcache.io/blobcache/src/blobcache"
 	"go.brendoncarroll.net/stdctx/logctx"
 	"go.uber.org/zap"
 	"wantbuild.io/want/src/internal/stores"
@@ -190,9 +191,13 @@ func (s *Server) handleStore(w http.ResponseWriter, r *http.Request) {
 		})
 	case "Exists":
 		handleRequest(w, r, func(ctx context.Context, req BlobExistsReq) (*BlobExistsResp, error) {
-			exists := make([]bool, len(req.CIDs))
-			if err := s.wstore.Exists(r.Context(), req.CIDs, exists); err != nil {
+			var existsBM blobcache.BitMap
+			if err := s.wstore.Exists(r.Context(), req.CIDs, &existsBM); err != nil {
 				return nil, err
+			}
+			exists := make([]bool, len(req.CIDs))
+			for i := range req.CIDs {
+				exists[i] = existsBM.IsSet(i)
 			}
 			return &BlobExistsResp{Exists: exists}, nil
 		})

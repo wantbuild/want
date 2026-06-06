@@ -3,8 +3,8 @@ module wantbuild.io/want
 go 1.26.0
 
 require (
-	blobcache.io/blobcache v0.7.1-0.20260604004425-fd8a1c2210ef
-	blobcache.io/glfs v0.0.0-20260313021227-407298e99fa7
+	blobcache.io/blobcache v0.7.1-0.20260606153648-158a97c23e8e
+	blobcache.io/glfs v0.0.0-20260606153950-599b6585abc8
 	github.com/cavaliergopher/cpio v1.0.1
 	github.com/go-git/go-git/v5 v5.16.2
 	github.com/google/go-containerregistry v0.20.2

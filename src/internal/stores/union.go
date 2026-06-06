@@ -25,7 +25,7 @@ func (u Union) Get(ctx context.Context, id blobcache.CID, buf []byte) (int, erro
 	return 0, err
 }
 
-func (u Union) Exists(ctx context.Context, cids []blobcache.CID, dst []bool) error {
+func (u Union) Exists(ctx context.Context, cids []blobcache.CID, dst *blobcache.BitMap) error {
 	for _, s := range u {
 		if err := s.Exists(ctx, cids, dst); err != nil {
 			return err

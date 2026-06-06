@@ -81,16 +81,15 @@ func (s nativeStore) Get(ctx context.Context, id blobcache.CID, buf []byte) (int
 	return int(n), nil
 }
 
-func (s nativeStore) Exists(ctx context.Context, cids []blobcache.CID, dst []bool) error {
+func (s nativeStore) Exists(ctx context.Context, cids []blobcache.CID, dst *blobcache.BitMap) error {
 	for i, cid := range cids {
-		dst[i] = true
 		_, err := bcsdk.GetBytes(ctx, s, cid, stores.MaxBlobSize)
 		if err != nil {
 			if !blobcache.IsErrNotFound(err) {
 				return err
 			}
 		} else {
-			dst[i] = true
+			dst.Set(i)
 		}
 	}
 	return nil

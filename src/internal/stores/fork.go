@@ -16,7 +16,7 @@ func (s Fork) Post(ctx context.Context, data []byte) (blobcache.CID, error) {
 	return s.W.Post(ctx, data)
 }
 
-func (s Fork) Exists(ctx context.Context, cids []blobcache.CID, dst []bool) error {
+func (s Fork) Exists(ctx context.Context, cids []blobcache.CID, dst *blobcache.BitMap) error {
 	if err := s.W.Exists(ctx, cids, dst); err != nil {
 		return err
 	}

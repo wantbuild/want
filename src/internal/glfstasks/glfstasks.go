@@ -70,7 +70,7 @@ func Success(x glfs.Ref) *wantjob.Result {
 }
 
 func FastSync(ctx context.Context, dst bcsdk.WO, src bcsdk.RO, root glfs.Ref) error {
-	if exists, err := schema.ExistsUnit(ctx, dst, root.CID); err == nil && exists {
+	if exists, err := bcsdk.ExistsUnit(ctx, dst, root.CID); err == nil && exists {
 		return nil
 	}
 	rootData := MarshalGLFSRef(root)
@@ -112,7 +112,7 @@ func Check(ctx context.Context, src bcsdk.RO, root glfs.Ref) error {
 }
 
 func check(ctx context.Context, src bcsdk.RO, root glfs.Ref, history []string) error {
-	if yes, err := schema.ExistsUnit(ctx, src, root.CID); err != nil {
+	if yes, err := bcsdk.ExistsUnit(ctx, src, root.CID); err != nil {
 		return err
 	} else if !yes {
 		return fmt.Errorf("integrity check failed, store %v: %T is missing %v", src, src, root.CID)

@@ -11,7 +11,6 @@ import (
 
 	"blobcache.io/blobcache/src/bcsdk"
 	"blobcache.io/blobcache/src/blobcache"
-	"blobcache.io/blobcache/src/schema"
 	"blobcache.io/glfs"
 	"github.com/kr/text"
 	"github.com/pkg/errors"
@@ -291,7 +290,7 @@ func (c *Compiler) compileTree(ctx context.Context, dst bcsdk.RW, src bcsdk.RO, 
 // compileRef compiles a Ref expression, which is essentially a noop, except for the check for referential integrity.
 func (c *Compiler) compileRef(ctx context.Context, dst bcsdk.RW, src bcsdk.RO, x glfs.Ref) (*value, error) {
 	if err := c.glfs.WalkRefs(ctx, src, x, func(ref glfs.Ref) error {
-		yes, err := schema.ExistsUnit(ctx, src, ref.CID)
+		yes, err := bcsdk.ExistsUnit(ctx, src, ref.CID)
 		if err != nil {
 			return err
 		}

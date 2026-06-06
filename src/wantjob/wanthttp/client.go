@@ -185,7 +185,7 @@ func (s *Store) Delete(ctx context.Context, cids []blobcache.CID) error {
 	return s.hc.doJSON(ctx, http.MethodPost, fmt.Sprintf("/stores/%d.Delete", s.sid), req, &resp)
 }
 
-func (s *Store) Exists(ctx context.Context, cids []blobcache.CID, dst []bool) error {
+func (s *Store) Exists(ctx context.Context, cids []blobcache.CID, dst *blobcache.BitMap) error {
 	req := BlobExistsReq{CIDs: cids}
 	var resp BlobExistsResp
 	if err := s.hc.doJSON(ctx, http.MethodPost, fmt.Sprintf("/stores/%d.Exists", s.sid), req, &resp); err != nil {
@@ -194,8 +194,10 @@ func (s *Store) Exists(ctx context.Context, cids []blobcache.CID, dst []bool) er
 	if len(resp.Exists) != len(cids) {
 		return fmt.Errorf("Exists returned slice with wrong length")
 	}
-	for i := range dst {
-		dst[i] = dst[i] || resp.Exists[i]
+	for i, yes := range resp.Exists {
+		if yes {
+			dst.Set(i)
+		}
 	}
 	return nil
 }
